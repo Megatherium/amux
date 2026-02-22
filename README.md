@@ -61,7 +61,7 @@ Each workspace tracks a repo checkout and its metadata. For local workflows, wor
 
 Workspace scope terminology:
 - **Project workspace**: created directly for a project (`amux workspace create <name> --project <repo>`). By default, it starts from the project's default branch.
-- **Nested workspace**: created from an existing workspace context (OpenClaw DX: `workspace create --scope nested --from-workspace <id>`). It remains isolated, and also starts from the project's default branch.
+- **Nested workspace**: created from an existing workspace context (Assistant DX: `workspace create --scope nested --from-workspace <id>`). It remains isolated, and also starts from the project's default branch.
 
 ## Architecture quick tour
 
@@ -98,8 +98,8 @@ Assistant profiles can be configured in `~/.amux/config.json`:
 ```json
 {
   "assistants": {
-    "openclaw": {
-      "command": "openclaw",
+    "assistant": {
+      "command": "assistant",
       "interrupt_count": 1,
       "interrupt_delay_ms": 0
     }

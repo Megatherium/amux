@@ -2,7 +2,7 @@
 name: amux
 description: Orchestrate AI coding agents via amux with managed workspaces, git worktrees, and async job queues.
 metadata:
-  { "openclaw": { "emoji": "🔀", "os": ["darwin", "linux"], "requires": { "bins": ["amux", "tmux"] } } }
+  { "assistant": { "emoji": "🔀", "os": ["darwin", "linux"], "requires": { "bins": ["amux", "tmux"] } } }
 ---
 
 # amux Skill
@@ -15,19 +15,19 @@ Orchestrate AI coding agents using `amux` — a workspace and agent lifecycle ma
 
 **Every agent interaction follows this loop:**
 
-1. **Start or send** — Launch the agent or send a follow-up instruction (for OpenClaw, prefer `scripts/openclaw-step.sh`; otherwise use `--wait` for bounded steps and `agent watch` with heartbeat for long-running work)
+1. **Start or send** — Launch the agent or send a follow-up instruction (for Assistant, prefer `scripts/assistant-step.sh`; otherwise use `--wait` for bounded steps and `agent watch` with heartbeat for long-running work)
 2. **Confirm** — Immediately tell the user what you did ("Started Codex on the doctor workspace. Monitoring...")
 3. **Summarize** — Prefer `response.delta` (new output since your send/run prompt). Fall back to `response.content` if delta is empty. Mention specific files changed, errors hit, or questions the agent is asking.
 4. **Next steps** — Offer actionable follow-ups: create a PR, run tests, send another instruction, stop the agent.
 
-### OpenClaw Runtime Guardrails
+### Assistant Runtime Guardrails
 
-When running `amux` through OpenClaw `exec`/`process` tools, avoid monitor deadlocks:
+When running `amux` through Assistant `exec`/`process` tools, avoid monitor deadlocks:
 
-1. Prefer `scripts/openclaw-step.sh` for `run`/`send` steps. It performs exactly one bounded wait and returns normalized JSON with `status`, `summary`, `next_action`, and `suggested_command`.
-2. For multi-step coding turns, prefer `scripts/openclaw-turn.sh` to enforce step caps, timeout-streak stops, milestone coalescing, and a guaranteed final summary payload.
+1. Prefer `scripts/assistant-step.sh` for `run`/`send` steps. It performs exactly one bounded wait and returns normalized JSON with `status`, `summary`, `next_action`, and `suggested_command`.
+2. For multi-step coding turns, prefer `scripts/assistant-turn.sh` to enforce step caps, timeout-streak stops, milestone coalescing, and a guaranteed final summary payload.
 3. For `agent run --wait` and `agent send --wait`, set tool `timeout` to at least `--wait-timeout + 90s` (minimum 180s) to cover startup + wait.
-4. When calling through OpenClaw `exec`, set `yieldMs` to at least `wait-timeout + 60000` (milliseconds). Use `timeout` at least 45s larger than `yieldMs`.
+4. When calling through Assistant `exec`, set `yieldMs` to at least `wait-timeout + 60000` (milliseconds). Use `timeout` at least 45s larger than `yieldMs`.
 5. Prefer `--wait` over `agent watch` for normal coding steps. `agent watch` is long-lived and can be killed by tool timeouts.
 6. If `exec` returns `Command still running`, keep polling the same process until it reaches a terminal status (`completed`/`failed`/`killed`); do not launch a second overlapping `amux` command for that step.
 7. If the process exits with timeout/SIGKILL and no output, retry once with a higher tool timeout and immediately send an interim user update.
@@ -38,24 +38,24 @@ When running `amux` through OpenClaw `exec`/`process` tools, avoid monitor deadl
 12. If the same process remains `running` after 3 polls with no new output, send one interim status update and continue polling every 10-15s until terminal status.
 13. Use `process log` for additional visibility when needed, but keep one authoritative process per step.
 14. Always finish with a user-facing completion message before overall run timeout, even when partial: include what completed, what timed out, and one clear next action.
-15. Keep each OpenClaw turn short: target at most 2-3 bounded amux steps per turn. If more work remains, stop and return a partial summary plus one explicit "continue" command.
+15. Keep each Assistant turn short: target at most 2-3 bounded amux steps per turn. If more work remains, stop and return a partial summary plus one explicit "continue" command.
 16. Reserve time for the final response: after ~180s of tool work, stop launching new tools and emit a final text summary immediately.
 17. On two consecutive `timed_out` step statuses, stop the turn and return a concise partial result + `suggested_command` instead of continuing loops.
 18. If `response.status` is `needs_input` and the hint indicates local permission-mode selection (e.g. bypass permissions prompt), tell the user it is blocked by interactive permissions and switch to a non-interactive assistant (typically `codex`) for continuation.
 19. Before `workspace create`, validate the repo path with `git -C <repo> rev-parse --verify HEAD`; if invalid, do not continue with that path.
 20. For `workspace create`, always pass an explicit absolute repo path (`--repo`/`--project`) from user context; never rely on `.` in orchestrator workspaces.
 21. Parse workspace id from `data.id` (fallback `data.workspace_id` for compatibility). Never continue with an empty workspace id.
-22. Some channels may not support `message read` via OpenClaw tools. Never rely on `message read` in coding loops.
-23. With `openclaw agent --deliver`, `status: ok` plus empty `result.payloads` is expected when updates were sent through `message` tool; treat this as success, not failure.
+22. Some channels may not support `message read` via Assistant tools. Never rely on `message read` in coding loops.
+23. With `assistant agent --deliver`, `status: ok` plus empty `result.payloads` is expected when updates were sent through `message` tool; treat this as success, not failure.
 24. Even when delivering updates to a chat channel, always end with a final plain-text assistant summary so local operators also get a non-empty terminal result.
-25. Do not run concurrent long agent turns on the same OpenClaw agent lane/session key; queueing can add large delays and confuse progress reporting.
+25. Do not run concurrent long agent turns on the same Assistant agent lane/session key; queueing can add large delays and confuse progress reporting.
 26. If you must call `amux --json agent capture`, branch on `data.status`; treat `session_exited` as a terminal state to summarize, not an orchestration crash.
 
-### OpenClaw one-step wrapper (recommended)
+### Assistant one-step wrapper (recommended)
 
 ```bash
 # 1. Start a bounded step (run) and read normalized fields
-step=$(skills/amux/scripts/openclaw-step.sh run \
+step=$(skills/amux/scripts/assistant-step.sh run \
   --workspace <workspace_id> \
   --assistant codex \
   --prompt "Add dark mode support" \
@@ -74,7 +74,7 @@ agent_id=$(echo "$step" | jq -r '.agent_id')
 
 ```bash
 # 1. Send one bounded follow-up step
-step=$(skills/amux/scripts/openclaw-step.sh send \
+step=$(skills/amux/scripts/assistant-step.sh send \
   --agent <agent_id> \
   --text "Also add tests" \
   --enter \
@@ -88,17 +88,17 @@ echo "$step" | jq -r '.status'
 
 **Always** run exactly one bounded step, then post a user-facing summary. Never just say "sent" and go silent.
 
-If a step times out with no visible output yet, `openclaw-step.sh` now performs a short post-timeout capture recovery pass and may set:
+If a step times out with no visible output yet, `assistant-step.sh` now performs a short post-timeout capture recovery pass and may set:
 - `recovered_from_capture: true`
 - `suggested_command` with an exact bounded follow-up send command.
-- `idempotency_key` auto-generated by default (disable with `OPENCLAW_STEP_AUTO_IDEMPOTENCY=false`).
+- `idempotency_key` auto-generated by default (disable with `AMUX_ASSISTANT_STEP_AUTO_IDEMPOTENCY=false`).
 - secret-safe output redaction for common tokens/credentials before channel delivery.
-- `verbosity` controls via `OPENCLAW_STEP_VERBOSITY=quiet|normal|detailed` (with `OPENCLAW_STEP_DETAIL_LINES` override).
+- `verbosity` controls via `AMUX_ASSISTANT_STEP_VERBOSITY=quiet|normal|detailed` (with `AMUX_ASSISTANT_STEP_DETAIL_LINES` override).
 - `delivery` metadata (`key`, `action`, `priority`, `retry_after_seconds`, `replace_previous`, `drop_pending`) for edit-vs-send orchestration.
 - context-aware `quick_actions` (tests/lint/security/review) with `callback_data` (`qa:*`), plus `quick_action_map`/`quick_action_prompts` for deterministic button-to-command mapping.
-- `openclaw.presentation.chunks`/`openclaw.presentation.chunks_meta` for continuation-aware chunk delivery on the selected channel.
-- channel payloads under `openclaw.channels.<channel_id>` and selected output under `openclaw.presentation`.
-- inline button scope control via `OPENCLAW_INLINE_BUTTONS_SCOPE=off|dm|group|all|allowlist` (default `allowlist`).
+- `assistant_ux.presentation.chunks`/`assistant_ux.presentation.chunks_meta` for continuation-aware chunk delivery on the selected channel.
+- channel payloads under `assistant_ux.channels.<channel_id>` and selected output under `assistant_ux.presentation`.
+- inline button scope control via `AMUX_ASSISTANT_INLINE_BUTTONS_SCOPE=off|dm|group|all|allowlist` (default `allowlist`).
 
 Use response fields in this order for mobile updates:
 1. `summary` (top-level)
@@ -108,7 +108,7 @@ Use response fields in this order for mobile updates:
 ### Multi-step turn wrapper (recommended)
 
 ```bash
-turn=$(skills/amux/scripts/openclaw-turn.sh run \
+turn=$(skills/amux/scripts/assistant-turn.sh run \
   --workspace <workspace_id> \
   --assistant codex \
   --prompt "Refactor the parser and add tests" \
@@ -120,80 +120,80 @@ turn=$(skills/amux/scripts/openclaw-turn.sh run \
 echo "$turn" | jq -r '.overall_status'
 echo "$turn" | jq -r '.summary'
 echo "$turn" | jq -r '.next_action'
-echo "$turn" | jq -r '.openclaw.presentation.chunks[]'
+echo "$turn" | jq -r '.assistant_ux.presentation.chunks[]'
 ```
 
-`openclaw-turn.sh` output includes:
+`assistant-turn.sh` output includes:
 - `overall_status` (`completed|needs_input|timed_out|session_exited|partial|partial_budget`)
 - `events` (raw step payloads), `milestones` (coalesced concise updates)
 - `delivery` + `progress_updates` (+ per-step progress percent) for outbox-style edit/coalesce behavior.
-- `verbosity` controls via `OPENCLAW_TURN_VERBOSITY=quiet|normal|detailed`.
+- `verbosity` controls via `AMUX_ASSISTANT_TURN_VERBOSITY=quiet|normal|detailed`.
 - `quick_actions` with `callback_data` (`qa:*`) plus `quick_action_map`/`quick_action_prompts`.
-- `openclaw.channels` and `openclaw.presentation` for channel-specific rendering payloads.
+- `assistant_ux.channels` and `assistant_ux.presentation` for channel-specific rendering payloads.
 - `channel.chunks`/`channel.chunks_meta` + channel button metadata.
 
-### OpenClaw DX control plane (project/workspace lifecycle)
+### Assistant DX control plane (project/workspace lifecycle)
 
-Use `skills/amux/scripts/openclaw-dx.sh` when the user is coding through OpenClaw on any channel and needs end-to-end lifecycle UX (not just one prompt turn):
+Use `skills/amux/scripts/assistant-dx.sh` when the user is coding through Assistant on any channel and needs end-to-end lifecycle UX (not just one prompt turn):
 
 ```bash
 # Guided next-step recommendation (best for first-time mobile users)
-skills/amux/scripts/openclaw-dx.sh guide [--project /abs/repo/path] [--workspace <workspace_id>] [--task "refactor ..."] [--assistant codex] [--channel slack]
+skills/amux/scripts/assistant-dx.sh guide [--project /abs/repo/path] [--workspace <workspace_id>] [--task "refactor ..."] [--assistant codex] [--channel slack]
 
 # Add/select project
-skills/amux/scripts/openclaw-dx.sh project add --cwd --workspace mobile --assistant codex
-skills/amux/scripts/openclaw-dx.sh project add --path /abs/repo/path
-skills/amux/scripts/openclaw-dx.sh project list --query api
-skills/amux/scripts/openclaw-dx.sh project pick --name api
+skills/amux/scripts/assistant-dx.sh project add --cwd --workspace mobile --assistant codex
+skills/amux/scripts/assistant-dx.sh project add --path /abs/repo/path
+skills/amux/scripts/assistant-dx.sh project list --query api
+skills/amux/scripts/assistant-dx.sh project pick --name api
 
 # One-shot kickoff (register project -> create workspace -> start coding turn)
-skills/amux/scripts/openclaw-dx.sh workflow kickoff --project /abs/repo/path --name refactor --assistant codex --prompt "Fix highest-impact tech debt"
+skills/amux/scripts/assistant-dx.sh workflow kickoff --project /abs/repo/path --name refactor --assistant codex --prompt "Fix highest-impact tech debt"
 
 # Project or nested workspace decision
 # Terminology:
 # - project workspace: created directly from a project
 # - nested workspace: created from a parent workspace (`--from-workspace`), still starting from the project's default branch
-skills/amux/scripts/openclaw-dx.sh workspace decide --project /abs/repo/path --task "Refactor checkout state" --assistant codex --name refactor
-skills/amux/scripts/openclaw-dx.sh workspace create --name mobile --project /abs/repo/path --assistant codex
-skills/amux/scripts/openclaw-dx.sh workspace create --name refactor --from-workspace <workspace_id> --scope nested --assistant codex
+skills/amux/scripts/assistant-dx.sh workspace decide --project /abs/repo/path --task "Refactor checkout state" --assistant codex --name refactor
+skills/amux/scripts/assistant-dx.sh workspace create --name mobile --project /abs/repo/path --assistant codex
+skills/amux/scripts/assistant-dx.sh workspace create --name refactor --from-workspace <workspace_id> --scope nested --assistant codex
 
 # Start/continue coding turns
-skills/amux/scripts/openclaw-dx.sh start --workspace <workspace_id> --assistant codex --prompt "..."
-skills/amux/scripts/openclaw-dx.sh continue --workspace <workspace_id> --text "..." --enter
+skills/amux/scripts/assistant-dx.sh start --workspace <workspace_id> --assistant codex --prompt "..."
+skills/amux/scripts/assistant-dx.sh continue --workspace <workspace_id> --text "..." --enter
 
 # Status/alerts and terminal flows
-skills/amux/scripts/openclaw-dx.sh status
-skills/amux/scripts/openclaw-dx.sh alerts
-skills/amux/scripts/openclaw-dx.sh status --include-stale   # include stale-session alerts when explicitly desired
-skills/amux/scripts/openclaw-dx.sh terminal run --workspace <workspace_id> --text "npm run dev" --enter
-skills/amux/scripts/openclaw-dx.sh terminal logs --workspace <workspace_id> --lines 120
+skills/amux/scripts/assistant-dx.sh status
+skills/amux/scripts/assistant-dx.sh alerts
+skills/amux/scripts/assistant-dx.sh status --include-stale   # include stale-session alerts when explicitly desired
+skills/amux/scripts/assistant-dx.sh terminal run --workspace <workspace_id> --text "npm run dev" --enter
+skills/amux/scripts/assistant-dx.sh terminal logs --workspace <workspace_id> --lines 120
 
 # Cleanup, review, ship
-skills/amux/scripts/openclaw-dx.sh cleanup --older-than 24h
-skills/amux/scripts/openclaw-dx.sh review --workspace <workspace_id> --assistant codex
-skills/amux/scripts/openclaw-dx.sh git ship --workspace <workspace_id> --message "feat: ..." [--push]
+skills/amux/scripts/assistant-dx.sh cleanup --older-than 24h
+skills/amux/scripts/assistant-dx.sh review --workspace <workspace_id> --assistant codex
+skills/amux/scripts/assistant-dx.sh git ship --workspace <workspace_id> --message "feat: ..." [--push]
 
 # Dual-pass multi-agent handoff (implement -> review)
-skills/amux/scripts/openclaw-dx.sh workflow dual --workspace <workspace_id> --implement-assistant claude --review-assistant codex
+skills/amux/scripts/assistant-dx.sh workflow dual --workspace <workspace_id> --implement-assistant claude --review-assistant codex
 
 # Assistant readiness
-skills/amux/scripts/openclaw-dx.sh assistants
+skills/amux/scripts/assistant-dx.sh assistants
 ```
 
-`openclaw-dx.sh` emits normalized JSON with:
+`assistant-dx.sh` emits normalized JSON with:
 - `status` + `summary` for quick mobile updates.
-- `quick_actions` + `openclaw.actions` (`map`, `prompts`, `fallback`).
-- `openclaw.channels` and `openclaw.presentation` for channel-specific rendering.
-- channel-specific button metadata in `openclaw.channels.<channel_id>`.
+- `quick_actions` + `assistant_ux.actions` (`map`, `prompts`, `fallback`).
+- `assistant_ux.channels` and `assistant_ux.presentation` for channel-specific rendering.
+- channel-specific button metadata in `assistant_ux.channels.<channel_id>`.
 - `data.alerts` (needs-input/session/stale-session signals) for proactive follow-up prompts.
 - `workflow.kickoff` and `workflow.dual` for one-command lifecycle/handoff orchestration.
 
-### OpenClaw exec/process pattern (required for long steps)
+### Assistant exec/process pattern (required for long steps)
 
 ```json
 {
   "tool": "exec",
-  "command": "skills/amux/scripts/openclaw-step.sh run --workspace <workspace_id> --assistant codex --prompt \"...\" --wait-timeout 60s --idle-threshold 10s",
+  "command": "skills/amux/scripts/assistant-step.sh run --workspace <workspace_id> --assistant codex --prompt \"...\" --wait-timeout 60s --idle-threshold 10s",
   "workdir": "/Users/andrewlee/founding/amux",
   "yieldMs": 120000,
   "timeout": 180
@@ -397,7 +397,7 @@ For mobile/chat users, keep updates push-style so they never need to ask for sta
 
 1. Send an immediate acknowledgement with the exact plan.
 2. Start work and capture `session_name`/`agent_id`.
-3. For long tasks, prefer repeated bounded `openclaw-step.sh` steps; if watching, stream `agent watch --heartbeat 10s` and post short updates from `summary`/`latest_line`.
+3. For long tasks, prefer repeated bounded `assistant-step.sh` steps; if watching, stream `agent watch --heartbeat 10s` and post short updates from `summary`/`latest_line`.
 4. If `needs_input=true`, ask a direct multiple-choice question immediately (`A/B/C` style).
 5. End with a completion summary in both channel output and local output: changed files, tests run, pass/fail, one next action.
 
