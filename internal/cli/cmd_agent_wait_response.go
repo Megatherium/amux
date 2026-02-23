@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	waitResponseExitAfterConsecutiveCaptureMisses = 3
-	waitResponseExitAfterMissingSessionChecks     = 3
+	waitResponseExitAfterConsecutiveCaptureMisses = defaultExitAfterConsecutiveCaptureMisses
+	waitResponseExitAfterMissingSessionChecks     = defaultExitAfterMissingSessionChecks
 )
 
 // waitResponseInitialChangeTimeout bounds how long --wait blocks when pane
@@ -67,10 +67,12 @@ func waitForAgentResponse(
 	var lastDifferentFromPre string
 	contentChanged := false
 	var lastChangeTime time.Time
-	captureMisses := 0
-	missingSessionChecks := 0
 	waitStartedAt := time.Now()
 	preStableHash := waitResponseContentHash(preContent)
+	exitDetector := newSessionExitDetector(
+		waitResponseExitAfterConsecutiveCaptureMisses,
+		waitResponseExitAfterMissingSessionChecks,
+	)
 
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
@@ -93,23 +95,10 @@ func waitForAgentResponse(
 
 		content, ok := capture(cfg.SessionName, cfg.CaptureLines, opts)
 		if !ok {
-			captureMisses++
-			if captureMisses < waitResponseExitAfterConsecutiveCaptureMisses {
+			if !exitDetector.CaptureMissIndicatesExit(cfg.SessionName, opts) {
 				continue
 			}
-			state, err := tmuxSessionStateFor(cfg.SessionName, opts)
-			if err != nil || state.Exists {
-				// Capture can miss transiently while the tmux session is still alive,
-				// and tmux state checks can also fail under load/timeouts.
-				// Reset misses and continue waiting rather than reporting a false exit.
-				captureMisses = 0
-				missingSessionChecks = 0
-				continue
-			}
-			missingSessionChecks++
-			if missingSessionChecks < waitResponseExitAfterMissingSessionChecks {
-				continue
-			}
+
 			fallback := preferredWaitContent(
 				lastContent,
 				lastNonEmptyContent,
@@ -143,8 +132,7 @@ func waitForAgentResponse(
 				Changed:       contentChanged,
 			}
 		}
-		captureMisses = 0
-		missingSessionChecks = 0
+		exitDetector.Reset()
 
 		hash := waitResponseContentHash(content)
 		rawHash := tmux.ContentHash(content)

@@ -109,6 +109,178 @@ redact_secrets_text() {
     -e 's/((TOKEN|SECRET|PASSWORD|API_KEY|APIKEY|AUTH_TOKEN|PRIVATE_KEY|ACCESS_KEY|CLIENT_SECRET|WEBHOOK_SECRET)=)[^[:space:]'"'"'\"]{8,}/\1***/g'
 }
 
+is_permission_mode_hint() {
+  local text="$1"
+  local lower
+  if [[ -z "${text// }" ]]; then
+    return 1
+  fi
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$lower" == *"assistant is waiting for local permission-mode selection."* ]]; then
+    return 0
+  fi
+  if [[ "$lower" == *"bypass permissions on"* ]]; then
+    return 0
+  fi
+  if [[ "$lower" == *"permission-mode selection"* || "$lower" == *"permission mode"* ]]; then
+    return 0
+  fi
+  if [[ "$lower" == *"select"* && "$lower" == *"permission"* ]]; then
+    return 0
+  fi
+  if [[ "$lower" == *"choose"* && "$lower" == *"permission"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+text_has_reply_option_number() {
+  local text="$1"
+  local number="$2"
+  if [[ -z "${text// }" || -z "${number// }" ]]; then
+    return 1
+  fi
+  printf '%s\n' "$text" | grep -Eiq "(^|[[:space:]])${number}[.)][[:space:]]+"
+}
+
+text_has_reply_option_letter() {
+  local text="$1"
+  local letter="$2"
+  local upper lower
+  if [[ -z "${text// }" || -z "${letter// }" ]]; then
+    return 1
+  fi
+  upper="$(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]')"
+  lower="$(printf '%s' "$letter" | tr '[:upper:]' '[:lower:]')"
+  printf '%s\n' "$text" | grep -Eiq "(^|[[:space:]])(${upper}|${lower})[.)][[:space:]]+"
+}
+
+text_has_yes_no_prompt() {
+  local text="$1"
+  local lower
+  if [[ -z "${text// }" ]]; then
+    return 1
+  fi
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$lower" == *"(y/n)"* || "$lower" == *"[y/n]"* || "$lower" == *"(yes/no)"* || "$lower" == *"[yes/no]"* || "$lower" == *"yes or no"* || "$lower" == *"reply yes"* || "$lower" == *"reply no"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+text_has_press_enter_prompt() {
+  local text="$1"
+  local lower
+  if [[ -z "${text// }" ]]; then
+    return 1
+  fi
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$lower" == *"press enter"* || "$lower" == *"hit enter"* || "$lower" == *"press return"* || "$lower" == *"hit return"* || "$lower" == *"just press enter"* || "$lower" == *"enter to continue"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+detect_agent_mode_from_text() {
+  local assistant_hint="$1"
+  local text="$2"
+  local assistant lower collapsed
+  local claude_pattern=0 droid_pattern=0
+  local key="" label="" switch_hint=""
+  assistant="$(printf '%s' "$assistant_hint" | tr '[:upper:]' '[:lower:]')"
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  collapsed="$(printf '%s' "$lower" | tr -s '[:space:]' ' ')"
+
+  if [[ "$collapsed" == *"claude code v"* || "$collapsed" == *"accept edits on (shift+tab to cycle)"* || "$collapsed" == *"plan mode on (shift+tab to cycle)"* || "$collapsed" == *"/permissions"* ]]; then
+    claude_pattern=1
+  fi
+  if [[ "$collapsed" == *"[z.ai coding plan]"* || "$collapsed" == *"shift+tab to cycle modes (auto/spec)"* || "$collapsed" == *"ctrl+l for autonomy"* || "$collapsed" == *"auto (high) - allow all commands"* ]]; then
+    droid_pattern=1
+  fi
+
+  if [[ "$assistant" == "claude" || ( -z "${assistant// }" && "$claude_pattern" -eq 1 ) ]]; then
+    assistant="claude"
+    switch_hint="/permissions"
+    if [[ "$collapsed" == *"plan mode on"* || "$collapsed" == *"permission mode: plan"* ]]; then
+      key="plan"
+      label="plan"
+    elif [[ "$collapsed" == *"accept edits on"* || "$collapsed" == *"permission mode: acceptedits"* || "$collapsed" == *"permission mode: accept edits"* ]]; then
+      key="accept_edits"
+      label="accept-edits"
+    elif [[ "$collapsed" == *"permission mode: default"* ]]; then
+      key="default"
+      label="default"
+    elif [[ "$collapsed" == *"permission mode: dontask"* || "$collapsed" == *"permission mode: don't ask"* ]]; then
+      key="dont_ask"
+      label="dont-ask"
+    elif [[ "$collapsed" == *"permission mode: bypasspermissions"* || "$collapsed" == *"bypass permissions on"* ]]; then
+      key="bypass_permissions"
+      label="bypass-permissions"
+    elif [[ "$collapsed" == *"assistant is waiting for local permission-mode selection."* ]]; then
+      key="permission_prompt"
+      label="permission selection needed"
+    elif [[ "$collapsed" == *"shift+tab to cycle"* ]]; then
+      key="unknown"
+      label="mode unknown"
+    fi
+  elif [[ "$assistant" == "droid" || ( -z "${assistant// }" && "$droid_pattern" -eq 1 ) ]]; then
+    assistant="droid"
+    switch_hint="/mode"
+    if [[ "$collapsed" == *"auto (high)"* || "$collapsed" == *"mode auto-high"* || "$collapsed" == *"/mode auto-high"* ]]; then
+      key="auto_high"
+      label="auto-high"
+    elif [[ "$collapsed" == *"auto (medium)"* || "$collapsed" == *"mode auto-medium"* || "$collapsed" == *"/mode auto-medium"* ]]; then
+      key="auto_medium"
+      label="auto-medium"
+    elif [[ "$collapsed" == *"auto (low)"* || "$collapsed" == *"mode auto-low"* || "$collapsed" == *"/mode auto-low"* ]]; then
+      key="auto_low"
+      label="auto-low"
+    elif [[ "$collapsed" == *"mode: spec"* || "$collapsed" == *" spec mode"* || "$collapsed" == *"/mode spec"* ]]; then
+      key="spec"
+      label="spec"
+    elif [[ "$collapsed" == *"mode: normal"* || "$collapsed" == *" normal mode"* || "$collapsed" == *"/mode normal"* ]]; then
+      key="normal"
+      label="normal"
+    elif [[ "$collapsed" == *"shift+tab to cycle modes (auto/spec)"* ]]; then
+      key="unknown"
+      label="mode unknown"
+    fi
+  fi
+
+  jq -cn \
+    --arg assistant "$assistant" \
+    --arg key "$key" \
+    --arg label "$label" \
+    --arg switch_hint "$switch_hint" \
+    '{assistant: $assistant, key: $key, label: $label, switch_hint: $switch_hint}'
+}
+
+mode_switch_actions_json() {
+  local agent_id="$1"
+  local assistant="$2"
+  local actions='[]'
+  if [[ -z "${agent_id// }" || -z "${assistant// }" ]]; then
+    printf '%s' "$actions"
+    return
+  fi
+
+  case "$assistant" in
+    claude)
+      actions="$(append_action "$actions" "claude_permissions" "Permissions" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/permissions\" --enter" "primary" "Open Claude permission-mode picker")"
+      ;;
+    droid)
+      actions="$(append_action "$actions" "droid_mode" "Mode Menu" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/mode\" --enter" "primary" "Show Droid mode options")"
+      actions="$(append_action "$actions" "droid_normal" "Mode Normal" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/mode normal\" --enter" "secondary" "Switch Droid to normal mode")"
+      actions="$(append_action "$actions" "droid_spec" "Mode Spec" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/mode spec\" --enter" "secondary" "Switch Droid to spec mode")"
+      actions="$(append_action "$actions" "droid_auto_low" "Auto Low" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/mode auto-low\" --enter" "secondary" "Switch Droid to auto-low mode")"
+      actions="$(append_action "$actions" "droid_auto_medium" "Auto Med" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/mode auto-medium\" --enter" "secondary" "Switch Droid to auto-medium mode")"
+      actions="$(append_action "$actions" "droid_auto_high" "Auto High" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"/mode auto-high\" --enter" "danger" "Switch Droid to auto-high mode")"
+      ;;
+  esac
+
+  printf '%s' "$actions"
+}
+
 sanitize_workspace_name() {
   local value="$1"
   value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/-+/-/g; s/\.+/./g; s/^-+//; s/-+$//; s/^\.+//; s/\.+$//')"
@@ -669,7 +841,7 @@ agent_for_workspace() {
     if [[ "$capture_status" == "session_exited" ]]; then
       continue
     fi
-    if [[ "$capture_needs_input" == "true" && "$capture_hint_trim" == "Assistant is waiting for local permission-mode selection." ]]; then
+    if [[ "$capture_needs_input" == "true" ]] && is_permission_mode_hint "$capture_hint_trim"; then
       continue
     fi
     if [[ "$capture_needs_input" == "false" ]]; then
@@ -698,16 +870,58 @@ turn_reports_permission_mode_gate() {
     return 1
   fi
   jq -e '
+    def permission_gate_text:
+      [
+        (.response.input_hint // ""),
+        (.input_hint // ""),
+        (.next_action // ""),
+        (.summary // ""),
+        (.channel.message // ""),
+        ((.events // []) | map(.response.input_hint // .input_hint // .summary // "") | join("\n"))
+      ] | join("\n");
     ((.overall_status // .status // "") == "needs_input")
     and (
-      ((.events // []) | any(
-        (.response.needs_input // false) == true
-        and ((.response.input_hint // "") == "Assistant is waiting for local permission-mode selection.")
-      ))
-      or ((.next_action // "") | test("permission-mode selection"; "i"))
-      or ((.summary // "") | test("permission-mode selection"; "i"))
+      ((.blocked_permission_mode // false) == true)
+      or ((.events // []) | any((.blocked_permission_mode // false) == true))
+      or (permission_gate_text | test("assistant is waiting for local permission-mode selection\\.|bypass permissions on|permission-mode selection|permission mode"; "i"))
     )
   ' >/dev/null 2>&1 <<<"$turn_json"
+}
+
+turn_reports_choice_prompt() {
+  local turn_json="$1"
+  if ! jq -e . >/dev/null 2>&1 <<<"$turn_json"; then
+    return 1
+  fi
+  jq -e '
+    def choice_text:
+      [
+        (.response.input_hint // ""),
+        (.input_hint // ""),
+        (.summary // ""),
+        (.channel.message // ""),
+        ((.events // []) | map(.response.input_hint // .input_hint // .summary // "") | join("\n"))
+      ] | join("\n");
+    def has_numeric_or_letter_options:
+      choice_text | test("(^|\\n)[[:space:]]*([1-9]|[A-Ea-e])[.)][[:space:]]+"; "m");
+    def has_yes_no_prompt:
+      choice_text | test("\\(y/n\\)|\\[y/n\\]|\\(yes/no\\)|\\[yes/no\\]|yes or no|reply yes|reply no"; "i");
+    def has_press_enter_prompt:
+      choice_text | test("press enter|hit enter|press return|hit return|just press enter|enter to continue"; "i");
+    ((.overall_status // .status // "") == "needs_input")
+    and (has_numeric_or_letter_options or has_yes_no_prompt or has_press_enter_prompt)
+  ' >/dev/null 2>&1 <<<"$turn_json"
+}
+
+turn_requires_user_decision() {
+  local turn_json="$1"
+  if turn_reports_permission_mode_gate "$turn_json"; then
+    return 0
+  fi
+  if turn_reports_choice_prompt "$turn_json"; then
+    return 0
+  fi
+  return 1
 }
 
 turn_reports_no_workspace_change_claim() {
@@ -1764,6 +1978,65 @@ append_action() {
     '$actions + [{id: $id, label: $lbl, command: $command, style: $style, prompt: $prompt}]'
 }
 
+merge_actions_json() {
+  local left_json="$1"
+  local right_json="$2"
+  jq -cn --argjson left "$left_json" --argjson right "$right_json" '$left + $right'
+}
+
+first_action_command_json() {
+  local actions_json="$1"
+  jq -r 'map(.command // "") | map(select(length > 0)) | .[0] // ""' <<<"$actions_json"
+}
+
+needs_input_reply_actions_json() {
+  local agent_id="$1"
+  local prompt_text="$2"
+  local actions='[]'
+  if [[ -z "${agent_id// }" ]]; then
+    printf '%s' "$actions"
+    return
+  fi
+  if text_has_reply_option_number "$prompt_text" "1"; then
+    actions="$(append_action "$actions" "reply_1" "Reply 1" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"1\" --enter" "success" "Reply with option 1")"
+  fi
+  if text_has_reply_option_number "$prompt_text" "2"; then
+    actions="$(append_action "$actions" "reply_2" "Reply 2" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"2\" --enter" "success" "Reply with option 2")"
+  fi
+  if text_has_reply_option_number "$prompt_text" "3"; then
+    actions="$(append_action "$actions" "reply_3" "Reply 3" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"3\" --enter" "success" "Reply with option 3")"
+  fi
+  if text_has_reply_option_number "$prompt_text" "4"; then
+    actions="$(append_action "$actions" "reply_4" "Reply 4" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"4\" --enter" "success" "Reply with option 4")"
+  fi
+  if text_has_reply_option_number "$prompt_text" "5"; then
+    actions="$(append_action "$actions" "reply_5" "Reply 5" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"5\" --enter" "success" "Reply with option 5")"
+  fi
+  if text_has_reply_option_letter "$prompt_text" "A"; then
+    actions="$(append_action "$actions" "reply_a" "Reply A" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"A\" --enter" "success" "Reply with option A")"
+  fi
+  if text_has_reply_option_letter "$prompt_text" "B"; then
+    actions="$(append_action "$actions" "reply_b" "Reply B" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"B\" --enter" "success" "Reply with option B")"
+  fi
+  if text_has_reply_option_letter "$prompt_text" "C"; then
+    actions="$(append_action "$actions" "reply_c" "Reply C" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"C\" --enter" "success" "Reply with option C")"
+  fi
+  if text_has_reply_option_letter "$prompt_text" "D"; then
+    actions="$(append_action "$actions" "reply_d" "Reply D" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"D\" --enter" "success" "Reply with option D")"
+  fi
+  if text_has_reply_option_letter "$prompt_text" "E"; then
+    actions="$(append_action "$actions" "reply_e" "Reply E" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"E\" --enter" "success" "Reply with option E")"
+  fi
+  if text_has_yes_no_prompt "$prompt_text"; then
+    actions="$(append_action "$actions" "reply_yes" "Reply Yes" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"yes\" --enter" "success" "Reply with yes")"
+    actions="$(append_action "$actions" "reply_no" "Reply No" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"no\" --enter" "danger" "Reply with no")"
+  fi
+  if text_has_press_enter_prompt "$prompt_text"; then
+    actions="$(append_action "$actions" "reply_enter" "Press Enter" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --enter" "success" "Press Enter to continue")"
+  fi
+  printf '%s' "$actions"
+}
+
 emit_turn_passthrough() {
   local command_name="$1"
   local workflow_name="$2"
@@ -1808,6 +2081,22 @@ emit_turn_passthrough() {
         ($command_name == "start" or $command_name == "continue" or $command_name == "review");
       def is_workspace_error:
         ((.overall_status // .status // "") == "command_error" or (.status // "") == "command_error" or (.overall_status // .status // "") == "partial");
+      def is_permission_mode_gate:
+        (
+          ((.blocked_permission_mode // false) == true)
+          or ((.events // []) | any((.blocked_permission_mode // false) == true))
+          or (
+            [
+              (.response.input_hint // ""),
+              (.input_hint // ""),
+              (.next_action // ""),
+              (.summary // ""),
+              (.channel.message // ""),
+              ((.events // []) | map(.response.input_hint // .input_hint // .summary // "") | join("\n"))
+            ] | join("\n")
+            | test("assistant is waiting for local permission-mode selection\\.|bypass permissions on|permission-mode selection|permission mode"; "i")
+          )
+        );
       def scrub_text:
         if type == "string" then
           gsub("\r"; "")
@@ -1823,8 +2112,10 @@ emit_turn_passthrough() {
       def fallback_next_action:
         if ((.next_action // "") | length) > 0 then
           .next_action
+        elif ((.overall_status // .status // "") == "needs_input") and (is_permission_mode_gate) then
+          "Ask the user to choose the permission mode locally. If local selection is unavailable, switch to a probe-passed non-interactive assistant."
         elif ((.overall_status // .status // "") == "needs_input") then
-          "Reply to the pending prompt, then continue the turn."
+          "Ask the user to choose one of the offered options (or press Enter when requested), then continue the turn with that exact reply."
         elif (is_workspace_error) and ((hint_workspace_id | length) > 0) and (is_turn_command) then
           "Check workspace status and assistant readiness, then retry with a focused follow-up."
         elif (is_workspace_error) and ((hint_workspace_id | length) > 0) then
@@ -1837,8 +2128,12 @@ emit_turn_passthrough() {
       def fallback_suggested_command:
         if ((.suggested_command // "") | length) > 0 then
           .suggested_command
+        elif ((.overall_status // .status // "") == "needs_input") and (is_permission_mode_gate) and ((hint_workspace_id | length) > 0) then
+          ($dx_ref + " assistants --workspace " + (hint_workspace_id) + " --probe --limit 3")
+        elif ((.overall_status // .status // "") == "needs_input") and (is_permission_mode_gate) then
+          ($dx_ref + " assistants --probe --limit 3")
         elif ((.overall_status // .status // "") == "needs_input") and ((.agent_id // "") | length) > 0 then
-          ($dx_ref + " continue --agent " + .agent_id + " --text \"If a choice is required, pick the safest high-impact default, continue, and report status plus next action.\" --enter")
+          ($dx_ref + " continue --agent " + .agent_id + " --text \"Please reply with the exact option you choose (for example 1/2/3/4/5, A/B/C/D/E, yes/no, or Enter), then continue and report status plus next action.\" --enter")
         elif ((.quick_actions // []) | length) > 0 then
           (
             (.quick_actions | map(.command // "") | map(select(length > 0)) | .[0])
@@ -1928,6 +2223,105 @@ emit_turn_passthrough() {
       end;
     rewrite
   ' <<<"$normalized_json")"
+
+  local needs_input_status needs_input_agent needs_input_workspace needs_input_assistant needs_input_text needs_input_blocked
+  needs_input_status="$(jq -r '.overall_status // .status // ""' <<<"$normalized_json")"
+  needs_input_agent="$(jq -r '.agent_id // ""' <<<"$normalized_json")"
+  needs_input_workspace="$(jq -r '.workspace_id // ""' <<<"$normalized_json")"
+  needs_input_assistant="$(jq -r '.assistant // ""' <<<"$normalized_json")"
+  needs_input_text="$(jq -r '
+    [
+      (.response.input_hint // ""),
+      (.input_hint // ""),
+      (.summary // ""),
+      (.channel.message // ""),
+      ((.events // []) | map(.response.input_hint // .input_hint // .summary // "") | join("\n"))
+    ] | join("\n")
+  ' <<<"$normalized_json")"
+  needs_input_blocked="$(jq -r '
+    if ((.blocked_permission_mode // false) == true) then
+      true
+    elif ((.events // []) | any((.blocked_permission_mode // false) == true)) then
+      true
+    else
+      false
+    end
+  ' <<<"$normalized_json")"
+  if [[ "$needs_input_status" == "needs_input" && -n "${needs_input_agent// }" ]]; then
+    local needs_input_actions
+    needs_input_actions="$(needs_input_reply_actions_json "$needs_input_agent" "$needs_input_text")"
+    if [[ "$needs_input_blocked" == "true" ]] || is_permission_mode_hint "$needs_input_text"; then
+      if [[ -n "${needs_input_workspace// }" ]]; then
+        needs_input_actions="$(append_action "$needs_input_actions" "assistants_ws" "Assistants" "skills/amux/scripts/assistant-dx.sh assistants --workspace $(shell_quote "$needs_input_workspace") --probe --limit 3" "primary" "Check probe-passed assistants for non-interactive continuation")"
+      else
+        needs_input_actions="$(append_action "$needs_input_actions" "assistants" "Assistants" "skills/amux/scripts/assistant-dx.sh assistants --probe --limit 3" "primary" "Check probe-passed assistants for non-interactive continuation")"
+      fi
+      if [[ -n "${needs_input_workspace// }" && "${needs_input_assistant:-}" != "codex" ]]; then
+        needs_input_actions="$(append_action "$needs_input_actions" "switch_codex" "Switch Codex" "skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$needs_input_workspace") --assistant codex --prompt \"Continue from current state and report status plus next action.\"" "danger" "Switch to codex for non-interactive continuation")"
+      fi
+    fi
+    if [[ "$(jq -r 'length' <<<"$needs_input_actions")" -gt 0 ]]; then
+      normalized_json="$(jq -c --argjson extra "$needs_input_actions" '
+        .quick_actions = (((.quick_actions // []) + $extra) | unique_by(.id))
+        | .quick_action_map = (
+            .quick_actions
+            | map({key: (.callback_data // ("qa:" + ((.id // "") | tostring))), value: (.command // "")})
+            | from_entries
+          )
+        | .quick_action_prompts = (
+            .quick_actions
+            | map({key: (.callback_data // ("qa:" + ((.id // "") | tostring))), value: (.prompt // "")})
+            | from_entries
+          )
+      ' <<<"$normalized_json")"
+    fi
+  fi
+
+  local mode_agent mode_assistant mode_text mode_json mode_key mode_label mode_actions
+  mode_agent="$(jq -r '.agent_id // ""' <<<"$normalized_json")"
+  mode_assistant="$(jq -r '.assistant // ""' <<<"$normalized_json")"
+  mode_assistant="$(printf '%s' "$mode_assistant" | tr '[:upper:]' '[:lower:]')"
+  mode_text="$(jq -r '
+    [
+      (.response.input_hint // ""),
+      (.input_hint // ""),
+      (.summary // ""),
+      (.channel.message // ""),
+      ((.events // []) | map(.response.input_hint // .input_hint // .summary // "") | join("\n"))
+    ] | join("\n")
+  ' <<<"$normalized_json")"
+  mode_json="$(detect_agent_mode_from_text "$mode_assistant" "$mode_text")"
+  mode_key="$(jq -r '.key // ""' <<<"$mode_json")"
+  mode_label="$(jq -r '.label // ""' <<<"$mode_json")"
+  if [[ -z "$mode_assistant" ]]; then
+    mode_assistant="$(jq -r '.assistant // ""' <<<"$mode_json")"
+  fi
+  mode_assistant="$(printf '%s' "$mode_assistant" | tr '[:upper:]' '[:lower:]')"
+
+  mode_actions='[]'
+  if [[ -n "${mode_agent// }" ]] && [[ "$mode_assistant" == "claude" || "$mode_assistant" == "droid" ]]; then
+    mode_actions="$(mode_switch_actions_json "$mode_agent" "$mode_assistant")"
+  fi
+  if [[ "$(jq -r 'length' <<<"$mode_actions")" -gt 0 ]]; then
+    normalized_json="$(jq -c --argjson extra "$mode_actions" '
+      .quick_actions = (((.quick_actions // []) + $extra) | unique_by(.id))
+      | .quick_action_map = (
+          .quick_actions
+          | map({key: (.callback_data // ("qa:" + ((.id // "") | tostring))), value: (.command // "")})
+          | from_entries
+        )
+      | .quick_action_prompts = (
+          .quick_actions
+          | map({key: (.callback_data // ("qa:" + ((.id // "") | tostring))), value: (.prompt // "")})
+          | from_entries
+        )
+    ' <<<"$normalized_json")"
+  fi
+  if [[ -n "${mode_assistant// }" || -n "${mode_key// }" || -n "${mode_label// }" ]]; then
+    normalized_json="$(jq -c --arg assistant "$mode_assistant" --arg key "$mode_key" --arg label "$mode_label" '
+      .mode = {assistant: $assistant, key: $key, label: $label}
+    ' <<<"$normalized_json")"
+  fi
 
   local workspace_id agent_id assistant workspace_context_json
   workspace_id="$(jq -r '.workspace_id // ""' <<<"$normalized_json")"
@@ -2752,6 +3146,7 @@ cmd_guide() {
   local selected_workspace_name=""
   local selected_workspace_repo=""
   local selected_workspace_label=""
+  local selected_workspace_assistant=""
 
   if [[ -n "$workspace" ]]; then
     selected_workspace="$(jq -c --arg id "$workspace" 'map(select(.id == $id)) | .[0] // null' <<<"$ws_json")"
@@ -2788,6 +3183,7 @@ cmd_guide() {
     selected_workspace_id="$(jq -r '.id // ""' <<<"$selected_workspace")"
     selected_workspace_name="$(jq -r '.name // ""' <<<"$selected_workspace")"
     selected_workspace_repo="$(jq -r '.repo // ""' <<<"$selected_workspace")"
+    selected_workspace_assistant="$(jq -r '.assistant // ""' <<<"$selected_workspace")"
     selected_workspace_scope="$(jq -r '.scope // ""' <<<"$selected_workspace")"
     selected_workspace_scope_label="$(workspace_scope_label "$selected_workspace_scope")"
     selected_workspace_parent="$(jq -r '.parent_workspace // ""' <<<"$selected_workspace")"
@@ -2862,6 +3258,18 @@ cmd_guide() {
       fi
     fi
   fi
+  local reply_context_text reply_choice_actions reply_choice_count
+  reply_context_text="$(printf '%s\n%s' "$capture_hint" "$capture_summary")"
+  reply_choice_actions='[]'
+  if [[ -n "$primary_agent" ]]; then
+    reply_choice_actions="$(needs_input_reply_actions_json "$primary_agent" "$reply_context_text")"
+  fi
+  reply_choice_count="$(jq -r 'length' <<<"$reply_choice_actions")"
+  local capture_mode_json capture_mode_assistant capture_mode_key capture_mode_label
+  capture_mode_json="$(detect_agent_mode_from_text "$selected_workspace_assistant" "$reply_context_text")"
+  capture_mode_assistant="$(jq -r '.assistant // ""' <<<"$capture_mode_json")"
+  capture_mode_key="$(jq -r '.key // ""' <<<"$capture_mode_json")"
+  capture_mode_label="$(jq -r '.label // ""' <<<"$capture_mode_json")"
 
   local kickoff_prompt="$task"
   if [[ -z "${kickoff_prompt// }" ]]; then
@@ -2914,10 +3322,24 @@ cmd_guide() {
     reason="Active agent is waiting for user input."
     RESULT_STATUS="needs_input"
     RESULT_SUMMARY="Guide: reply to blocked agent"
-    RESULT_NEXT_ACTION="Reply to the active prompt so work can continue."
-    if [[ -n "$primary_agent" ]]; then
+    if is_permission_mode_hint "$reply_context_text"; then
+      RESULT_NEXT_ACTION="Ask the user to choose the permission mode locally. If local selection is unavailable, switch to a probe-passed non-interactive assistant."
+      if [[ -n "$selected_workspace_id" ]]; then
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh assistants --workspace $(shell_quote "$selected_workspace_id") --probe --limit 3"
+      else
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh assistants --probe --limit 3"
+      fi
+    elif [[ "$reply_choice_count" -gt 0 ]]; then
+      RESULT_NEXT_ACTION="Ask the user to choose one of the listed options (or press Enter when requested), then send that exact reply."
+      RESULT_SUGGESTED_COMMAND="$(first_action_command_json "$reply_choice_actions")"
+      if [[ -z "${RESULT_SUGGESTED_COMMAND// }" && -n "$primary_agent" ]]; then
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$primary_agent") --text \"1\" --enter"
+      fi
+    elif [[ -n "$primary_agent" ]]; then
+      RESULT_NEXT_ACTION="Reply to the active prompt so work can continue."
       RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$primary_agent") --text $(shell_quote "${capture_hint:-Continue with the safest option and report status plus next action.}") --enter"
     else
+      RESULT_NEXT_ACTION="Reply to the active prompt so work can continue."
       RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --workspace $(shell_quote "$selected_workspace_id") --text $(shell_quote "${capture_hint:-Continue with the safest option and report status plus next action.}") --enter"
     fi
   elif [[ "$capture_status" == "session_exited" ]]; then
@@ -2943,6 +3365,13 @@ cmd_guide() {
       RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$primary_agent") --text \"Continue from current state and report status plus next action.\" --enter"
     else
       RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --workspace $(shell_quote "$selected_workspace_id") --text \"Continue from current state and report status plus next action.\" --enter"
+    fi
+  fi
+  if [[ "$capture_mode_assistant" == "claude" || "$capture_mode_assistant" == "droid" ]]; then
+    if [[ -n "${capture_mode_label// }" ]]; then
+      RESULT_NEXT_ACTION="$RESULT_NEXT_ACTION Current mode: $capture_mode_label."
+    else
+      RESULT_NEXT_ACTION="$RESULT_NEXT_ACTION Current mode is unknown; use mode actions to inspect/switch."
     fi
   fi
 
@@ -2979,7 +3408,20 @@ cmd_guide() {
       actions="$(append_action "$actions" "terminal" "Next.js Dev" "skills/amux/scripts/assistant-dx.sh terminal preset --workspace $(shell_quote "$selected_workspace_id") --kind nextjs" "primary" "Start Next.js dev server in this workspace")"
       ;;
     reply_agent)
-      actions="$(append_action "$actions" "reply" "Reply" "$RESULT_SUGGESTED_COMMAND" "danger" "Reply to blocked agent prompt")"
+      if [[ "$reply_choice_count" -gt 0 ]]; then
+        actions="$(merge_actions_json "$actions" "$reply_choice_actions")"
+      fi
+      if [[ "$reply_choice_count" -eq 0 ]]; then
+        actions="$(append_action "$actions" "reply" "Reply" "$RESULT_SUGGESTED_COMMAND" "danger" "Reply to blocked agent prompt")"
+      fi
+      if is_permission_mode_hint "$reply_context_text"; then
+        if [[ -n "$selected_workspace_id" ]]; then
+          actions="$(append_action "$actions" "assistants_ws" "Assistants" "skills/amux/scripts/assistant-dx.sh assistants --workspace $(shell_quote "$selected_workspace_id") --probe --limit 3" "primary" "Check probe-passed assistants")"
+          actions="$(append_action "$actions" "switch_codex" "Switch Codex" "skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$selected_workspace_id") --assistant codex --prompt \"Continue from current state and report status plus next action.\"" "danger" "Switch to codex for non-interactive continuation")"
+        else
+          actions="$(append_action "$actions" "assistants" "Assistants" "skills/amux/scripts/assistant-dx.sh assistants --probe --limit 3" "primary" "Check probe-passed assistants")"
+        fi
+      fi
       actions="$(append_action "$actions" "status_ws" "Status" "skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$selected_workspace_id")" "primary" "Check workspace state")"
       actions="$(append_action "$actions" "alerts_ws" "Alerts" "skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$selected_workspace_id")" "primary" "Show blocking alerts only")"
       ;;
@@ -2999,12 +3441,26 @@ cmd_guide() {
       ;;
   esac
 
+  local mode_assistant_for_actions mode_actions
+  mode_assistant_for_actions="$capture_mode_assistant"
+  if [[ -z "${mode_assistant_for_actions// }" ]]; then
+    mode_assistant_for_actions="$(printf '%s' "$selected_workspace_assistant" | tr '[:upper:]' '[:lower:]')"
+  fi
+  mode_actions='[]'
+  if [[ -n "$primary_agent" ]] && [[ "$mode_assistant_for_actions" == "claude" || "$mode_assistant_for_actions" == "droid" ]]; then
+    mode_actions="$(mode_switch_actions_json "$primary_agent" "$mode_assistant_for_actions")"
+  fi
+  if [[ "$(jq -r 'length' <<<"$mode_actions")" -gt 0 ]]; then
+    actions="$(merge_actions_json "$actions" "$mode_actions")"
+  fi
+
   if [[ -n "$selected_workspace_id" ]]; then
     actions="$(append_action "$actions" "cleanup" "Cleanup" "skills/amux/scripts/assistant-dx.sh cleanup --older-than 24h --yes" "primary" "Prune stale sessions")"
   elif [[ -n "$first_project_path" ]]; then
     actions="$(append_action "$actions" "workspace_list_first" "WS #1" "skills/amux/scripts/assistant-dx.sh workspace list --project $(shell_quote "$first_project_path")" "primary" "Inspect first project's workspaces")"
   fi
   actions="$(append_action "$actions" "status_global" "Global Status" "skills/amux/scripts/assistant-dx.sh status" "primary" "Show global status across projects")"
+  actions="$(jq -c 'unique_by(.id)' <<<"$actions")"
   RESULT_QUICK_ACTIONS="$actions"
 
   local workspace_count_total
@@ -3025,6 +3481,9 @@ cmd_guide() {
     --arg capture_status "$capture_status" \
     --arg capture_summary "$capture_summary" \
     --arg capture_hint "$capture_hint" \
+    --arg capture_mode_assistant "$capture_mode_assistant" \
+    --arg capture_mode_key "$capture_mode_key" \
+    --arg capture_mode_label "$capture_mode_label" \
     --argjson capture_needs_input "$capture_needs_input" \
     --argjson capture_has_completion "$capture_has_completion" \
     --argjson project_count "$project_count" \
@@ -3060,6 +3519,7 @@ cmd_guide() {
       capture_summary: $capture_summary,
       capture_needs_input: $capture_needs_input,
       capture_hint: $capture_hint,
+      capture_mode: {assistant: $capture_mode_assistant, key: $capture_mode_key, label: $capture_mode_label},
       capture_has_completion: $capture_has_completion,
       project_workspaces: $project_workspaces,
       workspace_agents: $workspace_agents
@@ -3075,6 +3535,11 @@ cmd_guide() {
   fi
   if [[ -n "${capture_summary// }" ]]; then
     RESULT_MESSAGE+=$'\n'"Latest: $capture_summary"
+  fi
+  if [[ -n "${capture_mode_label// }" ]]; then
+    RESULT_MESSAGE+=$'\n'"Detected mode: $capture_mode_label"
+  elif [[ "${capture_mode_assistant:-}" == "claude" || "${capture_mode_assistant:-}" == "droid" ]]; then
+    RESULT_MESSAGE+=$'\n'"Detected mode: unknown"
   fi
   RESULT_MESSAGE+=$'\n'"Next: $RESULT_NEXT_ACTION"
 
@@ -4369,7 +4834,7 @@ cmd_start() {
 
   local permission_retry_enabled permission_fallback_assistant
   permission_retry_enabled="${AMUX_ASSISTANT_DX_PERMISSION_RETRY:-true}"
-  permission_fallback_assistant="${AMUX_ASSISTANT_DX_PERMISSION_FALLBACK_ASSISTANT:-gemini}"
+  permission_fallback_assistant="${AMUX_ASSISTANT_DX_PERMISSION_FALLBACK_ASSISTANT:-codex}"
   if [[ "$permission_retry_enabled" != "false" ]] && turn_reports_permission_mode_gate "$turn_json"; then
     if [[ -n "${permission_fallback_assistant// }" && "$permission_fallback_assistant" != "$assistant" ]]; then
       local retry_turn_json
@@ -4416,7 +4881,9 @@ cmd_continue() {
   local agent=""
   local workspace=""
   local workspace_from_flag=false
-  local text="${AMUX_ASSISTANT_DX_CONTINUE_TEXT:-Continue from current state and provide concise status and next action.}"
+  local default_continue_text="${AMUX_ASSISTANT_DX_CONTINUE_TEXT:-Continue from current state and provide concise status and next action.}"
+  local text=""
+  local text_set=false
   local enter=false
   local auto_start=false
   local start_assistant=""
@@ -4439,6 +4906,7 @@ cmd_continue() {
           emit_error "continue" "command_error" "missing value for --text"
           return
         fi
+        text_set=true
         text="$1"; shift
         while [[ $# -gt 0 && "$1" != --* ]]; do
           text+=" $1"
@@ -4465,6 +4933,10 @@ cmd_continue() {
         ;;
     esac
   done
+
+  if [[ "$text_set" != "true" && "$enter" != "true" ]]; then
+    text="$default_continue_text"
+  fi
 
   if [[ -n "$start_assistant" && "$auto_start" != "true" ]]; then
     emit_error "continue" "command_error" "--assistant requires --auto-start" "pass --auto-start when selecting an assistant for fallback start"
@@ -4609,7 +5081,12 @@ cmd_continue() {
         fi
 
         local start_json
-        if ! start_json="$(run_self_json start --workspace "$workspace" --assistant "$resolved_assistant" --prompt "$text" --max-steps "$max_steps" --turn-budget "$turn_budget" --wait-timeout "$wait_timeout" --idle-threshold "$idle_threshold")"; then
+        local start_prompt
+        start_prompt="$text"
+        if [[ -z "${start_prompt// }" ]]; then
+          start_prompt="$default_continue_text"
+        fi
+        if ! start_json="$(run_self_json start --workspace "$workspace" --assistant "$resolved_assistant" --prompt "$start_prompt" --max-steps "$max_steps" --turn-budget "$turn_budget" --wait-timeout "$wait_timeout" --idle-threshold "$idle_threshold")"; then
           emit_error "continue" "command_error" "failed auto-start continuation" "unable to launch start fallback"
           return
         fi
@@ -4787,12 +5264,14 @@ cmd_continue() {
   local turn_args=(
     "$TURN_SCRIPT" send
     --agent "$agent"
-    --text "$text"
     --max-steps "$max_steps"
     --turn-budget "$turn_budget"
     --wait-timeout "$wait_timeout"
     --idle-threshold "$idle_threshold"
   )
+  if [[ "$text_set" == "true" || -n "$text" ]]; then
+    turn_args+=(--text "$text")
+  fi
   if [[ "$enter" == "true" ]]; then
     turn_args+=(--enter)
   fi
@@ -4809,24 +5288,31 @@ cmd_continue() {
     continue_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
     continue_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
     if [[ "$continue_status" == "needs_input" && -n "${continue_agent// }" && -n "${continue_auto_text// }" ]]; then
-      local continue_retry_args continue_retry_json continue_retry_ok continue_retry_status
-      continue_retry_args=(
-        "$TURN_SCRIPT" send
-        --agent "$continue_agent"
-        --text "$continue_auto_text"
-        --max-steps "$max_steps"
-        --turn-budget "$turn_budget"
-        --wait-timeout "$wait_timeout"
-        --idle-threshold "$idle_threshold"
-        --enter
-      )
-      continue_retry_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "${continue_retry_args[@]}" 2>&1 || true)"
-      continue_retry_json="$(recover_timeout_turn_once "$continue_retry_json" "$wait_timeout" "$idle_threshold")"
-      if jq -e . >/dev/null 2>&1 <<<"$continue_retry_json"; then
-        continue_retry_ok="$(jq -r '.ok // false' <<<"$continue_retry_json")"
-        continue_retry_status="$(jq -r '.overall_status // .status // ""' <<<"$continue_retry_json")"
-        if [[ "$continue_retry_ok" == "true" && "$continue_retry_status" != "command_error" && "$continue_retry_status" != "agent_error" ]]; then
-          turn_json="$continue_retry_json"
+      local continue_requires_user_decision
+      continue_requires_user_decision=false
+      if turn_requires_user_decision "$turn_json"; then
+        continue_requires_user_decision=true
+      fi
+      if [[ "$continue_requires_user_decision" != "true" ]]; then
+        local continue_retry_args continue_retry_json continue_retry_ok continue_retry_status
+        continue_retry_args=(
+          "$TURN_SCRIPT" send
+          --agent "$continue_agent"
+          --text "$continue_auto_text"
+          --max-steps "$max_steps"
+          --turn-budget "$turn_budget"
+          --wait-timeout "$wait_timeout"
+          --idle-threshold "$idle_threshold"
+          --enter
+        )
+        continue_retry_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "${continue_retry_args[@]}" 2>&1 || true)"
+        continue_retry_json="$(recover_timeout_turn_once "$continue_retry_json" "$wait_timeout" "$idle_threshold")"
+        if jq -e . >/dev/null 2>&1 <<<"$continue_retry_json"; then
+          continue_retry_ok="$(jq -r '.ok // false' <<<"$continue_retry_json")"
+          continue_retry_status="$(jq -r '.overall_status // .status // ""' <<<"$continue_retry_json")"
+          if [[ "$continue_retry_ok" == "true" && "$continue_retry_status" != "command_error" && "$continue_retry_status" != "agent_error" ]]; then
+            turn_json="$continue_retry_json"
+          fi
         fi
       fi
     fi
@@ -4989,6 +5475,7 @@ cmd_status() {
         workspace_name: (.name // ""),
         workspace_scope: (.scope // ""),
         workspace_scope_label: (.scope_label // ""),
+        assistant: (.assistant // ""),
         parent_workspace: (.parent_workspace // ""),
         parent_name: (.parent_name // ""),
         workspace_label: (
@@ -5036,11 +5523,12 @@ cmd_status() {
       continue
     fi
 
-    local capture_status capture_summary capture_needs_input capture_hint
+    local capture_status capture_summary capture_needs_input capture_hint capture_content
     capture_status="$(jq -r '.data.status // "captured"' <<<"$capture_out")"
     capture_summary="$(jq -r '.data.summary // .data.latest_line // ""' <<<"$capture_out")"
     capture_needs_input="$(jq -r '.data.needs_input // false' <<<"$capture_out")"
     capture_hint="$(jq -r '.data.input_hint // ""' <<<"$capture_out")"
+    capture_content="$(jq -r '.data.content // ""' <<<"$capture_out")"
     if [[ "$capture_needs_input" == "true" ]]; then
       local capture_hint_lc capture_summary_lc
       capture_hint_lc="$(printf '%s' "$capture_hint" | tr '[:upper:]' '[:lower:]')"
@@ -5050,7 +5538,7 @@ cmd_status() {
       fi
     fi
 
-    local agent_row agent_row_json agent_id workspace_id workspace_label
+    local agent_row agent_row_json agent_id workspace_id workspace_label capture_assistant capture_mode_json capture_mode_key capture_mode_label
     agent_row="$(jq -c --arg s "$session_name" '.[] | select(.session_name == $s)' <<<"$agents_json" | head -n 1)"
     agent_row_json='{}'
     if [[ -n "${agent_row// }" ]]; then
@@ -5062,21 +5550,30 @@ cmd_status() {
     if [[ -z "${workspace_label// }" ]]; then
       workspace_label="$workspace_id"
     fi
+    capture_assistant="$(jq -r --arg id "$workspace_id" --argjson details "$workspace_details" '$details[$id].assistant // ""' <<<"{}")"
+    capture_mode_json="$(detect_agent_mode_from_text "$capture_assistant" "$(printf '%s\n%s\n%s' "$capture_hint" "$capture_summary" "$capture_content")")"
+    capture_assistant="$(jq -r '.assistant // ""' <<<"$capture_mode_json")"
+    if [[ -z "${capture_assistant// }" ]]; then
+      capture_assistant="$(jq -r --arg id "$workspace_id" --argjson details "$workspace_details" '$details[$id].assistant // ""' <<<"{}")"
+    fi
+    capture_assistant="$(printf '%s' "$capture_assistant" | tr '[:upper:]' '[:lower:]')"
+    capture_mode_key="$(jq -r '.key // ""' <<<"$capture_mode_json")"
+    capture_mode_label="$(jq -r '.label // ""' <<<"$capture_mode_json")"
 
-    captures="$(jq -cn --argjson captures "$captures" --arg session "$session_name" --arg agent_id "$agent_id" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg status "$capture_status" --arg summary "$capture_summary" --arg hint "$capture_hint" --argjson needs_input "$capture_needs_input" '$captures + [{session_name: $session, agent_id: $agent_id, workspace_id: $workspace_id, workspace_label: $workspace_label, status: $status, summary: $summary, needs_input: $needs_input, input_hint: $hint}]')"
+    captures="$(jq -cn --argjson captures "$captures" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg status "$capture_status" --arg summary "$capture_summary" --arg hint "$capture_hint" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" --argjson needs_input "$capture_needs_input" '$captures + [{session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, status: $status, summary: $summary, needs_input: $needs_input, input_hint: $hint, mode_key: $mode_key, mode_label: $mode_label}]')"
 
     if [[ "$capture_needs_input" == "true" ]]; then
-      alerts="$(jq -cn --argjson alerts "$alerts" --arg type "needs_input" --arg session "$session_name" --arg agent_id "$agent_id" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg input_hint "$capture_hint" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, input_hint: $input_hint}]')"
+      alerts="$(jq -cn --argjson alerts "$alerts" --arg type "needs_input" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg input_hint "$capture_hint" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, input_hint: $input_hint, mode_key: $mode_key, mode_label: $mode_label}]')"
       continue
     fi
 
     if [[ "$capture_status" == "session_exited" ]]; then
-      alerts="$(jq -cn --argjson alerts "$alerts" --arg type "session_exited" --arg session "$session_name" --arg agent_id "$agent_id" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary}]')"
+      alerts="$(jq -cn --argjson alerts "$alerts" --arg type "session_exited" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, mode_key: $mode_key, mode_label: $mode_label}]')"
       continue
     fi
 
     if completion_signal_present "$capture_summary"; then
-      alerts="$(jq -cn --argjson alerts "$alerts" --arg type "completed" --arg session "$session_name" --arg agent_id "$agent_id" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary}]')"
+      alerts="$(jq -cn --argjson alerts "$alerts" --arg type "completed" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, mode_key: $mode_key, mode_label: $mode_label}]')"
     fi
   done < <(jq -r --argjson cap "$capture_agents" '.[:$cap][]?.session_name' <<<"$agents_json")
 
@@ -5134,14 +5631,36 @@ cmd_status() {
   fi
   suggested_command="$refresh_cmd"
 
-  local first_needs_input_agent first_completed_workspace first_completed_agent first_active_agent
+  local first_needs_input_agent first_needs_input_assistant first_needs_input_mode_key first_needs_input_mode_label first_needs_input_workspace first_needs_input_hint first_completed_workspace first_completed_agent first_active_agent first_active_mode_agent first_active_mode_assistant first_active_mode_label first_active_claude_mode_agent first_active_droid_mode_agent
   first_needs_input_agent="$(jq -r '.[] | select(.type == "needs_input") | .agent_id // empty' <<<"$alerts" | head -n 1)"
+  first_needs_input_assistant="$(jq -r '.[] | select(.type == "needs_input") | .assistant // empty' <<<"$alerts" | head -n 1)"
+  first_needs_input_mode_key="$(jq -r '.[] | select(.type == "needs_input") | .mode_key // empty' <<<"$alerts" | head -n 1)"
+  first_needs_input_mode_label="$(jq -r '.[] | select(.type == "needs_input") | .mode_label // empty' <<<"$alerts" | head -n 1)"
+  first_needs_input_workspace="$(jq -r '.[] | select(.type == "needs_input") | .workspace_id // empty' <<<"$alerts" | head -n 1)"
+  first_needs_input_hint="$(jq -r '([.[] | select(.type == "needs_input") | (.input_hint // .summary // "")] | .[0] // "")' <<<"$alerts")"
   first_completed_workspace="$(jq -r '.[] | select(.type == "completed") | .workspace_id // empty' <<<"$alerts" | head -n 1)"
   first_completed_agent="$(jq -r '.[] | select(.type == "completed") | .agent_id // empty' <<<"$alerts" | head -n 1)"
   first_active_agent="$(jq -r '.[] | .agent_id // empty | select(length > 0)' <<<"$captures" | head -n 1)"
+  first_active_mode_agent="$(jq -r '.[] | select((.assistant // "") == "claude" or (.assistant // "") == "droid") | .agent_id // empty | select(length > 0)' <<<"$captures" | head -n 1)"
+  first_active_mode_assistant="$(jq -r '.[] | select((.assistant // "") == "claude" or (.assistant // "") == "droid") | .assistant // empty | select(length > 0)' <<<"$captures" | head -n 1)"
+  first_active_mode_label="$(jq -r '.[] | select((.assistant // "") == "claude" or (.assistant // "") == "droid") | .mode_label // empty | select(length > 0)' <<<"$captures" | head -n 1)"
+  first_active_claude_mode_agent="$(jq -r '.[] | select((.assistant // "") == "claude") | .agent_id // empty | select(length > 0)' <<<"$captures" | head -n 1)"
+  first_active_droid_mode_agent="$(jq -r '.[] | select((.assistant // "") == "droid") | .agent_id // empty | select(length > 0)' <<<"$captures" | head -n 1)"
   if [[ -n "$first_needs_input_agent" ]]; then
-    next_action="Reply to the blocked agent prompt first."
-    suggested_command="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_needs_input_agent") --text \"If a choice is required, pick the safest high-impact default, continue, and then report status plus next action.\" --enter"
+    if is_permission_mode_hint "$first_needs_input_hint"; then
+      next_action="Ask the user to choose the permission mode locally. If local selection is unavailable, switch to a probe-passed non-interactive assistant."
+      if [[ -n "${first_needs_input_workspace// }" ]]; then
+        suggested_command="skills/amux/scripts/assistant-dx.sh assistants --workspace $(shell_quote "$first_needs_input_workspace") --probe --limit 3"
+      else
+        suggested_command="skills/amux/scripts/assistant-dx.sh assistants --probe --limit 3"
+      fi
+    else
+      next_action="Ask the user to choose one of the offered options (or press Enter when requested), then continue with that exact reply."
+      suggested_command="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_needs_input_agent") --text \"Reply with the exact option chosen (for example 1/2/3/4/5, A/B/C/D/E, yes/no, or Enter), then continue and report status plus blockers.\" --enter"
+    fi
+    if [[ -n "${first_needs_input_mode_label// }" ]]; then
+      next_action="$next_action Current mode: $first_needs_input_mode_label."
+    fi
   elif [[ "$completed_count" -gt 0 ]]; then
     next_action="Review recently completed agent work and ship if clean."
     if [[ -n "$first_completed_workspace" ]]; then
@@ -5155,6 +5674,9 @@ cmd_status() {
   elif [[ -n "$workspace" && -n "$first_active_agent" ]]; then
     next_action="Continue the active agent in this workspace."
     suggested_command="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_active_agent") --text \"Status update and next action.\" --enter"
+  fi
+  if [[ -z "$first_needs_input_agent" && -n "${first_active_mode_label// }" ]]; then
+    next_action="$next_action Active mode: $first_active_mode_label."
   fi
   if [[ "$alerts_only" == "true" && "$status" == "ok" ]]; then
     local full_status_cmd
@@ -5208,6 +5730,11 @@ cmd_status() {
       else
         "- ⚠️ " + (.type // "alert")
       end
+      + (if (.assistant // "") != "" then
+          " [" + (.assistant // "") + (if (.mode_label // "") != "" then " " + (.mode_label // "") else "" end) + "]"
+        else
+          ""
+        end)
     ) | join("\n")' <<<"$alerts")"
   local agent_lines
   agent_lines="$(jq -r --argjson limit "$capture_agents" '
@@ -5215,6 +5742,11 @@ cmd_status() {
       | map(
           "- " + (.workspace_label // .workspace_id // "")
           + " " + (.agent_id // "")
+          + (if (.assistant // "") != "" then
+              " [" + (.assistant // "") + (if (.mode_label // "") != "" then " " + (.mode_label // "") else "" end) + "]"
+            else
+              ""
+            end)
           + ": "
           + ((.summary // .status // "active")
             | gsub("[\r\n]+"; " ")
@@ -5243,7 +5775,51 @@ cmd_status() {
     actions="$(append_action "$actions" "full_status" "Full Status" "$full_status_action" "success" "Show workspace/agent details beyond alerts-only output")"
   fi
   if [[ -n "$first_needs_input_agent" ]]; then
-    actions="$(append_action "$actions" "reply" "Reply" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_needs_input_agent") --text \"If a choice is required, pick the safest high-impact default, continue, and report status and blockers.\" --enter" "danger" "Reply to blocked agent")"
+    local first_needs_input_actions
+    first_needs_input_actions="$(needs_input_reply_actions_json "$first_needs_input_agent" "$first_needs_input_hint")"
+    if [[ "$(jq -r 'length' <<<"$first_needs_input_actions")" -gt 0 ]]; then
+      actions="$(merge_actions_json "$actions" "$first_needs_input_actions")"
+    else
+      actions="$(append_action "$actions" "reply" "Reply" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_needs_input_agent") --text \"Reply with the exact option chosen, continue, and report status and blockers.\" --enter" "danger" "Reply to blocked agent")"
+    fi
+    if is_permission_mode_hint "$first_needs_input_hint"; then
+      if [[ -n "${first_needs_input_workspace// }" ]]; then
+        actions="$(append_action "$actions" "assistants_ws" "Assistants" "skills/amux/scripts/assistant-dx.sh assistants --workspace $(shell_quote "$first_needs_input_workspace") --probe --limit 3" "primary" "Check probe-passed assistants")"
+        actions="$(append_action "$actions" "switch_codex" "Switch Codex" "skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$first_needs_input_workspace") --assistant codex --prompt \"Continue from current state and report status plus next action.\"" "danger" "Switch to codex for non-interactive continuation")"
+      else
+        actions="$(append_action "$actions" "assistants" "Assistants" "skills/amux/scripts/assistant-dx.sh assistants --probe --limit 3" "primary" "Check probe-passed assistants")"
+      fi
+    fi
+    local needs_input_mode_assistant needs_input_mode_actions
+    needs_input_mode_assistant="$first_needs_input_assistant"
+    if [[ -z "${needs_input_mode_assistant// }" ]]; then
+      needs_input_mode_assistant="$(jq -r '.assistant // ""' <<<"$(detect_agent_mode_from_text "" "$first_needs_input_hint")")"
+    fi
+    needs_input_mode_assistant="$(printf '%s' "$needs_input_mode_assistant" | tr '[:upper:]' '[:lower:]')"
+    needs_input_mode_actions='[]'
+    if [[ "$needs_input_mode_assistant" == "claude" || "$needs_input_mode_assistant" == "droid" ]]; then
+      needs_input_mode_actions="$(mode_switch_actions_json "$first_needs_input_agent" "$needs_input_mode_assistant")"
+    fi
+    if [[ "$(jq -r 'length' <<<"$needs_input_mode_actions")" -gt 0 ]]; then
+      actions="$(merge_actions_json "$actions" "$needs_input_mode_actions")"
+    fi
+  fi
+  if [[ -n "$first_active_mode_agent" && -n "$first_active_mode_assistant" ]]; then
+    local active_mode_actions
+    active_mode_actions="$(mode_switch_actions_json "$first_active_mode_agent" "$first_active_mode_assistant")"
+    if [[ "$(jq -r 'length' <<<"$active_mode_actions")" -gt 0 ]]; then
+      actions="$(merge_actions_json "$actions" "$active_mode_actions")"
+    fi
+  fi
+  if [[ -n "$first_active_claude_mode_agent" ]]; then
+    if [[ "$(jq -r '[.[] | select(.id == "claude_permissions")] | length' <<<"$actions")" -eq 0 ]]; then
+      actions="$(append_action "$actions" "claude_permissions" "Permissions" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_active_claude_mode_agent") --text \"/permissions\" --enter" "primary" "Open Claude permission-mode picker")"
+    fi
+  fi
+  if [[ -n "$first_active_droid_mode_agent" ]]; then
+    if [[ "$(jq -r '[.[] | select(.id == "droid_mode")] | length' <<<"$actions")" -eq 0 ]]; then
+      actions="$(append_action "$actions" "droid_mode" "Mode Menu" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$first_active_droid_mode_agent") --text \"/mode\" --enter" "primary" "Show Droid mode options")"
+    fi
   fi
   if [[ "$completed_count" -gt 0 ]]; then
     if [[ -n "$first_completed_workspace" ]]; then
@@ -5263,6 +5839,35 @@ cmd_status() {
   elif [[ -n "$first_ws" ]]; then
     actions="$(append_action "$actions" "continue_ws" "Continue WS" "skills/amux/scripts/assistant-dx.sh continue --workspace $(shell_quote "$first_ws") --text \"Status update and next action.\" --enter" "success" "Continue active work in top workspace")"
   fi
+  actions="$(jq -c 'unique_by(.id)' <<<"$actions")"
+
+  local mode_signals
+  mode_signals="$(jq -c '
+    [
+      .[]
+      | select((.assistant // "") == "claude" or (.assistant // "") == "droid")
+      | {
+          agent_id: (.agent_id // ""),
+          assistant: (.assistant // ""),
+          mode_key: (.mode_key // ""),
+          mode_label: (.mode_label // ""),
+          workspace_id: (.workspace_id // ""),
+          workspace_label: (.workspace_label // "")
+        }
+    ]
+  ' <<<"$captures")"
+  local mode_lines
+  mode_lines="$(jq -r --argjson limit "$limit" '
+    .[:$limit]
+    | map(
+        "- " + (.workspace_label // .workspace_id // "")
+        + " " + (.agent_id // "")
+        + " [" + (.assistant // "")
+        + (if (.mode_label // "") != "" then " " + (.mode_label // "") else " mode unknown" end)
+        + "]"
+      )
+    | join("\n")
+  ' <<<"$mode_signals")"
 
   RESULT_OK=true
   RESULT_COMMAND="$result_command"
@@ -5278,7 +5883,8 @@ cmd_status() {
     --argjson workspace_details "$workspace_details" \
     --argjson alerts "$alerts" \
     --argjson captures "$captures" \
-    '{counts: $counts, workspaces: $workspaces, workspace_details: $workspace_details, alerts: $alerts, captures: $captures}')"
+    --argjson mode_signals "$mode_signals" \
+    '{counts: $counts, workspaces: $workspaces, workspace_details: $workspace_details, alerts: $alerts, captures: $captures, mode_signals: $mode_signals}')"
 
   RESULT_MESSAGE="$(printf '%s %s' "$(if [[ "$status" == "ok" ]]; then printf '✅'; elif [[ "$status" == "needs_input" ]]; then printf '❓'; else printf '⚠️'; fi)" "$summary")"
   RESULT_MESSAGE+=$'\n'"Counts: projects=$project_count workspaces=$workspace_count agents=$agent_count terminals=$terminal_count sessions=$session_count"
@@ -5297,6 +5903,9 @@ cmd_status() {
   fi
   if [[ "$alerts_only" != "true" ]] && ([[ -n "$workspace" ]] || [[ -n "$project" ]]) && [[ -n "${agent_lines// }" ]]; then
     RESULT_MESSAGE+=$'\n'"Agents:"$'\n'"$agent_lines"
+  fi
+  if [[ "$alerts_only" != "true" ]] && [[ -n "${mode_lines// }" ]]; then
+    RESULT_MESSAGE+=$'\n'"Modes:"$'\n'"$mode_lines"
   fi
   if [[ "$alerts_only" != "true" ]] && [[ -n "${ws_lines// }" ]]; then
     RESULT_MESSAGE+=$'\n'"Workspaces:"$'\n'"$ws_lines"
@@ -6210,6 +6819,14 @@ cmd_workflow_kickoff() {
   kickoff_initial_status="$(jq -r '.overall_status // .status // ""' <<<"$start_json")"
   kickoff_agent_id="$(jq -r '.agent_id // ""' <<<"$start_json")"
   if [[ "$kickoff_auto_continue" != "false" && "$kickoff_initial_status" == "needs_input" && -n "${kickoff_agent_id// }" ]]; then
+    local kickoff_requires_user_decision
+    kickoff_requires_user_decision=false
+    if turn_requires_user_decision "$start_json"; then
+      kickoff_requires_user_decision=true
+    fi
+    if [[ "$kickoff_requires_user_decision" == "true" ]]; then
+      :
+    else
     local kickoff_continue_json kickoff_continue_ok kickoff_continue_status
     if kickoff_continue_json="$(run_self_json continue --agent "$kickoff_agent_id" --text "$kickoff_auto_text" --enter --wait-timeout "$wait_timeout" --idle-threshold "$idle_threshold")"; then
       kickoff_continue_ok="$(jq -r '.ok // false' <<<"$kickoff_continue_json")"
@@ -6217,6 +6834,7 @@ cmd_workflow_kickoff() {
       if [[ "$kickoff_continue_ok" == "true" && "$kickoff_continue_status" != "command_error" && "$kickoff_continue_status" != "agent_error" ]]; then
         start_json="$kickoff_continue_json"
       fi
+    fi
     fi
   fi
 
@@ -6530,7 +7148,12 @@ cmd_workflow_dual() {
   if [[ "$auto_continue_impl" == "true" ]] && [[ "$impl_auto_continue_eligible" == "true" ]]; then
     local impl_agent_id
     impl_agent_id="$(jq -r '.agent_id // ""' <<<"$implementation_json")"
-    if [[ -n "${impl_agent_id// }" ]] && [[ -x "$STEP_SCRIPT_PATH" ]]; then
+    local impl_requires_user_decision
+    impl_requires_user_decision=false
+    if turn_requires_user_decision "$implementation_json"; then
+      impl_requires_user_decision=true
+    fi
+    if [[ "$impl_requires_user_decision" != "true" && -n "${impl_agent_id// }" ]] && [[ -x "$STEP_SCRIPT_PATH" ]]; then
       dx_dual_progress "implementation status=$impl_status; auto-continuing once"
       local impl_auto_json
       impl_auto_json="$("$STEP_SCRIPT_PATH" send \
@@ -7068,10 +7691,14 @@ cmd_assistants() {
     RESULT_NEXT_ACTION="Install or remap missing assistant binaries in ~/.amux/config.json."
   fi
   if [[ "$probe_needs_input" -gt 0 ]]; then
-    if [[ "$probe_passed" -gt 0 ]] && [[ "$probe_failed" -eq 0 ]]; then
-      RESULT_NEXT_ACTION="Use probe-passed assistants for non-interactive mobile flows; assistants needing local permission can be skipped."
+    if [[ "$probe_passed" -gt 0 ]]; then
+      if [[ "$codex_probe_passed" -gt 0 ]]; then
+        RESULT_NEXT_ACTION="Use probe-passed assistants for non-interactive mobile flows; codex passed and can be preferred. Skip assistants requiring local permission input."
+      else
+        RESULT_NEXT_ACTION="Use probe-passed assistants for non-interactive mobile flows; skip assistants requiring local permission input."
+      fi
     else
-      RESULT_NEXT_ACTION="Some assistants need interactive permission input. Use codex for non-interactive mobile flows."
+      RESULT_NEXT_ACTION="Some assistants require interactive permission input and no probe passed yet. Run a focused start/status check before relying on them."
     fi
   elif [[ "$probe_failed" -gt 0 ]]; then
     RESULT_NEXT_ACTION="Investigate failing assistant probes before relying on those assistants."

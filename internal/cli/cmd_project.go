@@ -47,31 +47,17 @@ func lenientCanonicalizePath(path string) string {
 // --- project routing ---
 
 func routeProject(w, wErr io.Writer, gf GlobalFlags, args []string, version string) int {
-	if len(args) == 0 {
-		if gf.JSON {
-			ReturnError(w, "usage_error", "Usage: amux project <list|add|remove> [flags]", nil, version)
-		} else {
-			fmt.Fprintln(wErr, "Usage: amux project <list|add|remove> [flags]")
-		}
-		return ExitUsage
-	}
-	sub := args[0]
-	subArgs := args[1:]
-	switch sub {
-	case "list", "ls":
-		return cmdProjectList(w, wErr, gf, subArgs, version)
-	case "add":
-		return cmdProjectAdd(w, wErr, gf, subArgs, version)
-	case "remove", "rm":
-		return cmdProjectRemove(w, wErr, gf, subArgs, version)
-	default:
-		if gf.JSON {
-			ReturnError(w, "unknown_command", "Unknown project subcommand: "+sub, nil, version)
-		} else {
-			fmt.Fprintf(wErr, "Unknown project subcommand: %s\n", sub)
-		}
-		return ExitUsage
-	}
+	return routeSubcommand(w, wErr, gf, args, version, subcommandRouter{
+		scope: "project",
+		usage: "Usage: amux project <list|add|remove> [flags]",
+		handlers: map[string]commandHandler{
+			"list":   cmdProjectList,
+			"ls":     cmdProjectList,
+			"add":    cmdProjectAdd,
+			"remove": cmdProjectRemove,
+			"rm":     cmdProjectRemove,
+		},
+	})
 }
 
 // --- project list ---

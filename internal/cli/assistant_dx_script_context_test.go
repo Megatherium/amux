@@ -168,6 +168,171 @@ esac
 	}
 }
 
+func TestAssistantDXGuide_NeedsInputOptionsExposeReplyChoiceActions(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "project list")
+    printf '%s' '{"ok":true,"data":[{"name":"demo","path":"/tmp/demo"}],"error":null}'
+    ;;
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-1","name":"mobile","repo":"/tmp/demo","root":"/tmp/ws-1","assistant":"claude"}],"error":null}'
+    ;;
+  "agent list")
+    printf '%s' '{"ok":true,"data":[{"agent_id":"agent-1","session_name":"sess-1","workspace_id":"ws-1"}],"error":null}'
+    ;;
+  "terminal list")
+    printf '%s' '{"ok":true,"data":[{"workspace_id":"ws-1","session_name":"term-1"}],"error":null}'
+    ;;
+  "agent capture")
+    printf '%s' '{"ok":true,"data":{"status":"captured","summary":"Pick one:\n1. Continue with codex\n2. Continue with claude","needs_input":true,"input_hint":"Pick one:\n1. Continue with codex\n2. Continue with claude"},"error":null}'
+    ;;
+  *)
+    printf '{"ok":false,"error":{"code":"unexpected","message":"unexpected args: %s"}}' "$*"
+    ;;
+esac
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+
+	payload := runScriptJSON(t, scriptPath, env,
+		"guide",
+		"--workspace", "ws-1",
+	)
+
+	if got, _ := payload["status"].(string); got != "needs_input" {
+		t.Fatalf("status = %q, want %q", got, "needs_input")
+	}
+	nextAction, _ := payload["next_action"].(string)
+	if !strings.Contains(nextAction, "choose one of the listed options") {
+		t.Fatalf("next_action = %q, want explicit choice guidance", nextAction)
+	}
+	suggested, _ := payload["suggested_command"].(string)
+	if !strings.Contains(suggested, "--text \"1\"") {
+		t.Fatalf("suggested_command = %q, want first reply-choice command", suggested)
+	}
+
+	quickActions, ok := payload["quick_actions"].([]any)
+	if !ok || len(quickActions) == 0 {
+		t.Fatalf("quick_actions missing or empty: %#v", payload["quick_actions"])
+	}
+	var sawReply1 bool
+	var sawReply2 bool
+	var sawGenericReply bool
+	for _, raw := range quickActions {
+		action, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := action["id"].(string)
+		switch id {
+		case "reply_1":
+			sawReply1 = true
+		case "reply_2":
+			sawReply2 = true
+		case "reply":
+			sawGenericReply = true
+		}
+	}
+	if !sawReply1 || !sawReply2 {
+		t.Fatalf("expected reply_1 and reply_2 quick actions in %#v", quickActions)
+	}
+	if sawGenericReply {
+		t.Fatalf("did not expect generic reply action when choice actions exist: %#v", quickActions)
+	}
+}
+
+func TestAssistantDXGuide_PermissionModeNeedsInputAddsAssistantsAndSwitchCodex(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "project list")
+    printf '%s' '{"ok":true,"data":[{"name":"demo","path":"/tmp/demo"}],"error":null}'
+    ;;
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-1","name":"mobile","repo":"/tmp/demo","root":"/tmp/ws-1","assistant":"claude"}],"error":null}'
+    ;;
+  "agent list")
+    printf '%s' '{"ok":true,"data":[{"agent_id":"agent-1","session_name":"sess-1","workspace_id":"ws-1"}],"error":null}'
+    ;;
+  "terminal list")
+    printf '%s' '{"ok":true,"data":[{"workspace_id":"ws-1","session_name":"term-1"}],"error":null}'
+    ;;
+  "agent capture")
+    printf '%s' '{"ok":true,"data":{"status":"captured","summary":"Assistant is waiting for local permission-mode selection.","needs_input":true,"input_hint":"Assistant is waiting for local permission-mode selection."},"error":null}'
+    ;;
+  *)
+    printf '{"ok":false,"error":{"code":"unexpected","message":"unexpected args: %s"}}' "$*"
+    ;;
+esac
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+
+	payload := runScriptJSON(t, scriptPath, env,
+		"guide",
+		"--workspace", "ws-1",
+	)
+
+	if got, _ := payload["status"].(string); got != "needs_input" {
+		t.Fatalf("status = %q, want %q", got, "needs_input")
+	}
+	nextAction, _ := payload["next_action"].(string)
+	if !strings.Contains(nextAction, "permission mode locally") {
+		t.Fatalf("next_action = %q, want permission-mode guidance", nextAction)
+	}
+	suggested, _ := payload["suggested_command"].(string)
+	if !strings.Contains(suggested, "assistants --workspace ws-1 --probe --limit 3") {
+		t.Fatalf("suggested_command = %q, want workspace assistants probe command", suggested)
+	}
+
+	quickActions, ok := payload["quick_actions"].([]any)
+	if !ok || len(quickActions) == 0 {
+		t.Fatalf("quick_actions missing or empty: %#v", payload["quick_actions"])
+	}
+	var sawAssistants bool
+	var sawSwitchCodex bool
+	for _, raw := range quickActions {
+		action, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := action["id"].(string)
+		cmd, _ := action["command"].(string)
+		if id == "assistants_ws" && strings.Contains(cmd, "assistants --workspace ws-1 --probe --limit 3") {
+			sawAssistants = true
+		}
+		if id == "switch_codex" && strings.Contains(cmd, "--assistant codex") {
+			sawSwitchCodex = true
+		}
+	}
+	if !sawAssistants || !sawSwitchCodex {
+		t.Fatalf("expected assistants_ws and switch_codex quick actions in %#v", quickActions)
+	}
+}
+
 func TestAssistantDXStart_UsesSiblingTurnScriptWhenInvokedOutsideRepoRoot(t *testing.T) {
 	requireBinary(t, "jq")
 	requireBinary(t, "bash")

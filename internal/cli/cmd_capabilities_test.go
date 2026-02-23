@@ -89,13 +89,20 @@ func TestCmdCapabilitiesJSON(t *testing.T) {
 		t.Fatalf("expected agent job status command in capabilities")
 	}
 	foundAgentJobWait := false
+	foundDoctorTmux := false
 	for _, raw := range commands {
-		if cmd, _ := raw.(string); cmd == "agent job wait" {
+		cmd, _ := raw.(string)
+		if cmd == "agent job wait" {
 			foundAgentJobWait = true
-			break
+		}
+		if cmd == "doctor tmux" {
+			foundDoctorTmux = true
 		}
 	}
 	if !foundAgentJobWait {
 		t.Fatalf("expected agent job wait command in capabilities")
+	}
+	if !foundDoctorTmux {
+		t.Fatalf("expected doctor tmux command in capabilities")
 	}
 }

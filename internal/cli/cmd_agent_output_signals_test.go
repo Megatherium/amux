@@ -42,6 +42,23 @@ func TestCompactAgentOutput_DropsPromptWrappedContinuation(t *testing.T) {
 	}
 }
 
+func TestCompactAgentOutput_DropsDroidChromeNoise(t *testing.T) {
+	raw := "v0.60.0\nYou are standing in an open terminal. An AI awaits your commands.\nENTER to send • \\ + ENTER for a new line • @ to mention files\nCurrent folder: /tmp/repo\n> Reply exactly READY in one line.\n⛬ READY\n⛬ Status: Fresh repo, no pending changes.\nAuto (High) - allow all commands             GLM-5 [Z.AI Coding Plan] [custom]\nshift+tab to cycle modes (auto/spec), ctrl+L for        ctrl+N to cycle\nautonomy                                                models\n[⏱ 1m 18s]? for help                                                     IDE ◌"
+	got := compactAgentOutput(raw)
+	want := "⛬ READY\n⛬ Status: Fresh repo, no pending changes."
+	if got != want {
+		t.Fatalf("compactAgentOutput() = %q, want %q", got, want)
+	}
+}
+
+func TestCompactAgentOutput_DropsANSIWrappedPromptChrome(t *testing.T) {
+	raw := "\x1b[38;5;39m❯\u00a0Try \"fix lint errors\"\x1b[0m\n• useful line"
+	got := compactAgentOutput(raw)
+	if got != "• useful line" {
+		t.Fatalf("compactAgentOutput() = %q, want %q", got, "• useful line")
+	}
+}
+
 func TestDetectNeedsInput_ConfirmationPrompt(t *testing.T) {
 	content := "Plan complete\nDo you want me to proceed? (y/N)"
 	ok, hint := detectNeedsInput(content)
@@ -72,6 +89,52 @@ func TestDetectNeedsInputPrompt_ExplicitMarker(t *testing.T) {
 	}
 	if hint != "Do you want me to proceed? (y/N)" {
 		t.Fatalf("hint = %q, want %q", hint, "Do you want me to proceed? (y/N)")
+	}
+}
+
+func TestDetectNeedsInputPrompt_ExplicitMarkerIncludesTrailingOptions(t *testing.T) {
+	content := "Choose one and reply with the number:\n1. Continue with codex\n2) Continue with claude\n3. Ask me later\n4. Cancel"
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	want := "Choose one and reply with the number:\n1. Continue with codex\n2) Continue with claude\n3. Ask me later\n4. Cancel"
+	if hint != want {
+		t.Fatalf("hint = %q, want %q", hint, want)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ExplicitMarkerIncludesLetterOptions(t *testing.T) {
+	content := "Reply with one letter:\nA. Keep current assistant\nB) Switch assistant"
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	want := "Reply with one letter:\nA. Keep current assistant\nB) Switch assistant"
+	if hint != want {
+		t.Fatalf("hint = %q, want %q", hint, want)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ExplicitMarkerIncludesExtendedNumericOptions(t *testing.T) {
+	content := "Pick one:\n1. One\n2. Two\n3. Three\n4. Four\n5. Five"
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ExplicitMarkerIncludesExtendedLetterOptions(t *testing.T) {
+	content := "Reply with one letter:\nA. First\nB. Second\nC. Third\nD. Fourth\nE. Fifth"
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
 	}
 }
 

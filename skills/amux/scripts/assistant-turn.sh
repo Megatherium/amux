@@ -3,7 +3,7 @@
 #
 # Usage:
 #   assistant-turn.sh run  --workspace <id> --assistant <name> --prompt <text> [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
-#   assistant-turn.sh send --agent <id> --text <text> [--enter] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
+#   assistant-turn.sh send --agent <id> [--text <text>] [--enter] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
 #
 # Behavior:
 # - Executes bounded steps via assistant-step.sh.
@@ -41,7 +41,7 @@ usage() {
   cat >&2 <<'EOF'
 Usage:
   assistant-turn.sh run  --workspace <id> --assistant <name> --prompt <text> [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
-  assistant-turn.sh send --agent <id> --text <text> [--enter] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
+  assistant-turn.sh send --agent <id> [--text <text>] [--enter] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
 EOF
 }
 
@@ -338,9 +338,9 @@ case "$MODE" in
     fi
     ;;
   send)
-    if [[ -z "$AGENT_ID" || -z "$TEXT" ]]; then
+    if [[ -z "$AGENT_ID" || ( -z "$TEXT" && "$ENTER" != "true" ) ]]; then
       usage
-      echo '{"ok":false,"status":"command_error","summary":"Missing required flags","error":"send requires --agent and --text"}'
+      echo '{"ok":false,"status":"command_error","summary":"Missing required flags","error":"send requires --agent and --text (or --enter)"}'
       exit 0
     fi
     ;;
@@ -407,11 +407,13 @@ while [[ "$STEPS_USED" -lt "$MAX_STEPS" ]]; do
     STEP_ARGS=(
       "$STEP_SCRIPT" send
       --agent "$CURRENT_AGENT"
-      --text "$CURRENT_TEXT"
       --wait-timeout "$WAIT_TIMEOUT"
       --idle-threshold "$IDLE_THRESHOLD"
       --idempotency-key "$STEP_IDEMPOTENCY_KEY"
     )
+    if [[ -n "$CURRENT_TEXT" ]]; then
+      STEP_ARGS+=(--text "$CURRENT_TEXT")
+    fi
     if [[ "$CURRENT_ENTER" == "true" ]]; then
       STEP_ARGS+=(--enter)
     fi

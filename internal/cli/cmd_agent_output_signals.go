@@ -12,7 +12,7 @@ func compactAgentOutput(content string) string {
 	out := make([]string, 0, len(lines))
 	dropPromptContinuation := false
 	for _, raw := range lines {
-		line := strings.TrimSpace(raw)
+		line := strings.TrimSpace(stripANSIEscape(raw))
 		if line == "" {
 			continue
 		}
@@ -31,6 +31,32 @@ func compactAgentOutput(content string) string {
 		out = append(out, line)
 	}
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func stripANSIEscape(line string) string {
+	if !strings.Contains(line, "\x1b") {
+		return line
+	}
+	var b strings.Builder
+	for i := 0; i < len(line); i++ {
+		if line[i] != 0x1b {
+			b.WriteByte(line[i])
+			continue
+		}
+		// Handle CSI escape sequences: ESC [ ... final-byte
+		if i+1 < len(line) && line[i+1] == '[' {
+			i += 2
+			for i < len(line) {
+				c := line[i]
+				if c >= '@' && c <= '~' {
+					break
+				}
+				i++
+			}
+			continue
+		}
+	}
+	return b.String()
 }
 
 func isPromptChromeLine(line string) bool {
@@ -66,38 +92,52 @@ func hasLeadingIndent(raw string) bool {
 }
 
 func shouldDropAgentChromeLine(line string) bool {
-	if isAgentProgressNoiseLine(line) {
+	clean := strings.TrimSpace(stripANSIEscape(line))
+	if isAgentProgressNoiseLine(clean) {
 		return true
 	}
 	switch {
-	case strings.HasPrefix(line, "╭"),
-		strings.HasPrefix(line, "╰"),
-		strings.HasPrefix(line, "│"),
-		strings.HasPrefix(line, "─"),
-		strings.HasPrefix(line, "────────────────"),
-		strings.HasPrefix(line, "└ "),
-		strings.HasPrefix(line, "⎿ "),
-		strings.HasPrefix(line, "↳ Interacted with "),
-		strings.HasPrefix(line, "› "),
-		strings.HasPrefix(line, "❯"),
-		strings.HasPrefix(line, "? for shortcuts"),
-		strings.HasPrefix(line, "✶ "),
-		strings.HasPrefix(line, "✻ "),
-		line == "✻",
-		line == "|",
-		strings.HasPrefix(line, "▟"),
-		strings.HasPrefix(line, "▐"),
-		strings.HasPrefix(line, "▝"),
-		strings.HasPrefix(line, "▘"),
-		strings.HasPrefix(line, "Tip:"),
-		strings.HasPrefix(line, "• Ran "),
-		strings.Contains(line, "Claude Code v"),
-		strings.Contains(line, "· Claude Max"),
-		strings.HasPrefix(line, "model:"),
-		strings.HasPrefix(line, "directory:"),
-		strings.HasPrefix(line, "cwd:"),
-		strings.HasPrefix(line, "workspace:"),
-		strings.Contains(line, "chatgpt.com/codex"):
+	case strings.HasPrefix(clean, "╭"),
+		strings.HasPrefix(clean, "╰"),
+		strings.HasPrefix(clean, "│"),
+		strings.HasPrefix(clean, "─"),
+		strings.HasPrefix(clean, "────────────────"),
+		strings.HasPrefix(clean, "└ "),
+		strings.HasPrefix(clean, "> "),
+		strings.HasPrefix(clean, "⎿ "),
+		strings.HasPrefix(clean, "↳ Interacted with "),
+		strings.HasPrefix(clean, "› "),
+		strings.HasPrefix(clean, "❯"),
+		strings.HasPrefix(clean, "? for shortcuts"),
+		strings.HasPrefix(clean, "✶ "),
+		strings.HasPrefix(clean, "✻ "),
+		clean == "✻",
+		clean == "|",
+		strings.HasPrefix(clean, "▟"),
+		strings.HasPrefix(clean, "▐"),
+		strings.HasPrefix(clean, "▝"),
+		strings.HasPrefix(clean, "▘"),
+		strings.HasPrefix(clean, "Tip:"),
+		strings.HasPrefix(clean, "Try \""),
+		strings.HasPrefix(clean, "• Ran "),
+		(strings.Contains(clean, "❯") && strings.Contains(clean, "Try \"")),
+		strings.Contains(clean, "Claude Code v"),
+		strings.Contains(clean, "· Claude Max"),
+		strings.HasPrefix(clean, "model:"),
+		strings.HasPrefix(clean, "directory:"),
+		strings.HasPrefix(clean, "cwd:"),
+		strings.HasPrefix(clean, "workspace:"),
+		strings.HasPrefix(clean, "Current folder:"),
+		strings.HasPrefix(clean, "ENTER to send"),
+		strings.HasPrefix(clean, "You are standing in an open terminal."),
+		strings.HasPrefix(clean, "Auto (High) - allow all commands"),
+		strings.Contains(clean, "[Z.AI Coding Plan]"),
+		strings.Contains(clean, "shift+tab to cycle modes (auto/spec)"),
+		strings.Contains(clean, "ctrl+N to cycle"),
+		(strings.Contains(strings.ToLower(clean), "autonomy") && strings.Contains(strings.ToLower(clean), "models")),
+		(strings.HasPrefix(clean, "[⏱") && strings.Contains(strings.ToLower(clean), "for help")),
+		(strings.HasPrefix(strings.ToLower(clean), "v0.") && len(clean) <= 10),
+		strings.Contains(clean, "chatgpt.com/codex"):
 		return true
 	default:
 		return false
@@ -123,7 +163,7 @@ func isAgentProgressNoiseLine(line string) bool {
 }
 
 func normalizeStatusLine(line string) string {
-	trimmed := strings.TrimSpace(line)
+	trimmed := strings.TrimSpace(stripANSIEscape(line))
 	switch {
 	case strings.HasPrefix(trimmed, "• "):
 		return strings.TrimSpace(strings.TrimPrefix(trimmed, "• "))
@@ -169,7 +209,11 @@ func detectNeedsInputPrompt(content string) (bool, string) {
 			continue
 		}
 		if looksLikeExplicitNeedsInputLine(line) {
-			return true, normalizeNeedsInputHint(line)
+			hint := normalizeNeedsInputHint(line)
+			if optionHint := trailingNeedsInputOptionLines(lines, i+1); optionHint != "" {
+				hint = hint + "\n" + optionHint
+			}
+			return true, hint
 		}
 	}
 	return false, ""
@@ -215,10 +259,70 @@ func looksLikeExplicitNeedsInputLine(line string) bool {
 		"requires approval",
 		"permission required",
 		"bypass permissions on",
+		"pick one",
+		"choose one",
+		"reply with",
+		"enter 1",
 	}
 	for _, marker := range markers {
 		if strings.Contains(lower, marker) {
 			return true
+		}
+	}
+	return false
+}
+
+func trailingNeedsInputOptionLines(lines []string, start int) string {
+	if start < 0 || start >= len(lines) {
+		return ""
+	}
+	options := make([]string, 0, 9)
+	for i := start; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			if len(options) > 0 {
+				break
+			}
+			continue
+		}
+		if shouldDropAgentChromeLine(line) {
+			continue
+		}
+		if looksLikeEnumeratedOptionLine(line) {
+			options = append(options, line)
+			if len(options) >= 9 {
+				break
+			}
+			continue
+		}
+		if len(options) > 0 {
+			break
+		}
+	}
+	return strings.Join(options, "\n")
+}
+
+func looksLikeEnumeratedOptionLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	for n := 1; n <= 9; n++ {
+		pDot := fmt.Sprintf("%d.", n)
+		pParen := fmt.Sprintf("%d)", n)
+		if strings.HasPrefix(trimmed, pDot) {
+			return strings.TrimSpace(trimmed[len(pDot):]) != ""
+		}
+		if strings.HasPrefix(trimmed, pParen) {
+			return strings.TrimSpace(trimmed[len(pParen):]) != ""
+		}
+	}
+	for _, prefix := range []string{
+		"A.", "A)", "B.", "B)", "C.", "C)", "D.", "D)", "E.", "E)",
+		"a.", "a)", "b.", "b)", "c.", "c)", "d.", "d)", "e.", "e)",
+	} {
+		if strings.HasPrefix(trimmed, prefix) {
+			return strings.TrimSpace(trimmed[len(prefix):]) != ""
 		}
 	}
 	return false

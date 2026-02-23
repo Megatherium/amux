@@ -9,7 +9,7 @@ HARNESS_HEIGHT ?= 48
 HARNESS_SCROLLBACK_FRAMES ?= 600
 GOFUMPT ?= go run mvdan.cc/gofumpt@v0.9.2
 
-.PHONY: build install test bench lint lint-strict lint-strict-new lint-ci-parity check-file-length fmt fmt-check vet clean run dev devcheck help release-check release-tag release-push release harness-center harness-sidebar harness-monitor harness-presets
+.PHONY: build install test bench lint lint-strict lint-strict-new lint-ci-parity check-file-length fmt fmt-check vet clean run dev devcheck help release-check release-tag release-push release harness-center harness-sidebar harness-monitor harness-presets tmux-doctor tmux-prune
 
 build:
 	go build -o $(BINARY_NAME) $(MAIN_PACKAGE)
@@ -141,6 +141,8 @@ help:
 	@echo "  harness-sidebar - Run sidebar harness preset (deep scrollback)"
 	@echo "  harness-monitor - Run monitor harness preset"
 	@echo "  harness-presets - Run all harness presets"
+	@echo "  tmux-doctor - Diagnose tmux/PTY pressure and stale sessions"
+	@echo "  tmux-prune - Prune detached/orphaned amux tmux sessions"
 	@echo "  release-check - Run tests and harness smoke checks"
 	@echo "  release-tag   - Create an annotated tag (VERSION=vX.Y.Z)"
 	@echo "  release-push  - Push the tag to origin (VERSION=vX.Y.Z)"
@@ -162,3 +164,9 @@ release-push:
 	@git push origin "$(VERSION)"
 
 release: release-check release-tag release-push
+
+tmux-doctor:
+	go run ./cmd/amux doctor tmux
+
+tmux-prune:
+	go run ./cmd/amux doctor tmux --prune --yes --older-than 6h

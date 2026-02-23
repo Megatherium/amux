@@ -161,3 +161,75 @@ printf '%s' '{"ok":true,"mode":"send","status":"idle","overall_status":"complete
 		t.Fatalf("summary = %q, want auto-continue summary", summary)
 	}
 }
+
+func TestAssistantDXWorkflowKickoff_DoesNotAutoContinueWhenPromptHasExplicitChoices(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+	fakeTurnPath := filepath.Join(fakeBinDir, "fake-turn.sh")
+	sendCalledPath := filepath.Join(fakeBinDir, "send-called.txt")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "project list")
+    printf '%s' '{"ok":true,"data":[],"error":null}'
+    ;;
+  "project add")
+    printf '%s' '{"ok":true,"data":{"name":"demo","path":"/tmp/demo"},"error":null}'
+    ;;
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-mobile","name":"mobile","repo":"/tmp/demo","root":"/tmp/ws-mobile","assistant":"codex","created":"2026-02-22T00:00:00Z"}],"error":null}'
+    ;;
+  "workspace create")
+    printf '%s' '{"ok":true,"data":{"id":"ws-mobile","name":"mobile","repo":"/tmp/demo","root":"/tmp/ws-mobile","assistant":"codex"},"error":null}'
+    ;;
+  *)
+    printf '{"ok":false,"error":{"code":"unexpected","message":"unexpected args: %s"}}' "$*"
+    ;;
+esac
+`)
+
+	writeExecutable(t, fakeTurnPath, `#!/usr/bin/env bash
+set -euo pipefail
+mode="${1:-}"
+if [[ "$mode" == "run" ]]; then
+  printf '%s' '{"ok":true,"mode":"run","status":"needs_input","overall_status":"needs_input","summary":"Pick one:\n1. Continue with codex\n2. Continue with claude","input_hint":"Pick one:\n1. Continue with codex\n2. Continue with claude","agent_id":"agent-1","workspace_id":"ws-mobile","assistant":"codex","next_action":"","suggested_command":"","quick_actions":[],"channel":{"message":"needs input","chunks":["needs input"],"chunks_meta":[{"index":1,"total":1,"text":"needs input"}],"inline_buttons":[]}}'
+  exit 0
+fi
+printf '%s' "called" > "${SEND_CALLED_PATH:?missing SEND_CALLED_PATH}"
+printf '%s' '{"ok":true,"mode":"send","status":"idle","overall_status":"completed","summary":"should not auto-continue","agent_id":"agent-1","workspace_id":"ws-mobile","assistant":"codex","next_action":"Run review.","suggested_command":"","quick_actions":[],"channel":{"message":"continued","chunks":["continued"],"chunks_meta":[{"index":1,"total":1,"text":"continued"}],"inline_buttons":[]}}'
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+	env = withEnv(env, "AMUX_ASSISTANT_DX_TURN_SCRIPT", fakeTurnPath)
+	env = withEnv(env, "AMUX_ASSISTANT_DX_SELF_SCRIPT", scriptPath)
+	env = withEnv(env, "AMUX_ASSISTANT_PRESENT_SCRIPT", "/nonexistent")
+	env = withEnv(env, "SEND_CALLED_PATH", sendCalledPath)
+
+	payload := runScriptJSON(t, scriptPath, env,
+		"workflow", "kickoff",
+		"--project", "/tmp/demo",
+		"--name", "mobile",
+		"--assistant", "codex",
+		"--prompt", "Fix the highest-impact debt item.",
+	)
+
+	if got, _ := payload["status"].(string); got != "needs_input" {
+		t.Fatalf("status = %q, want %q when explicit choices require user decision", got, "needs_input")
+	}
+	nextAction, _ := payload["next_action"].(string)
+	if !strings.Contains(nextAction, "choose one of the offered options") {
+		t.Fatalf("next_action = %q, want explicit choice guidance", nextAction)
+	}
+	if _, err := os.Stat(sendCalledPath); err == nil {
+		t.Fatalf("unexpected auto-continue send invocation for explicit choice prompt")
+	}
+}

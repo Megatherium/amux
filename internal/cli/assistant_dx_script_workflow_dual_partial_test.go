@@ -153,6 +153,83 @@ printf '%s' '{"ok":true,"mode":"send","status":"idle","overall_status":"complete
 	}
 }
 
+func TestAssistantDXWorkflowDual_ImplNeedsInputWithChoicesSkipsAutoContinue(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+	fakeTurnPath := filepath.Join(fakeBinDir, "fake-turn.sh")
+	fakeStepPath := filepath.Join(fakeBinDir, "fake-step.sh")
+	stepCalledPath := filepath.Join(fakeBinDir, "step-called.txt")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-1","name":"demo","repo":"/tmp/demo"}],"error":null}'
+    ;;
+  *)
+    printf '%s' '{"ok":true,"data":{},"error":null}'
+    ;;
+esac
+`)
+
+	writeExecutable(t, fakeTurnPath, `#!/usr/bin/env bash
+set -euo pipefail
+assistant=""
+for ((i=1; i<=$#; i++)); do
+  if [[ "${!i}" == "--assistant" ]]; then
+    next=$((i+1))
+    assistant="${!next}"
+  fi
+done
+if [[ "$assistant" == "claude" ]]; then
+  printf '%s' '{"ok":true,"mode":"run","status":"needs_input","overall_status":"needs_input","summary":"Pick one:\n1. Continue with codex\n2. Continue with claude","input_hint":"Pick one:\n1. Continue with codex\n2. Continue with claude","agent_id":"agent-impl","workspace_id":"ws-1","assistant":"claude","next_action":"Ask user to choose one option.","suggested_command":"","quick_actions":[],"channel":{"message":"impl needs input","chunks":["impl needs input"],"chunks_meta":[{"index":1,"total":1,"text":"impl needs input"}],"inline_buttons":[]}}'
+  exit 0
+fi
+printf '%s' '{"ok":true,"mode":"run","status":"idle","overall_status":"completed","summary":"review should not run","agent_id":"agent-review","workspace_id":"ws-1","assistant":"codex","next_action":"Ship.","suggested_command":"skills/amux/scripts/assistant-dx.sh git ship --workspace ws-1","quick_actions":[],"channel":{"message":"review","chunks":["review"],"chunks_meta":[{"index":1,"total":1,"text":"review"}],"inline_buttons":[]}}'
+`)
+
+	writeExecutable(t, fakeStepPath, `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s' "called" > "${STEP_CALLED_PATH:?missing STEP_CALLED_PATH}"
+printf '%s' '{"ok":true,"mode":"send","status":"idle","overall_status":"completed","summary":"should not auto-continue","agent_id":"agent-impl","workspace_id":"ws-1","assistant":"claude","quick_actions":[],"channel":{"message":"done","chunks":["done"],"chunks_meta":[{"index":1,"total":1,"text":"done"}],"inline_buttons":[]}}'
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+	env = withEnv(env, "AMUX_ASSISTANT_DX_TURN_SCRIPT", fakeTurnPath)
+	env = withEnv(env, "AMUX_ASSISTANT_DX_STEP_SCRIPT", fakeStepPath)
+	env = withEnv(env, "AMUX_ASSISTANT_DX_SELF_SCRIPT", scriptPath)
+	env = withEnv(env, "AMUX_ASSISTANT_PRESENT_SCRIPT", "/nonexistent")
+	env = withEnv(env, "AMUX_ASSISTANT_DX_IMPLEMENT_NEEDS_INPUT_RETRY", "false")
+	env = withEnv(env, "STEP_CALLED_PATH", stepCalledPath)
+
+	payload := runScriptJSON(t, scriptPath, env,
+		"workflow", "dual",
+		"--workspace", "ws-1",
+		"--implement-assistant", "claude",
+		"--review-assistant", "codex",
+		"--auto-continue-impl", "true",
+	)
+
+	if got, _ := payload["status"].(string); got != "needs_input" {
+		t.Fatalf("status = %q, want %q when implementation requires explicit user decision", got, "needs_input")
+	}
+	if _, err := os.Stat(stepCalledPath); err == nil {
+		t.Fatalf("unexpected implementation auto-continue step invocation for explicit choice prompt")
+	}
+	nextAction, _ := payload["next_action"].(string)
+	if !strings.Contains(nextAction, "Ask user") && !strings.Contains(nextAction, "Reply") {
+		t.Fatalf("next_action = %q, want implementation needs_input guidance", nextAction)
+	}
+}
+
 func TestAssistantDXWorkflowDual_ImplTimedOutFallsBackToConfiguredAssistant(t *testing.T) {
 	requireBinary(t, "jq")
 	requireBinary(t, "bash")

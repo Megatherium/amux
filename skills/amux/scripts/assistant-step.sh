@@ -3,7 +3,7 @@
 #
 # Usage:
 #   assistant-step.sh run  --workspace <id> --assistant <name> --prompt <text> [--wait-timeout 60s] [--idle-threshold 10s]
-#   assistant-step.sh send --agent <id> --text <text> [--enter] [--wait-timeout 60s] [--idle-threshold 10s]
+#   assistant-step.sh send --agent <id> [--text <text>] [--enter] [--wait-timeout 60s] [--idle-threshold 10s]
 #
 # Emits a normalized JSON object for easy chat orchestration:
 # {
@@ -60,7 +60,7 @@ usage() {
   cat >&2 <<'EOF'
 Usage:
   assistant-step.sh run  --workspace <id> --assistant <name> --prompt <text> [--wait-timeout 60s] [--idle-threshold 10s]
-  assistant-step.sh send --agent <id> --text <text> [--enter] [--wait-timeout 60s] [--idle-threshold 10s]
+  assistant-step.sh send --agent <id> [--text <text>] [--enter] [--wait-timeout 60s] [--idle-threshold 10s]
 EOF
 }
 
@@ -260,14 +260,29 @@ trim_line() {
 
 is_chrome_line() {
   local line="$1"
+  local lower collapsed
+  lower="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
+  collapsed="$(printf '%s' "$lower" | tr -s '[:space:]' ' ')"
   case "$line" in
-    ""|"|"|✻|"╭"*|"╰"*|"│"*|"─"*|"└ "*|"⎿ "*|"↳ Interacted with "*|"› "*|"❯ "*|"? for shortcuts"*|"✶ "*|"✻ "*|"▟"*|"▐"*|"▝"*|"▘"*|"Tip:"*|"model:"*|"directory:"*|"cwd:"*|"workspace:"*|"• Explored"|"• Exploring"|"• Working ("*|"Working ("*|"Thinking "*|*" no sandbox "*|*"/model "*|"~/.amux/"*|*"sandbox   "*|*"sandbox "*")"|"shift+tab to accept edits"*|"/ commands · @ files · ! shell"*|*"? for help"*|*"▄▄▄▄"*|*"███"*|*"▀▀▀"*|">   Type your message or @path/to/file"*)
+    ""|"|"|✻|"╭"*|"╰"*|"│"*|"─"*|"└ "*|"⎿ "*|"↳ Interacted with "*|"› "*|"❯ "*|"> "*|"? for shortcuts"*|"✶ "*|"✻ "*|"▟"*|"▐"*|"▝"*|"▘"*|"Tip:"*|"model:"*|"directory:"*|"cwd:"*|"workspace:"*|"Current folder:"*|"ENTER to send"*|"You are standing in an open terminal."*|"Auto (High) - allow all commands"*|"Try \""*|"• Explored"|"• Exploring"|"• Working ("*|"Working ("*|"Thinking "*|*" no sandbox "*|*"/model "*|"~/.amux/"*|*"sandbox   "*|*"sandbox "*")"|"shift+tab to accept edits"*|"/ commands · @ files · ! shell"*|*"? for help"*|*"▄▄▄▄"*|*"███"*|*"▀▀▀"*|">   Type your message or @path/to/file"*)
       return 0
       ;;
     *)
-      return 1
       ;;
   esac
+  if [[ "$line" == *"[Z.AI Coding Plan]"* || "$lower" == *"shift+tab to cycle modes (auto/spec)"* || "$lower" == *"ctrl+n to cycle"* || "$lower" == *"chatgpt.com/codex"* ]]; then
+    return 0
+  fi
+  if [[ "$collapsed" == *"autonomy models"* ]]; then
+    return 0
+  fi
+  if [[ "$line" == "[⏱"* && "$lower" == *"for help"* ]]; then
+    return 0
+  fi
+  if [[ "$lower" =~ ^v0\.[0-9]+(\.[0-9]+)*$ ]]; then
+    return 0
+  fi
+  return 1
 }
 
 compact_agent_text() {
@@ -512,6 +527,53 @@ sanitize_summary_text() {
   printf '%s' "$text"
 }
 
+text_has_reply_option_number() {
+  local text="$1"
+  local number="$2"
+  if [[ -z "${text// }" || -z "${number// }" ]]; then
+    return 1
+  fi
+  printf '%s\n' "$text" | grep -Eiq "(^|[[:space:]])${number}[.)][[:space:]]+"
+}
+
+text_has_reply_option_letter() {
+  local text="$1"
+  local letter="$2"
+  local upper lower
+  if [[ -z "${text// }" || -z "${letter// }" ]]; then
+    return 1
+  fi
+  upper="$(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]')"
+  lower="$(printf '%s' "$letter" | tr '[:upper:]' '[:lower:]')"
+  printf '%s\n' "$text" | grep -Eiq "(^|[[:space:]])(${upper}|${lower})[.)][[:space:]]+"
+}
+
+text_has_yes_no_prompt() {
+  local text="$1"
+  local lower
+  if [[ -z "${text// }" ]]; then
+    return 1
+  fi
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$lower" == *"(y/n)"* || "$lower" == *"[y/n]"* || "$lower" == *"(yes/no)"* || "$lower" == *"[yes/no]"* || "$lower" == *"yes or no"* || "$lower" == *"reply yes"* || "$lower" == *"reply no"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+text_has_press_enter_prompt() {
+  local text="$1"
+  local lower
+  if [[ -z "${text// }" ]]; then
+    return 1
+  fi
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$lower" == *"press enter"* || "$lower" == *"hit enter"* || "$lower" == *"press return"* || "$lower" == *"hit return"* || "$lower" == *"just press enter"* || "$lower" == *"enter to continue"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
 build_delta_excerpt() {
   local raw="$1"
   local max_lines="$2"
@@ -661,12 +723,16 @@ case "$MODE" in
     cmd+=(agent run --workspace "$WORKSPACE" --assistant "$ASSISTANT" --prompt "$PROMPT" --wait --wait-timeout "$WAIT_TIMEOUT" --idle-threshold "$IDLE_THRESHOLD")
     ;;
   send)
-    if [[ -z "$AGENT_ID" || -z "$TEXT" ]]; then
+    if [[ -z "$AGENT_ID" || ( -z "$TEXT" && "$ENTER" != "true" ) ]]; then
       usage
-      print_json_error "$MODE" "command_error" "Missing required flags" "send requires --agent and --text"
+      print_json_error "$MODE" "command_error" "Missing required flags" "send requires --agent and --text (or --enter)"
       exit 2
     fi
-    cmd+=(agent send --agent "$AGENT_ID" --text "$TEXT" --wait --wait-timeout "$WAIT_TIMEOUT" --idle-threshold "$IDLE_THRESHOLD")
+    cmd+=(agent send --agent "$AGENT_ID")
+    if [[ -n "$TEXT" ]]; then
+      cmd+=(--text "$TEXT")
+    fi
+    cmd+=(--wait --wait-timeout "$WAIT_TIMEOUT" --idle-threshold "$IDLE_THRESHOLD")
     if [[ "$ENTER" == "true" ]]; then
       cmd+=(--enter)
     fi
@@ -1063,6 +1129,77 @@ if [[ -n "$AGENT_ID_OUT" ]]; then
   STATUS_SEND_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"Provide a one-line progress status.\" --enter --wait-timeout 60s --idle-threshold 10s"
 fi
 
+SWITCH_CODEX_COMMAND=""
+if [[ "$BLOCKED_PERMISSION_MODE" == "true" && -n "$WORKSPACE_ID_OUT" ]]; then
+  if [[ "${ASSISTANT_OUT:-}" != "codex" ]]; then
+    SWITCH_CODEX_COMMAND="$STEP_SCRIPT_CMD run --workspace $(shell_quote "$WORKSPACE_ID_OUT") --assistant codex --prompt \"Continue from current workspace state and provide concise status plus next action.\" --wait-timeout 60s --idle-threshold 10s"
+    if [[ -z "${SUGGESTED_COMMAND// }" ]]; then
+      SUGGESTED_COMMAND="$SWITCH_CODEX_COMMAND"
+    fi
+  fi
+fi
+
+NEEDS_INPUT_REPLY_1_COMMAND=""
+NEEDS_INPUT_REPLY_2_COMMAND=""
+NEEDS_INPUT_REPLY_3_COMMAND=""
+NEEDS_INPUT_REPLY_4_COMMAND=""
+NEEDS_INPUT_REPLY_5_COMMAND=""
+NEEDS_INPUT_REPLY_A_COMMAND=""
+NEEDS_INPUT_REPLY_B_COMMAND=""
+NEEDS_INPUT_REPLY_C_COMMAND=""
+NEEDS_INPUT_REPLY_D_COMMAND=""
+NEEDS_INPUT_REPLY_E_COMMAND=""
+NEEDS_INPUT_REPLY_YES_COMMAND=""
+NEEDS_INPUT_REPLY_NO_COMMAND=""
+NEEDS_INPUT_REPLY_ENTER_COMMAND=""
+if [[ "$STATUS" == "needs_input" && -n "$AGENT_ID_OUT" ]]; then
+  NEEDS_INPUT_REPLY_CONTEXT="$(printf '%s\n%s\n%s\n%s' "$INPUT_HINT" "$SUMMARY" "$RESPONSE_SUMMARY" "$DELTA_COMPACT")"
+  if text_has_reply_option_number "$NEEDS_INPUT_REPLY_CONTEXT" "1"; then
+    NEEDS_INPUT_REPLY_1_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"1\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_number "$NEEDS_INPUT_REPLY_CONTEXT" "2"; then
+    NEEDS_INPUT_REPLY_2_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"2\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_number "$NEEDS_INPUT_REPLY_CONTEXT" "3"; then
+    NEEDS_INPUT_REPLY_3_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"3\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_number "$NEEDS_INPUT_REPLY_CONTEXT" "4"; then
+    NEEDS_INPUT_REPLY_4_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"4\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_number "$NEEDS_INPUT_REPLY_CONTEXT" "5"; then
+    NEEDS_INPUT_REPLY_5_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"5\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_letter "$NEEDS_INPUT_REPLY_CONTEXT" "A"; then
+    NEEDS_INPUT_REPLY_A_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"A\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_letter "$NEEDS_INPUT_REPLY_CONTEXT" "B"; then
+    NEEDS_INPUT_REPLY_B_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"B\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_letter "$NEEDS_INPUT_REPLY_CONTEXT" "C"; then
+    NEEDS_INPUT_REPLY_C_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"C\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_letter "$NEEDS_INPUT_REPLY_CONTEXT" "D"; then
+    NEEDS_INPUT_REPLY_D_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"D\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_reply_option_letter "$NEEDS_INPUT_REPLY_CONTEXT" "E"; then
+    NEEDS_INPUT_REPLY_E_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"E\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_yes_no_prompt "$NEEDS_INPUT_REPLY_CONTEXT"; then
+    NEEDS_INPUT_REPLY_YES_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"yes\" --enter --wait-timeout 60s --idle-threshold 10s"
+    NEEDS_INPUT_REPLY_NO_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --text \"no\" --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+  if text_has_press_enter_prompt "$NEEDS_INPUT_REPLY_CONTEXT"; then
+    NEEDS_INPUT_REPLY_ENTER_COMMAND="$STEP_SCRIPT_CMD send --agent $(shell_quote "$AGENT_ID_OUT") --enter --wait-timeout 60s --idle-threshold 10s"
+  fi
+fi
+if [[ "$STATUS" == "needs_input" ]] && [[ -n "${NEEDS_INPUT_REPLY_1_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_2_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_3_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_4_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_5_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_A_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_B_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_C_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_D_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_E_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_YES_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_NO_COMMAND// }" || -n "${NEEDS_INPUT_REPLY_ENTER_COMMAND// }" ]]; then
+  if [[ "$BLOCKED_PERMISSION_MODE" == "true" ]]; then
+    NEXT_ACTION="Ask the user to choose the permission mode locally. If local selection is not available, switch to a non-interactive assistant and continue."
+  else
+    NEXT_ACTION="Ask the user to choose one of the listed options, then send that exact reply (for example 1/2/3/4/5, A/B/C/D/E, yes/no, or Enter)."
+  fi
+fi
+
 RESTART_COMMAND=""
 if [[ "$STATUS" == "session_exited" && -n "$WORKSPACE_ID_OUT" && -n "$ASSISTANT_OUT" ]]; then
   RESTART_COMMAND="$STEP_SCRIPT_CMD run --workspace $(shell_quote "$WORKSPACE_ID_OUT") --assistant $(shell_quote "$ASSISTANT_OUT") --prompt \"Continue from where you left off and provide a concise progress update.\" --wait-timeout 60s --idle-threshold 10s"
@@ -1157,6 +1294,20 @@ AMUX_ASSISTANT_PAYLOAD="$(jq -n \
   --argjson channel_chunk_chars "$AMUX_ASSISTANT_CHUNK_CHARS" \
   --arg status_send_command "$STATUS_SEND_COMMAND" \
   --arg restart_command "$RESTART_COMMAND" \
+  --arg switch_codex_command "$SWITCH_CODEX_COMMAND" \
+  --arg needs_input_reply_1_command "$NEEDS_INPUT_REPLY_1_COMMAND" \
+  --arg needs_input_reply_2_command "$NEEDS_INPUT_REPLY_2_COMMAND" \
+  --arg needs_input_reply_3_command "$NEEDS_INPUT_REPLY_3_COMMAND" \
+  --arg needs_input_reply_4_command "$NEEDS_INPUT_REPLY_4_COMMAND" \
+  --arg needs_input_reply_5_command "$NEEDS_INPUT_REPLY_5_COMMAND" \
+  --arg needs_input_reply_a_command "$NEEDS_INPUT_REPLY_A_COMMAND" \
+  --arg needs_input_reply_b_command "$NEEDS_INPUT_REPLY_B_COMMAND" \
+  --arg needs_input_reply_c_command "$NEEDS_INPUT_REPLY_C_COMMAND" \
+  --arg needs_input_reply_d_command "$NEEDS_INPUT_REPLY_D_COMMAND" \
+  --arg needs_input_reply_e_command "$NEEDS_INPUT_REPLY_E_COMMAND" \
+  --arg needs_input_reply_yes_command "$NEEDS_INPUT_REPLY_YES_COMMAND" \
+  --arg needs_input_reply_no_command "$NEEDS_INPUT_REPLY_NO_COMMAND" \
+  --arg needs_input_reply_enter_command "$NEEDS_INPUT_REPLY_ENTER_COMMAND" \
   --arg test_remediation_command "$TEST_REMEDIATION_COMMAND" \
   --arg lint_remediation_command "$LINT_REMEDIATION_COMMAND" \
   --arg security_review_command "$SECURITY_REVIEW_COMMAND" \
@@ -1232,6 +1383,48 @@ AMUX_ASSISTANT_PAYLOAD="$(jq -n \
           else empty end),
         (if ($review_changes_command | length) > 0
           then quick_action("review"; "Review"; $review_changes_command; "primary"; "Review and summarize recent code changes")
+          else empty end),
+        (if ($needs_input_reply_1_command | length) > 0
+          then quick_action("reply_1"; "Reply 1"; $needs_input_reply_1_command; "success"; "Reply with option 1")
+          else empty end),
+        (if ($needs_input_reply_2_command | length) > 0
+          then quick_action("reply_2"; "Reply 2"; $needs_input_reply_2_command; "success"; "Reply with option 2")
+          else empty end),
+        (if ($needs_input_reply_3_command | length) > 0
+          then quick_action("reply_3"; "Reply 3"; $needs_input_reply_3_command; "success"; "Reply with option 3")
+          else empty end),
+        (if ($needs_input_reply_4_command | length) > 0
+          then quick_action("reply_4"; "Reply 4"; $needs_input_reply_4_command; "success"; "Reply with option 4")
+          else empty end),
+        (if ($needs_input_reply_5_command | length) > 0
+          then quick_action("reply_5"; "Reply 5"; $needs_input_reply_5_command; "success"; "Reply with option 5")
+          else empty end),
+        (if ($needs_input_reply_a_command | length) > 0
+          then quick_action("reply_a"; "Reply A"; $needs_input_reply_a_command; "success"; "Reply with option A")
+          else empty end),
+        (if ($needs_input_reply_b_command | length) > 0
+          then quick_action("reply_b"; "Reply B"; $needs_input_reply_b_command; "success"; "Reply with option B")
+          else empty end),
+        (if ($needs_input_reply_c_command | length) > 0
+          then quick_action("reply_c"; "Reply C"; $needs_input_reply_c_command; "success"; "Reply with option C")
+          else empty end),
+        (if ($needs_input_reply_d_command | length) > 0
+          then quick_action("reply_d"; "Reply D"; $needs_input_reply_d_command; "success"; "Reply with option D")
+          else empty end),
+        (if ($needs_input_reply_e_command | length) > 0
+          then quick_action("reply_e"; "Reply E"; $needs_input_reply_e_command; "success"; "Reply with option E")
+          else empty end),
+        (if ($needs_input_reply_yes_command | length) > 0
+          then quick_action("reply_yes"; "Reply Yes"; $needs_input_reply_yes_command; "success"; "Reply with yes")
+          else empty end),
+        (if ($needs_input_reply_no_command | length) > 0
+          then quick_action("reply_no"; "Reply No"; $needs_input_reply_no_command; "danger"; "Reply with no")
+          else empty end),
+        (if ($needs_input_reply_enter_command | length) > 0
+          then quick_action("reply_enter"; "Press Enter"; $needs_input_reply_enter_command; "success"; "Press Enter to continue")
+          else empty end),
+        (if ($switch_codex_command | length) > 0
+          then quick_action("switch_codex"; "Switch Codex"; $switch_codex_command; "danger"; "Switch to codex for non-interactive continuation")
           else empty end),
         (if ($suggested_command | length) > 0
           then quick_action("suggested"; "Continue"; $suggested_command; "primary"; "Continue from current state")

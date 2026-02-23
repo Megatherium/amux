@@ -248,3 +248,166 @@ esac
 		t.Fatalf("expected full_status quick action in %#v", quickActions)
 	}
 }
+
+func TestAssistantDXStatus_NeedsInputChoicesAddReplyActions(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "project list")
+    printf '%s' '{"ok":true,"data":[{"name":"demo","path":"/tmp/demo"}],"error":null}'
+    ;;
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-main","name":"mainline","repo":"/tmp/demo","scope":"project","assistant":"claude","created":"2026-01-01T00:00:00Z"}],"error":null}'
+    ;;
+  "agent list")
+    printf '%s' '{"ok":true,"data":[{"session_name":"sess-main","agent_id":"agent-main","workspace_id":"ws-main","tab_id":"tab-2","type":"agent"}],"error":null}'
+    ;;
+  "terminal list")
+    printf '%s' '{"ok":true,"data":[],"error":null}'
+    ;;
+  "session list")
+    printf '%s' '{"ok":true,"data":[{"session_name":"sess-main"}],"error":null}'
+    ;;
+  "session prune")
+    printf '%s' '{"ok":true,"data":{"dry_run":true,"pruned":[],"total":0,"errors":[]},"error":null}'
+    ;;
+  "agent capture")
+    printf '%s' '{"ok":true,"data":{"session_name":"sess-main","status":"captured","summary":"Pick one:\n1. Continue with codex\n2. Continue with claude\nPress Enter to continue","needs_input":true,"input_hint":"Pick one:\n1. Continue with codex\n2. Continue with claude\nPress Enter to continue"},"error":null}'
+    ;;
+  *)
+    printf '{"ok":false,"error":{"code":"unexpected","message":"unexpected args: %s"}}' "$*"
+    ;;
+esac
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+
+	payload := runScriptJSON(t, scriptPath, env, "status")
+
+	if got, _ := payload["status"].(string); got != "needs_input" {
+		t.Fatalf("status = %q, want %q", got, "needs_input")
+	}
+	nextAction, _ := payload["next_action"].(string)
+	if !strings.Contains(nextAction, "choose one of the offered options") {
+		t.Fatalf("next_action = %q, want explicit choice guidance", nextAction)
+	}
+	quickActions, ok := payload["quick_actions"].([]any)
+	if !ok || len(quickActions) == 0 {
+		t.Fatalf("quick_actions missing or empty: %#v", payload["quick_actions"])
+	}
+	var sawReply1 bool
+	var sawReply2 bool
+	var sawReplyEnter bool
+	for _, raw := range quickActions {
+		action, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := action["id"].(string)
+		if id == "reply_1" {
+			sawReply1 = true
+		}
+		if id == "reply_2" {
+			sawReply2 = true
+		}
+		if id == "reply_enter" {
+			sawReplyEnter = true
+		}
+	}
+	if !sawReply1 || !sawReply2 || !sawReplyEnter {
+		t.Fatalf("expected reply_1/reply_2/reply_enter quick actions in %#v", quickActions)
+	}
+}
+
+func TestAssistantDXStatus_PermissionModeNeedsInputSuggestsAssistantsAndSwitchCodex(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "project list")
+    printf '%s' '{"ok":true,"data":[{"name":"demo","path":"/tmp/demo"}],"error":null}'
+    ;;
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-main","name":"mainline","repo":"/tmp/demo","scope":"project","assistant":"claude","created":"2026-01-01T00:00:00Z"}],"error":null}'
+    ;;
+  "agent list")
+    printf '%s' '{"ok":true,"data":[{"session_name":"sess-main","agent_id":"agent-main","workspace_id":"ws-main","tab_id":"tab-2","type":"agent"}],"error":null}'
+    ;;
+  "terminal list")
+    printf '%s' '{"ok":true,"data":[],"error":null}'
+    ;;
+  "session list")
+    printf '%s' '{"ok":true,"data":[{"session_name":"sess-main"}],"error":null}'
+    ;;
+  "session prune")
+    printf '%s' '{"ok":true,"data":{"dry_run":true,"pruned":[],"total":0,"errors":[]},"error":null}'
+    ;;
+  "agent capture")
+    printf '%s' '{"ok":true,"data":{"session_name":"sess-main","status":"captured","summary":"Assistant is waiting for local permission-mode selection.","needs_input":true,"input_hint":"Assistant is waiting for local permission-mode selection."},"error":null}'
+    ;;
+  *)
+    printf '{"ok":false,"error":{"code":"unexpected","message":"unexpected args: %s"}}' "$*"
+    ;;
+esac
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+
+	payload := runScriptJSON(t, scriptPath, env, "status")
+
+	if got, _ := payload["status"].(string); got != "needs_input" {
+		t.Fatalf("status = %q, want %q", got, "needs_input")
+	}
+	nextAction, _ := payload["next_action"].(string)
+	if !strings.Contains(nextAction, "permission mode locally") {
+		t.Fatalf("next_action = %q, want permission-mode guidance", nextAction)
+	}
+	suggested, _ := payload["suggested_command"].(string)
+	if !strings.Contains(suggested, "assistants --workspace ws-main --probe --limit 3") {
+		t.Fatalf("suggested_command = %q, want assistants probe command", suggested)
+	}
+	quickActions, ok := payload["quick_actions"].([]any)
+	if !ok || len(quickActions) == 0 {
+		t.Fatalf("quick_actions missing or empty: %#v", payload["quick_actions"])
+	}
+	var sawAssistants bool
+	var sawSwitchCodex bool
+	for _, raw := range quickActions {
+		action, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := action["id"].(string)
+		command, _ := action["command"].(string)
+		if id == "assistants_ws" && strings.Contains(command, "assistants --workspace ws-main --probe --limit 3") {
+			sawAssistants = true
+		}
+		if id == "switch_codex" && strings.Contains(command, "--assistant codex") {
+			sawSwitchCodex = true
+		}
+	}
+	if !sawAssistants || !sawSwitchCodex {
+		t.Fatalf("expected assistants_ws and switch_codex quick actions in %#v", quickActions)
+	}
+}

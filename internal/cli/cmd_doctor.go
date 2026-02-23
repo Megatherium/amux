@@ -21,8 +21,11 @@ type doctorResult struct {
 }
 
 func cmdDoctor(w, wErr io.Writer, gf GlobalFlags, args []string, version string) int {
-	const usage = "Usage: amux doctor [--json]"
+	const usage = "Usage: amux doctor [tmux] [--json]"
 	if len(args) > 0 {
+		if args[0] == "tmux" {
+			return cmdDoctorTmux(w, wErr, gf, args[1:], version)
+		}
 		return returnUsageError(
 			w,
 			wErr,

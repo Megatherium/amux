@@ -42,6 +42,7 @@ func cmdCapabilities(w, wErr io.Writer, gf GlobalFlags, args []string, version s
 		Commands: []string{
 			"status",
 			"doctor",
+			"doctor tmux",
 			"capabilities",
 			"logs tail",
 			"workspace list",

@@ -297,6 +297,22 @@ exit 2
 	if !ok || len(quickActions) == 0 {
 		t.Fatalf("quick_actions missing or empty: %#v", payload["quick_actions"])
 	}
+	var sawSwitchCodex bool
+	for _, raw := range quickActions {
+		action, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := action["id"].(string)
+		command, _ := action["command"].(string)
+		if id == "switch_codex" && strings.Contains(command, "--assistant codex") {
+			sawSwitchCodex = true
+			break
+		}
+	}
+	if !sawSwitchCodex {
+		t.Fatalf("expected switch_codex quick action in %#v", quickActions)
+	}
 	idempotencyKey, _ := payload["idempotency_key"].(string)
 	if !strings.HasPrefix(idempotencyKey, "tgstep-") {
 		t.Fatalf("idempotency_key = %q, want prefix tgstep-", idempotencyKey)
@@ -304,6 +320,10 @@ exit 2
 	nextAction, _ := payload["next_action"].(string)
 	if !strings.Contains(nextAction, "non-interactive assistant") {
 		t.Fatalf("next_action = %q, expected non-interactive hint", nextAction)
+	}
+	suggested, _ := payload["suggested_command"].(string)
+	if !strings.Contains(suggested, "--assistant codex") {
+		t.Fatalf("suggested_command = %q, want codex fallback command", suggested)
 	}
 }
 
