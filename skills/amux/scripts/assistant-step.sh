@@ -21,30 +21,6 @@
 
 set -euo pipefail
 
-promote_legacy_env_var() {
-  local old_var="$1"
-  local new_var="$2"
-  if [[ -n "${!old_var+x}" && -z "${!new_var+x}" ]]; then
-    printf -v "$new_var" '%s' "${!old_var}"
-    export "$new_var"
-  fi
-}
-
-promote_legacy_env_prefix() {
-  local old_prefix="$1"
-  local new_prefix="$2"
-  local old_var suffix new_var
-  while IFS= read -r old_var; do
-    [[ -z "${old_var// }" ]] && continue
-    suffix="${old_var#"$old_prefix"}"
-    new_var="${new_prefix}${suffix}"
-    promote_legacy_env_var "$old_var" "$new_var"
-  done < <(compgen -v | grep "^${old_prefix}" || true)
-}
-
-# Backward compatibility for pre-generalization env var names.
-promote_legacy_env_prefix "OPENCLAW_" "AMUX_ASSISTANT_"
-
 shell_quote() {
   printf '%q' "$1"
 }
@@ -1364,7 +1340,7 @@ AMUX_ASSISTANT_PAYLOAD="$(jq -n \
     def quick_action($id; $lbl; $command; $style; $prompt):
       {
         id: $id,
-        label: $lbl,
+        "label": $lbl,
         command: $command,
         style: $style,
         callback_data: ("qa:" + $id),

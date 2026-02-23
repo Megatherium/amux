@@ -1,31 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-promote_legacy_env_var() {
-  local old_var="$1"
-  local new_var="$2"
-  if [[ -n "${!old_var+x}" && -z "${!new_var+x}" ]]; then
-    printf -v "$new_var" '%s' "${!old_var}"
-    export "$new_var"
-  fi
-}
-
-promote_legacy_env_prefix() {
-  local old_prefix="$1"
-  local new_prefix="$2"
-  local old_var suffix new_var
-  while IFS= read -r old_var; do
-    [[ -z "${old_var// }" ]] && continue
-    suffix="${old_var#"$old_prefix"}"
-    new_var="${new_prefix}${suffix}"
-    promote_legacy_env_var "$old_var" "$new_var"
-  done < <(compgen -v | grep "^${old_prefix}" || true)
-}
-
-# Backward compatibility for pre-generalization env var names.
-promote_legacy_env_prefix "OPENCLAW_" "AMUX_ASSISTANT_"
-promote_legacy_env_var "OPENCLAW_DOGFOOD_OPENCLAW_AGENT" "AMUX_ASSISTANT_DOGFOOD_AGENT"
-
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" >/dev/null 2>&1 && pwd -P)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd -P)"

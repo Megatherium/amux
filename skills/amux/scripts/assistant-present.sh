@@ -5,21 +5,8 @@
 # - normalized quick action ids (`action_id`)
 # - `quick_action_by_id` and `quick_action_prompts_by_id`
 # - `.assistant_ux` with channel-specific presentation payloads
-# - `.openclaw` legacy mirror for backward compatibility
 
 set -euo pipefail
-
-promote_legacy_env_var() {
-  local old_var="$1"
-  local new_var="$2"
-  if [[ -n "${!old_var+x}" && -z "${!new_var+x}" ]]; then
-    printf -v "$new_var" '%s' "${!old_var}"
-    export "$new_var"
-  fi
-}
-
-# Backward compatibility for pre-generalization env var names.
-promote_legacy_env_var "OPENCLAW_CHANNEL" "AMUX_ASSISTANT_CHANNEL"
 
 if ! command -v jq >/dev/null 2>&1; then
   cat
@@ -80,7 +67,7 @@ jq -c --arg target_channel "$TARGET_CHANNEL" '
         | {
             id: (($action.id // $action_id) | tostring),
             action_id: $action_id,
-            label: (($action.label // "Action") | tostring),
+            "label": (($action.label // "Action") | tostring),
             command: (($action.command // "") | tostring),
             style: normalize_style(($action.style // "primary")),
             prompt: (($action.prompt // "") | tostring),
@@ -201,7 +188,7 @@ jq -c --arg target_channel "$TARGET_CHANNEL" '
                       | map({
                           type: 2,
                           style: discord_style(.style),
-                          label: (.label[0:80]),
+                          "label": (.label[0:80]),
                           custom_id: .action_id
                         })
                     )
@@ -221,7 +208,7 @@ jq -c --arg target_channel "$TARGET_CHANNEL" '
           $base + {
             quick_replies: (
               $quick_actions
-              | map({id: .action_id, label: .label, value: .command})
+              | map({id: .action_id, "label": .label, value: .command})
             )
           }
         else
@@ -288,6 +275,5 @@ jq -c --arg target_channel "$TARGET_CHANNEL" '
           fallback: action_fallback($quick_actions)
         }
       }
-    | .openclaw = .assistant_ux
   )
 ' "$TMP_INPUT"

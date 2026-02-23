@@ -8,30 +8,6 @@
 
 set -euo pipefail
 
-promote_legacy_env_var() {
-  local old_var="$1"
-  local new_var="$2"
-  if [[ -n "${!old_var+x}" && -z "${!new_var+x}" ]]; then
-    printf -v "$new_var" '%s' "${!old_var}"
-    export "$new_var"
-  fi
-}
-
-promote_legacy_env_prefix() {
-  local old_prefix="$1"
-  local new_prefix="$2"
-  local old_var suffix new_var
-  while IFS= read -r old_var; do
-    [[ -z "${old_var// }" ]] && continue
-    suffix="${old_var#"$old_prefix"}"
-    new_var="${new_prefix}${suffix}"
-    promote_legacy_env_var "$old_var" "$new_var"
-  done < <(compgen -v | grep "^${old_prefix}" || true)
-}
-
-# Backward compatibility for pre-generalization env var names.
-promote_legacy_env_prefix "OPENCLAW_" "AMUX_ASSISTANT_"
-
 usage() {
   cat >&2 <<'USAGE'
 Usage:
@@ -252,7 +228,7 @@ detect_agent_mode_from_text() {
     --arg key "$key" \
     --arg label "$label" \
     --arg switch_hint "$switch_hint" \
-    '{assistant: $assistant, key: $key, label: $label, switch_hint: $switch_hint}'
+    '{"assistant": $assistant, "key": $key, "label": $label, "switch_hint": $switch_hint}'
 }
 
 mode_switch_actions_json() {
@@ -540,7 +516,7 @@ emit_result() {
             | ($entry.value // {}) as $value
             | {
                 id: ($value.id // "action"),
-                label: ($value.label // "Action"),
+                "label": ($value.label // "Action"),
                 command: ($value.command // ""),
                 style: (
                   ($value.style // "primary") as $style
@@ -1975,7 +1951,7 @@ append_action() {
     --arg command "$command" \
     --arg style "$style" \
     --arg prompt "$prompt" \
-    '$actions + [{id: $id, label: $lbl, command: $command, style: $style, prompt: $prompt}]'
+    '$actions + [{id: $id, "label": $lbl, command: $command, style: $style, prompt: $prompt}]'
 }
 
 merge_actions_json() {
@@ -2150,7 +2126,7 @@ emit_turn_passthrough() {
         end;
       (scrub_text) as $clean
       | $clean
-      | del(.assistant_ux, .openclaw, .quick_action_by_id, .quick_action_prompts_by_id)
+      | del(.assistant_ux, .quick_action_by_id, .quick_action_prompts_by_id)
       | .next_action = (fallback_next_action)
       | .suggested_command = (fallback_suggested_command)
       | .quick_actions = (
@@ -2162,7 +2138,7 @@ emit_turn_passthrough() {
                 [
                   {
                     id: "status_ws",
-                    label: "WS Status",
+                    "label": "WS Status",
                     command: ($dx_ref + " status --workspace " + (hint_workspace_id)),
                     style: "primary",
                     prompt: "Check workspace status before retrying"
@@ -2173,7 +2149,7 @@ emit_turn_passthrough() {
                       [
                         {
                           id: "assistants_ws",
-                          label: "Assistants",
+                          "label": "Assistants",
                           command: ($dx_ref + " assistants --workspace " + (hint_workspace_id) + " --probe --limit 3"),
                           style: "secondary",
                           prompt: "Check assistant readiness before retrying"
@@ -2319,7 +2295,7 @@ emit_turn_passthrough() {
   fi
   if [[ -n "${mode_assistant// }" || -n "${mode_key// }" || -n "${mode_label// }" ]]; then
     normalized_json="$(jq -c --arg assistant "$mode_assistant" --arg key "$mode_key" --arg label "$mode_label" '
-      .mode = {assistant: $assistant, key: $key, label: $label}
+      .mode = {assistant: $assistant, key: $key, "label": $label}
     ' <<<"$normalized_json")"
   fi
 
@@ -3519,7 +3495,7 @@ cmd_guide() {
       capture_summary: $capture_summary,
       capture_needs_input: $capture_needs_input,
       capture_hint: $capture_hint,
-      capture_mode: {assistant: $capture_mode_assistant, key: $capture_mode_key, label: $capture_mode_label},
+      capture_mode: {assistant: $capture_mode_assistant, key: $capture_mode_key, "label": $capture_mode_label},
       capture_has_completion: $capture_has_completion,
       project_workspaces: $project_workspaces,
       workspace_agents: $workspace_agents
@@ -4321,7 +4297,7 @@ cmd_workspace_list() {
     nested_scope_count: $nested_scope_count,
     workspace_filter: (
       if ($workspace_filter_id | length) > 0 then
-        {id: $workspace_filter_id, label: (if ($workspace_filter_label | length) > 0 then $workspace_filter_label else $workspace_filter_id end)}
+        {id: $workspace_filter_id, "label": (if ($workspace_filter_label | length) > 0 then $workspace_filter_label else $workspace_filter_id end)}
       else
         null
       end
@@ -5238,9 +5214,9 @@ cmd_continue() {
       start_cmd="skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$workspace") --assistant $(shell_quote "$suggested_assistant") --prompt \"Resume work and provide status plus next action.\""
       RESULT_QUICK_ACTIONS="$(jq -cn --arg auto_start_cmd "$auto_start_cmd" --arg start_cmd "$start_cmd" '
         [
-          {id:"auto_start", label:"Auto Start", command:$auto_start_cmd, style:"success", prompt:"Auto-start and continue in one command"},
-          {id:"start", label:"Start", command:$start_cmd, style:"primary", prompt:"Start a new coding turn"},
-          {id:"status", label:"Status", command:"skills/amux/scripts/assistant-dx.sh status", style:"primary", prompt:"Show global active-agent status"}
+          {id:"auto_start", "label":"Auto Start", command:$auto_start_cmd, style:"success", prompt:"Auto-start and continue in one command"},
+          {id:"start", "label":"Start", command:$start_cmd, style:"primary", prompt:"Start a new coding turn"},
+          {id:"status", "label":"Status", command:"skills/amux/scripts/assistant-dx.sh status", style:"primary", prompt:"Show global active-agent status"}
         ]')"
       RESULT_MESSAGE="⚠️ No active agent in workspace $workspace_context_label"
       if [[ "$workspace_from_flag" != "true" && "$other_agents_query_failed" == "true" ]]; then
@@ -6878,7 +6854,7 @@ cmd_workflow_kickoff() {
                 and ((.id // "") == "status" or (.label // "") == "Status")
               then
                 . + {
-                  label: "Reply + Continue",
+                  "label": "Reply + Continue",
                   style: "success",
                   prompt: "Send a safe follow-up and continue this turn"
                 }
@@ -6894,7 +6870,7 @@ cmd_workflow_kickoff() {
           if ($suggested_command | length) > 0 and ($has_continue_id | not) and ($has_suggested_command | not) then
             {
               id: "continue_turn",
-              label: (if ((.overall_status // .status // "") == "needs_input") then "Reply + Continue" else "Continue" end),
+              "label": (if ((.overall_status // .status // "") == "needs_input") then "Reply + Continue" else "Continue" end),
               command: $suggested_command,
               style: (if ((.overall_status // .status // "") == "needs_input") then "success" else "primary" end),
               prompt: (if ((.overall_status // .status // "") == "needs_input") then "Send a safe follow-up and continue this turn" else "Continue this turn" end)
@@ -6905,14 +6881,14 @@ cmd_workflow_kickoff() {
         ),
         {
           id: "status_ws",
-          label: "WS Status",
+          "label": "WS Status",
           command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace_id),
           style: "primary",
           prompt: "Check workspace status"
         },
         {
           id: "review_ws",
-          label: "WS Review",
+          "label": "WS Review",
           command: ("skills/amux/scripts/assistant-dx.sh review --workspace " + $workspace_id + " --assistant codex"),
           style: "primary",
           prompt: "Run review on uncommitted changes"
@@ -6932,7 +6908,7 @@ cmd_workflow_kickoff() {
           kickoff: $kickoff,
           phase: "start"
         }
-      | del(.assistant_ux, .openclaw, .quick_action_by_id, .quick_action_prompts_by_id)
+      | del(.assistant_ux, .quick_action_by_id, .quick_action_prompts_by_id)
     ' <<<"$start_json")"
 
   printf '%s\n' "$kickoff_json"
