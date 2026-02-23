@@ -235,6 +235,35 @@ func TestCmdDoctorTmuxSessionQueryErrorIsWarn(t *testing.T) {
 	}
 }
 
+func TestCmdDoctorTmuxPruneSessionQueryErrorFails(t *testing.T) {
+	root := t.TempDir()
+	svc := &Services{
+		Store:    data.NewWorkspaceStore(root),
+		TmuxOpts: tmux.Options{},
+		QuerySessionRows: func(_ tmux.Options) ([]sessionRow, error) {
+			return nil, errors.New("tmux timeout")
+		},
+	}
+
+	var w bytes.Buffer
+	var wErr bytes.Buffer
+	code := cmdDoctorTmuxWith(&w, &wErr, GlobalFlags{JSON: true}, []string{"--prune", "--yes"}, "test-v1", svc)
+	if code != ExitInternalError {
+		t.Fatalf("cmdDoctorTmuxWith() code = %d, want %d", code, ExitInternalError)
+	}
+
+	var env Envelope
+	if err := json.Unmarshal(w.Bytes(), &env); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v\nraw: %s", err, w.String())
+	}
+	if env.OK {
+		t.Fatalf("expected ok=false")
+	}
+	if env.Error == nil || env.Error.Code != "doctor_tmux_prune_failed" {
+		t.Fatalf("expected doctor_tmux_prune_failed, got %#v", env.Error)
+	}
+}
+
 func TestCmdDoctorTmuxOlderThanFiltersCandidates(t *testing.T) {
 	origLimit := doctorReadSysctlInt
 	origInUse := doctorReadPTMXInUse

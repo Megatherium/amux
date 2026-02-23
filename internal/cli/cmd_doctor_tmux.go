@@ -87,9 +87,16 @@ func cmdDoctorTmuxWith(w, wErr io.Writer, gf GlobalFlags, args []string, version
 		}
 	}
 
-	rows, err := svc.QuerySessionRows(svc.TmuxOpts)
-	sessionQueryErr := err
+	rows, sessionQueryErr := svc.QuerySessionRows(svc.TmuxOpts)
 	if sessionQueryErr != nil {
+		if *prune {
+			if gf.JSON {
+				ReturnError(w, "doctor_tmux_prune_failed", fmt.Sprintf("failed to query tmux sessions: %v", sessionQueryErr), nil, version)
+			} else {
+				Errorf(wErr, "failed to query tmux sessions: %v", sessionQueryErr)
+			}
+			return ExitInternalError
+		}
 		rows = []sessionRow{}
 	}
 	wsIDs, err := svc.Store.List()

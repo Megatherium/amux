@@ -116,6 +116,61 @@ func TestDetectNeedsInputPrompt_ExplicitMarkerIncludesLetterOptions(t *testing.T
 	}
 }
 
+func TestDetectNeedsInputPrompt_ReplyWithNumericChoices(t *testing.T) {
+	content := "Reply with 1 to continue, 2 to cancel."
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ReplyWithNumericChoicesMidSentence(t *testing.T) {
+	content := "To continue, reply with 1 to approve or 2 to cancel."
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ReplyWithSlashLetterChoices(t *testing.T) {
+	content := "Reply with A/B/C"
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ReplyWithYesConfirmation(t *testing.T) {
+	content := "Reply with yes to continue."
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
+	}
+}
+
+func TestDetectNeedsInputPrompt_ReplyWithShortYesConfirmation(t *testing.T) {
+	content := "Reply with y to continue."
+	ok, hint := detectNeedsInputPrompt(content)
+	if !ok {
+		t.Fatalf("detectNeedsInputPrompt() = false, want true")
+	}
+	if hint != content {
+		t.Fatalf("hint = %q, want %q", hint, content)
+	}
+}
+
 func TestDetectNeedsInputPrompt_ExplicitMarkerIncludesExtendedNumericOptions(t *testing.T) {
 	content := "Pick one:\n1. One\n2. Two\n3. Three\n4. Four\n5. Five"
 	ok, hint := detectNeedsInputPrompt(content)
@@ -143,6 +198,38 @@ func TestDetectNeedsInputPrompt_DoesNotMatchQuestionFallbackOnly(t *testing.T) {
 	ok, _ := detectNeedsInputPrompt(content)
 	if ok {
 		t.Fatalf("detectNeedsInputPrompt() = true, want false")
+	}
+}
+
+func TestDetectNeedsInputPrompt_DoesNotMatchGenericReplyWithText(t *testing.T) {
+	content := "I'll reply with a patch summary once tests finish."
+	ok, hint := detectNeedsInputPrompt(content)
+	if ok {
+		t.Fatalf("detectNeedsInputPrompt() = true, want false (hint=%q)", hint)
+	}
+}
+
+func TestDetectNeedsInputPrompt_DoesNotMatchFirstPersonReplyWithNumbers(t *testing.T) {
+	content := "I'll reply with 1 summary and 2 follow-ups after tests."
+	ok, hint := detectNeedsInputPrompt(content)
+	if ok {
+		t.Fatalf("detectNeedsInputPrompt() = true, want false (hint=%q)", hint)
+	}
+}
+
+func TestDetectNeedsInputPrompt_DoesNotMatchNonChoiceReplyWithNumbers(t *testing.T) {
+	content := "For release notes, reply with 2025 roadmap and 2026 patch notes."
+	ok, hint := detectNeedsInputPrompt(content)
+	if ok {
+		t.Fatalf("detectNeedsInputPrompt() = true, want false (hint=%q)", hint)
+	}
+}
+
+func TestDetectNeedsInput_DoesNotMatchGenericReplyWithText(t *testing.T) {
+	content := "I'll reply with a patch summary once tests finish."
+	ok, hint := detectNeedsInput(content)
+	if ok {
+		t.Fatalf("detectNeedsInput() = true, want false (hint=%q)", hint)
 	}
 }
 
