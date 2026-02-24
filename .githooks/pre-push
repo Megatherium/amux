@@ -22,5 +22,8 @@ center_args=(${AMUX_HARNESS_CENTER_ARGS:---mode=center --tabs=8 --frames=200 --w
 echo "amux pre-push: running headless UI harness (center)..."
 go run ./cmd/amux-harness "${center_args[@]}"
 
-echo "amux pre-push: running tests..."
+echo "amux pre-push: running CLI tests..."
+go test ./internal/cli
+
+echo "amux pre-push: running E2E tests..."
 go test ./internal/e2e

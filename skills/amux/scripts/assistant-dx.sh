@@ -162,7 +162,7 @@ detect_agent_mode_from_text() {
   local text="$2"
   local assistant lower collapsed
   local claude_pattern=0 droid_pattern=0
-  local key="" label="" switch_hint=""
+  local key="" mode_label="" switch_hint=""
   assistant="$(printf '%s' "$assistant_hint" | tr '[:upper:]' '[:lower:]')"
   lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
   collapsed="$(printf '%s' "$lower" | tr -s '[:space:]' ' ')"
@@ -179,56 +179,56 @@ detect_agent_mode_from_text() {
     switch_hint="/permissions"
     if [[ "$collapsed" == *"plan mode on"* || "$collapsed" == *"permission mode: plan"* ]]; then
       key="plan"
-      label="plan"
+      mode_label="plan"
     elif [[ "$collapsed" == *"accept edits on"* || "$collapsed" == *"permission mode: acceptedits"* || "$collapsed" == *"permission mode: accept edits"* ]]; then
       key="accept_edits"
-      label="accept-edits"
+      mode_label="accept-edits"
     elif [[ "$collapsed" == *"permission mode: default"* ]]; then
       key="default"
-      label="default"
+      mode_label="default"
     elif [[ "$collapsed" == *"permission mode: dontask"* || "$collapsed" == *"permission mode: don't ask"* ]]; then
       key="dont_ask"
-      label="dont-ask"
+      mode_label="dont-ask"
     elif [[ "$collapsed" == *"permission mode: bypasspermissions"* || "$collapsed" == *"bypass permissions on"* ]]; then
       key="bypass_permissions"
-      label="bypass-permissions"
+      mode_label="bypass-permissions"
     elif [[ "$collapsed" == *"assistant is waiting for local permission-mode selection."* ]]; then
       key="permission_prompt"
-      label="permission selection needed"
+      mode_label="permission selection needed"
     elif [[ "$collapsed" == *"shift+tab to cycle"* ]]; then
       key="unknown"
-      label="mode unknown"
+      mode_label="mode unknown"
     fi
   elif [[ "$assistant" == "droid" || ( -z "${assistant// }" && "$droid_pattern" -eq 1 ) ]]; then
     assistant="droid"
     switch_hint="/mode"
     if [[ "$collapsed" == *"auto (high)"* || "$collapsed" == *"mode auto-high"* || "$collapsed" == *"/mode auto-high"* ]]; then
       key="auto_high"
-      label="auto-high"
+      mode_label="auto-high"
     elif [[ "$collapsed" == *"auto (medium)"* || "$collapsed" == *"mode auto-medium"* || "$collapsed" == *"/mode auto-medium"* ]]; then
       key="auto_medium"
-      label="auto-medium"
+      mode_label="auto-medium"
     elif [[ "$collapsed" == *"auto (low)"* || "$collapsed" == *"mode auto-low"* || "$collapsed" == *"/mode auto-low"* ]]; then
       key="auto_low"
-      label="auto-low"
+      mode_label="auto-low"
     elif [[ "$collapsed" == *"mode: spec"* || "$collapsed" == *" spec mode"* || "$collapsed" == *"/mode spec"* ]]; then
       key="spec"
-      label="spec"
+      mode_label="spec"
     elif [[ "$collapsed" == *"mode: normal"* || "$collapsed" == *" normal mode"* || "$collapsed" == *"/mode normal"* ]]; then
       key="normal"
-      label="normal"
+      mode_label="normal"
     elif [[ "$collapsed" == *"shift+tab to cycle modes (auto/spec)"* ]]; then
       key="unknown"
-      label="mode unknown"
+      mode_label="mode unknown"
     fi
   fi
 
   jq -cn \
     --arg assistant "$assistant" \
     --arg key "$key" \
-    --arg label "$label" \
+    --arg mode_label "$mode_label" \
     --arg switch_hint "$switch_hint" \
-    '{"assistant": $assistant, "key": $key, "label": $label, "switch_hint": $switch_hint}'
+    '{"assistant": $assistant, "key": $key, "label": $mode_label, "switch_hint": $switch_hint}'
 }
 
 mode_switch_actions_json() {
@@ -2294,8 +2294,8 @@ emit_turn_passthrough() {
     ' <<<"$normalized_json")"
   fi
   if [[ -n "${mode_assistant// }" || -n "${mode_key// }" || -n "${mode_label// }" ]]; then
-    normalized_json="$(jq -c --arg assistant "$mode_assistant" --arg key "$mode_key" --arg label "$mode_label" '
-      .mode = {assistant: $assistant, key: $key, "label": $label}
+    normalized_json="$(jq -c --arg assistant "$mode_assistant" --arg key "$mode_key" --arg mode_label "$mode_label" '
+      .mode = {assistant: $assistant, key: $key, "label": $mode_label}
     ' <<<"$normalized_json")"
   fi
 
