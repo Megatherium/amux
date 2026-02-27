@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -382,4 +384,54 @@ func intFromJSONNumber(t *testing.T, v any) int {
 		t.Fatalf("expected float64 JSON number, got %T", v)
 	}
 	return int(f)
+}
+
+func TestReadPTMXOpenCountCountsRows(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available in PATH")
+	}
+	origCmd := doctorExecCommandContext
+	origTimeout := doctorPTMXProbeTimeout
+	doctorPTMXProbeTimeout = 100 * time.Millisecond
+	doctorExecCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "sh", "-c", "printf 'COMMAND\\nproc-a\\nproc-b\\n'")
+	}
+	defer func() {
+		doctorExecCommandContext = origCmd
+		doctorPTMXProbeTimeout = origTimeout
+	}()
+
+	count, ok := readPTMXOpenCount()
+	if !ok {
+		t.Fatalf("readPTMXOpenCount() ok = false, want true")
+	}
+	if count != 2 {
+		t.Fatalf("readPTMXOpenCount() count = %d, want 2", count)
+	}
+}
+
+func TestReadPTMXOpenCountTimesOut(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep not available in PATH")
+	}
+	origCmd := doctorExecCommandContext
+	origTimeout := doctorPTMXProbeTimeout
+	doctorPTMXProbeTimeout = 20 * time.Millisecond
+	doctorExecCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "sleep", "1")
+	}
+	defer func() {
+		doctorExecCommandContext = origCmd
+		doctorPTMXProbeTimeout = origTimeout
+	}()
+
+	start := time.Now()
+	_, ok := readPTMXOpenCount()
+	elapsed := time.Since(start)
+	if ok {
+		t.Fatalf("readPTMXOpenCount() ok = true, want false")
+	}
+	if elapsed >= 500*time.Millisecond {
+		t.Fatalf("readPTMXOpenCount() elapsed = %v, want < 500ms", elapsed)
+	}
 }

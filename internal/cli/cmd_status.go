@@ -3,11 +3,14 @@ package cli
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/andyrewlee/amux/internal/git"
 	"github.com/andyrewlee/amux/internal/tmux"
 )
+
+var statusNormalizeRepoPathForCompare = normalizeRepoPathForCompare
 
 type statusResult struct {
 	Version        string `json:"version"`
@@ -57,19 +60,22 @@ func cmdStatus(w, wErr io.Writer, gf GlobalFlags, args []string, version string)
 			if !git.IsGitRepository(path) {
 				continue
 			}
-			key := normalizeRepoPathForCompare(path)
-			if key != "" {
-				if _, ok := seen[key]; ok {
-					continue
-				}
-				seen[key] = struct{}{}
+			key := statusProjectDedupKey(path)
+			if key == "" {
+				result.ProjectCount++
+				continue
 			}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
 			result.ProjectCount++
 		}
 	}
 
-	// Workspaces (same visibility as `workspace list` default)
-	workspaces, err := listAll(svc, false, false)
+	// Workspaces: keep `status` lightweight by counting stored metadata entries.
+	// Use `workspace list` for visibility-filtered workspace counts/details.
+	workspaces, err := svc.Store.List()
 	if err == nil {
 		result.WorkspaceCount = len(workspaces)
 	}
@@ -103,4 +109,15 @@ func boolStatus(ok bool) string {
 		return "ok"
 	}
 	return "unavailable"
+}
+
+func statusProjectDedupKey(path string) string {
+	if key := statusNormalizeRepoPathForCompare(path); key != "" {
+		return key
+	}
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return ""
+	}
+	return filepath.Clean(trimmed)
 }

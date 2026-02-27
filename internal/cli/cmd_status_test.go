@@ -83,7 +83,7 @@ func TestCmdStatusUnexpectedArgsReturnsUsageError(t *testing.T) {
 	}
 }
 
-func TestCmdStatusCountsUseVisibleProjectWorkspaceView(t *testing.T) {
+func TestCmdStatusCountsVisibleProjectsAndStoredWorkspaces(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -139,8 +139,8 @@ func TestCmdStatusCountsUseVisibleProjectWorkspaceView(t *testing.T) {
 	if got, _ := dataMap["project_count"].(float64); int(got) != 1 {
 		t.Fatalf("project_count = %v, want 1", dataMap["project_count"])
 	}
-	if got, _ := dataMap["workspace_count"].(float64); int(got) != 1 {
-		t.Fatalf("workspace_count = %v, want 1", dataMap["workspace_count"])
+	if got, _ := dataMap["workspace_count"].(float64); int(got) != 2 {
+		t.Fatalf("workspace_count = %v, want 2", dataMap["workspace_count"])
 	}
 }
 
@@ -170,6 +170,56 @@ func TestCmdStatusProjectCountDedupesCanonicalAliasEntries(t *testing.T) {
 		t.Fatalf("MkdirAll(registry dir) error = %v", err)
 	}
 	raw := `{"projects":[{"name":"repo","path":"` + repoReal + `"},{"name":"repo","path":"` + repoLink + `"}]}`
+	if err := os.WriteFile(registryPath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("WriteFile(registry) error = %v", err)
+	}
+
+	var w, wErr bytes.Buffer
+	code := cmdStatus(&w, &wErr, GlobalFlags{JSON: true}, nil, "test-v1")
+	if code != ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, wErr.String())
+	}
+
+	var env Envelope
+	if err := json.Unmarshal(w.Bytes(), &env); err != nil {
+		t.Fatalf("failed to decode JSON: %v\nraw: %s", err, w.String())
+	}
+	if !env.OK {
+		t.Fatalf("expected ok=true")
+	}
+
+	dataMap, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected data object, got %T", env.Data)
+	}
+	if got, _ := dataMap["project_count"].(float64); int(got) != 1 {
+		t.Fatalf("project_count = %v, want 1", dataMap["project_count"])
+	}
+}
+
+func TestCmdStatusProjectCountDedupesWhenNormalizeKeyIsEmpty(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	origNormalize := statusNormalizeRepoPathForCompare
+	statusNormalizeRepoPathForCompare = func(string) string { return "" }
+	defer func() { statusNormalizeRepoPathForCompare = origNormalize }()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatalf("MkdirAll(repo) error = %v", err)
+	}
+	runGit(t, repo, "init")
+
+	registryPath := filepath.Join(home, ".amux", "projects.json")
+	if err := os.MkdirAll(filepath.Dir(registryPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(registry dir) error = %v", err)
+	}
+	raw := `{"projects":[{"name":"repo-1","path":"` + repo + `"},{"name":"repo-2","path":"` + repo + `"}]}`
 	if err := os.WriteFile(registryPath, []byte(raw), 0o644); err != nil {
 		t.Fatalf("WriteFile(registry) error = %v", err)
 	}

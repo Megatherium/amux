@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -37,8 +38,10 @@ type doctorTmuxResult struct {
 var (
 	// Test seam: these function pointers are overridden in cmd_doctor_tmux_test
 	// to keep PTY-capacity checks deterministic without shelling out.
-	doctorReadSysctlInt = readSysctlInt
-	doctorReadPTMXInUse = readPTMXOpenCount
+	doctorReadSysctlInt      = readSysctlInt
+	doctorReadPTMXInUse      = readPTMXOpenCount
+	doctorExecCommandContext = exec.CommandContext
+	doctorPTMXProbeTimeout   = 2 * time.Second
 )
 
 func cmdDoctorTmux(w, wErr io.Writer, gf GlobalFlags, args []string, version string) int {
@@ -340,7 +343,9 @@ func readSysctlInt(key string) (int, bool) {
 func readPTMXOpenCount() (int, bool) {
 	// Best-effort metric only: lsof can be unavailable/slow or blocked by local
 	// policy, and callers already degrade to a non-fatal warning on failure.
-	out, err := exec.Command("lsof", "/dev/ptmx").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), doctorPTMXProbeTimeout)
+	defer cancel()
+	out, err := doctorExecCommandContext(ctx, "lsof", "/dev/ptmx").Output()
 	if err != nil {
 		return 0, false
 	}

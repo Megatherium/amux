@@ -239,6 +239,23 @@ trim_line() {
   printf '%s' "$line"
 }
 
+is_inline_prompt_chrome_line() {
+  local line="$1"
+  local prompt lower
+  if [[ "$line" != "> "* ]]; then
+    return 1
+  fi
+  prompt="$(trim_line "${line#> }")"
+  if [[ -z "$prompt" ]]; then
+    return 0
+  fi
+  lower="$(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$lower" == "reply exactly "* && "$lower" == *" in one line." ]]; then
+    return 0
+  fi
+  return 1
+}
+
 is_chrome_line() {
   local line="$1"
   local lower collapsed
@@ -251,6 +268,9 @@ is_chrome_line() {
     *)
       ;;
   esac
+  if is_inline_prompt_chrome_line "$line"; then
+    return 0
+  fi
   if [[ "$line" == *"[Z.AI Coding Plan]"* || "$lower" == *"shift+tab to cycle modes (auto/spec)"* || "$lower" == *"ctrl+n to cycle"* || "$lower" == *"chatgpt.com/codex"* ]]; then
     return 0
   fi
@@ -268,12 +288,22 @@ is_chrome_line() {
 
 compact_agent_text() {
   local raw="$1"
-  local cleaned line out
+  local cleaned line out substantive_seen
   out=""
+  substantive_seen=false
   cleaned="$(strip_ansi_text "$raw")"
   while IFS= read -r line; do
     line="$(trim_line "$line")"
     if [[ -z "$line" ]]; then
+      continue
+    fi
+    # Preserve quoted blocks ("> ...") only when they follow substantive output.
+    # Known inline prompt chrome still gets dropped.
+    if [[ "$line" == "> "* && "$substantive_seen" == "true" ]] && ! is_inline_prompt_chrome_line "$line"; then
+      if [[ -n "$out" ]]; then
+        out+=$'\n'
+      fi
+      out+="$line"
       continue
     fi
     if is_chrome_line "$line"; then
@@ -283,6 +313,7 @@ compact_agent_text() {
       out+=$'\n'
     fi
     out+="$line"
+    substantive_seen=true
   done < <(printf '%s\n' "$cleaned")
   printf '%s' "$out"
 }
@@ -294,6 +325,9 @@ last_nonempty_line() {
   while IFS= read -r line; do
     line="$(trim_line "$line")"
     if [[ -z "$line" ]]; then
+      continue
+    fi
+    if is_chrome_line "$line"; then
       continue
     fi
     last="$line"
