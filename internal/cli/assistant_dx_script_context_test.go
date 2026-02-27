@@ -349,6 +349,14 @@ func TestAssistantDXStart_UsesSiblingTurnScriptWhenInvokedOutsideRepoRoot(t *tes
 	if err := os.WriteFile(copiedScriptPath, src, 0o755); err != nil {
 		t.Fatalf("write copied script: %v", err)
 	}
+	textDetectPath := filepath.Join("..", "..", "skills", "amux", "scripts", "text-detect.sh")
+	textDetectSrc, err := os.ReadFile(textDetectPath)
+	if err != nil {
+		t.Fatalf("read text-detect.sh: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(scriptDir, "text-detect.sh"), textDetectSrc, 0o644); err != nil {
+		t.Fatalf("write text-detect.sh: %v", err)
+	}
 
 	argsLog := filepath.Join(scriptDir, "turn-args.log")
 	fakeTurnPath := filepath.Join(scriptDir, "assistant-turn.sh")

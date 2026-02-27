@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -146,9 +147,10 @@ func listByRepo(svc *Services, repoPath string, includeArchived bool) ([]Workspa
 	if err != nil {
 		return nil, err
 	}
+	cache := newSymlinkCache()
 	infos := make([]WorkspaceInfo, 0, len(workspaces))
 	for _, ws := range workspaces {
-		if !shouldSurfaceWorkspaceForCLI(svc.Config.Paths.WorkspacesRoot, ws) {
+		if !shouldSurfaceWorkspaceForCLI(svc.Config.Paths.WorkspacesRoot, ws, cache) {
 			continue
 		}
 		infos = append(infos, workspaceToInfo(ws))
@@ -173,6 +175,7 @@ func normalizeRepoPathForCompare(path string) string {
 func isVisibleRegisteredRepo(svc *Services, repoPath string) (bool, error) {
 	target := normalizeRepoPathForCompare(repoPath)
 	if target == "" {
+		slog.Debug("repo path normalized to empty", "path", repoPath)
 		return false, nil
 	}
 
@@ -189,6 +192,7 @@ func isVisibleRegisteredRepo(svc *Services, repoPath string) (bool, error) {
 			return true, nil
 		}
 	}
+	slog.Debug("repo not in registered projects", "path", repoPath, "normalized", target, "registered", len(paths))
 	return false, nil
 }
 
@@ -210,6 +214,7 @@ func listAll(svc *Services, includeArchived, includeAll bool) ([]WorkspaceInfo, 
 	}
 	workspaces := make([]*data.Workspace, 0, len(ids))
 	seen := make(map[string]int, len(ids))
+	cache := newSymlinkCache()
 	loadErrors := 0
 	for _, id := range ids {
 		ws, err := svc.Store.Load(id)
@@ -220,7 +225,7 @@ func listAll(svc *Services, includeArchived, includeAll bool) ([]WorkspaceInfo, 
 		if !includeArchived && ws.Archived {
 			continue
 		}
-		if !shouldSurfaceWorkspaceForCLI(svc.Config.Paths.WorkspacesRoot, ws) {
+		if !shouldSurfaceWorkspaceForCLI(svc.Config.Paths.WorkspacesRoot, ws, cache) {
 			continue
 		}
 		repoKey := normalizeRepoPathForCompare(ws.Repo)
@@ -365,7 +370,7 @@ func listAllStoredMetadata(svc *Services, includeArchived bool) ([]WorkspaceInfo
 	return infos, nil
 }
 
-func shouldSurfaceWorkspaceForCLI(workspacesRoot string, ws *data.Workspace) bool {
+func shouldSurfaceWorkspaceForCLI(workspacesRoot string, ws *data.Workspace, cache *symlinkCache) bool {
 	if ws == nil {
 		return false
 	}
@@ -377,7 +382,7 @@ func shouldSurfaceWorkspaceForCLI(workspacesRoot string, ws *data.Workspace) boo
 	if managedRoot == "" || wsRoot == "" {
 		return false
 	}
-	return pathWithinAliasesCLI(workspacePathAliasesCLI(managedRoot), workspacePathAliasesCLI(wsRoot))
+	return pathWithinAliasesCLI(workspacePathAliasesCLI(managedRoot, cache), workspacePathAliasesCLI(wsRoot, cache))
 }
 
 func lexicalWorkspacePathCLI(path string) string {
@@ -422,7 +427,7 @@ func pathWithinAliasesCLI(baseAliases, targetAliases []string) bool {
 	return false
 }
 
-func workspacePathAliasesCLI(path string) []string {
+func workspacePathAliasesCLI(path string, cache *symlinkCache) []string {
 	canonical := lexicalWorkspacePathCLI(path)
 	if canonical == "" {
 		return nil
@@ -438,7 +443,7 @@ func workspacePathAliasesCLI(path string) []string {
 
 	add(canonical)
 	add(data.NormalizePath(canonical))
-	if resolved, ok := resolveFromExistingPrefixCLI(canonical); ok {
+	if resolved, ok := resolveFromExistingPrefixCLI(canonical, cache); ok {
 		add(resolved)
 		add(data.NormalizePath(resolved))
 	}
@@ -450,14 +455,14 @@ func workspacePathAliasesCLI(path string) []string {
 	return aliases
 }
 
-func resolveFromExistingPrefixCLI(path string) (string, bool) {
+func resolveFromExistingPrefixCLI(path string, cache *symlinkCache) (string, bool) {
 	full := lexicalWorkspacePathCLI(path)
 	if full == "" {
 		return "", false
 	}
 	for prefix := full; ; prefix = filepath.Dir(prefix) {
 		if info, err := os.Lstat(prefix); err == nil {
-			resolvedPrefix, ok := resolvePrefixAliasCLI(prefix, info)
+			resolvedPrefix, ok := resolvePrefixAliasCLI(prefix, info, cache)
 			if ok {
 				rel, relErr := filepath.Rel(prefix, full)
 				if relErr == nil {
@@ -476,8 +481,28 @@ func resolveFromExistingPrefixCLI(path string) (string, bool) {
 	return "", false
 }
 
-func resolvePrefixAliasCLI(prefix string, info os.FileInfo) (string, bool) {
-	if resolved, err := filepath.EvalSymlinks(prefix); err == nil {
+type symlinkCache struct {
+	resolved map[string]string
+}
+
+func newSymlinkCache() *symlinkCache {
+	return &symlinkCache{resolved: make(map[string]string)}
+}
+
+func (c *symlinkCache) evalSymlinks(path string) (string, error) {
+	if r, ok := c.resolved[path]; ok {
+		return r, nil
+	}
+	r, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	c.resolved[path] = r
+	return r, nil
+}
+
+func resolvePrefixAliasCLI(prefix string, info os.FileInfo, cache *symlinkCache) (string, bool) {
+	if resolved, err := cache.evalSymlinks(prefix); err == nil {
 		return filepath.Clean(resolved), true
 	}
 	if info.Mode()&os.ModeSymlink != 0 {

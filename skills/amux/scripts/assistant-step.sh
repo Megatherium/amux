@@ -29,6 +29,7 @@ shell_quote() {
 
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" >/dev/null 2>&1 && pwd -P)"
+source "$SCRIPT_DIR/text-detect.sh"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename "$SCRIPT_SOURCE")"
 STEP_SCRIPT_REF="${AMUX_ASSISTANT_STEP_CMD_REF:-skills/amux/scripts/assistant-step.sh}"
 STEP_SCRIPT_CMD="$(shell_quote "$STEP_SCRIPT_REF")"
@@ -505,53 +506,6 @@ sanitize_summary_text() {
     return
   fi
   printf '%s' "$text"
-}
-
-text_has_reply_option_number() {
-  local text="$1"
-  local number="$2"
-  if [[ -z "${text// }" || -z "${number// }" ]]; then
-    return 1
-  fi
-  printf '%s\n' "$text" | grep -Eiq "(^|[[:space:]])${number}[.)][[:space:]]+"
-}
-
-text_has_reply_option_letter() {
-  local text="$1"
-  local letter="$2"
-  local upper lower
-  if [[ -z "${text// }" || -z "${letter// }" ]]; then
-    return 1
-  fi
-  upper="$(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]')"
-  lower="$(printf '%s' "$letter" | tr '[:upper:]' '[:lower:]')"
-  printf '%s\n' "$text" | grep -Eiq "(^|[[:space:]])(${upper}|${lower})[.)][[:space:]]+"
-}
-
-text_has_yes_no_prompt() {
-  local text="$1"
-  local lower
-  if [[ -z "${text// }" ]]; then
-    return 1
-  fi
-  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$lower" == *"(y/n)"* || "$lower" == *"[y/n]"* || "$lower" == *"(yes/no)"* || "$lower" == *"[yes/no]"* || "$lower" == *"yes or no"* || "$lower" == *"reply yes"* || "$lower" == *"reply no"* ]]; then
-    return 0
-  fi
-  return 1
-}
-
-text_has_press_enter_prompt() {
-  local text="$1"
-  local lower
-  if [[ -z "${text// }" ]]; then
-    return 1
-  fi
-  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$lower" == *"press enter"* || "$lower" == *"hit enter"* || "$lower" == *"press return"* || "$lower" == *"hit return"* || "$lower" == *"just press enter"* || "$lower" == *"enter to continue"* ]]; then
-    return 0
-  fi
-  return 1
 }
 
 build_delta_excerpt() {
