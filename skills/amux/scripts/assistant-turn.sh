@@ -2,8 +2,8 @@
 # assistant-turn.sh — Multi-step bounded Assistant coding turn for amux.
 #
 # Usage:
-#   assistant-turn.sh run  --workspace <id> --assistant <name> --prompt <text> [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
-#   assistant-turn.sh send --agent <id> [--text <text>] [--enter] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
+#   assistant-turn.sh run  --workspace <id> --assistant <name> --prompt <text> [--idempotency-key <key>] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
+#   assistant-turn.sh send --agent <id> [--text <text>] [--enter] [--idempotency-key <key>] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
 #
 # Behavior:
 # - Executes bounded steps via assistant-step.sh.
@@ -13,13 +13,21 @@
 
 set -euo pipefail
 
-AMUX_BIN="${AMUX_BIN:-amux}"
+AMUX_BIN_DEFAULT="$(command -v amux 2>/dev/null || true)"
+if [[ -z "${AMUX_BIN_DEFAULT// }" ]]; then
+  if [[ -x "/usr/local/bin/amux" ]]; then
+    AMUX_BIN_DEFAULT="/usr/local/bin/amux"
+  else
+    AMUX_BIN_DEFAULT="amux"
+  fi
+fi
+AMUX_BIN="${AMUX_BIN:-$AMUX_BIN_DEFAULT}"
 
 usage() {
   cat >&2 <<'EOF'
 Usage:
-  assistant-turn.sh run  --workspace <id> --assistant <name> --prompt <text> [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
-  assistant-turn.sh send --agent <id> [--text <text>] [--enter] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
+  assistant-turn.sh run  --workspace <id> --assistant <name> --prompt <text> [--idempotency-key <key>] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
+  assistant-turn.sh send --agent <id> [--text <text>] [--enter] [--idempotency-key <key>] [--max-steps 3] [--turn-budget 180] [--wait-timeout 60s] [--idle-threshold 10s]
 EOF
 }
 
@@ -51,7 +59,7 @@ print_json_error() {
 flag_requires_value() {
   local flag="$1"
   case "$flag" in
-    --wait-timeout|--idle-threshold|--max-steps|--turn-budget|--followup-text|--workspace|--assistant|--prompt|--agent|--text)
+    --wait-timeout|--idle-threshold|--max-steps|--turn-budget|--followup-text|--workspace|--assistant|--prompt|--agent|--text|--idempotency-key)
       return 0
       ;;
     *)
@@ -244,6 +252,7 @@ PROMPT=""
 AGENT_ID=""
 TEXT=""
 ENTER=false
+TURN_IDEMPOTENCY_KEY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -269,6 +278,8 @@ while [[ $# -gt 0 ]]; do
       TEXT="$2"; shift 2 ;;
     --enter)
       ENTER=true; shift ;;
+    --idempotency-key)
+      TURN_IDEMPOTENCY_KEY="$2"; shift 2 ;;
     *)
       usage
       echo "unknown flag: $1" >&2
@@ -349,6 +360,11 @@ CURRENT_AGENT="$AGENT_ID"
 CURRENT_TEXT="$TEXT"
 CURRENT_ENTER="$ENTER"
 
+STEP_IDEMPOTENCY_BASE="$TURN_ID"
+if [[ -n "${TURN_IDEMPOTENCY_KEY// }" ]]; then
+  STEP_IDEMPOTENCY_BASE="$TURN_IDEMPOTENCY_KEY"
+fi
+
 LAST_STEP_JSON='{}'
 LAST_STATUS="unknown"
 LAST_SUMMARY=""
@@ -372,7 +388,7 @@ while [[ "$STEPS_USED" -lt "$MAX_STEPS" ]]; do
   fi
 
   STEP_INDEX="$((STEPS_USED + 1))"
-  STEP_IDEMPOTENCY_KEY="${TURN_ID}-step-${STEP_INDEX}"
+  STEP_IDEMPOTENCY_KEY="${STEP_IDEMPOTENCY_BASE}-step-${STEP_INDEX}"
   STEP_EXIT=0
 
   if [[ "$CURRENT_MODE" == "run" ]]; then

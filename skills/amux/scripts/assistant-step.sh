@@ -21,7 +21,15 @@
 
 set -euo pipefail
 
-AMUX_BIN="${AMUX_BIN:-amux}"
+AMUX_BIN_DEFAULT="$(command -v amux 2>/dev/null || true)"
+if [[ -z "${AMUX_BIN_DEFAULT// }" ]]; then
+  if [[ -x "/usr/local/bin/amux" ]]; then
+    AMUX_BIN_DEFAULT="/usr/local/bin/amux"
+  else
+    AMUX_BIN_DEFAULT="amux"
+  fi
+fi
+AMUX_BIN="${AMUX_BIN:-$AMUX_BIN_DEFAULT}"
 
 shell_quote() {
   printf '%q' "$1"
@@ -718,14 +726,18 @@ fi
 
 WAIT_TIMEOUT_SECONDS="$(duration_to_seconds "$WAIT_TIMEOUT" 60)"
 # Allow bounded extra headroom for agent startup/prompt readiness.
-HARD_TIMEOUT_BUFFER_SECONDS="$(duration_to_seconds "${AMUX_ASSISTANT_STEP_HARD_TIMEOUT_BUFFER:-180}" 180)"
+HARD_TIMEOUT_BUFFER_SECONDS="$(duration_to_seconds "${AMUX_ASSISTANT_STEP_HARD_TIMEOUT_BUFFER:-30}" 30)"
 if ! [[ "$HARD_TIMEOUT_BUFFER_SECONDS" =~ ^[0-9]+$ ]] || [[ "$HARD_TIMEOUT_BUFFER_SECONDS" -lt 0 ]]; then
-  HARD_TIMEOUT_BUFFER_SECONDS=180
+  HARD_TIMEOUT_BUFFER_SECONDS=30
 fi
 HARD_TIMEOUT_SECONDS=$((WAIT_TIMEOUT_SECONDS + HARD_TIMEOUT_BUFFER_SECONDS))
-HARD_TIMEOUT_CAP_SECONDS="$(duration_to_seconds "${AMUX_ASSISTANT_STEP_HARD_TIMEOUT_CAP:-600}" 600)"
+HARD_TIMEOUT_CAP_SECONDS="$(duration_to_seconds "${AMUX_ASSISTANT_STEP_HARD_TIMEOUT_CAP:-120}" 120)"
 if [[ "$HARD_TIMEOUT_CAP_SECONDS" -gt 0 && "$HARD_TIMEOUT_SECONDS" -gt "$HARD_TIMEOUT_CAP_SECONDS" ]]; then
   HARD_TIMEOUT_SECONDS="$HARD_TIMEOUT_CAP_SECONDS"
+fi
+# Never expire before the caller-requested wait timeout.
+if [[ "$HARD_TIMEOUT_SECONDS" -lt "$WAIT_TIMEOUT_SECONDS" ]]; then
+  HARD_TIMEOUT_SECONDS="$WAIT_TIMEOUT_SECONDS"
 fi
 RAW_OUTPUT=""
 CMD_EXIT=0

@@ -74,7 +74,16 @@ func runAgentWaitForResponse(
 		CaptureLines:  defaultWaitCaptureLines,
 		PollInterval:  defaultWaitPollInterval,
 		IdleThreshold: idleThreshold,
+		// Never let the initial-change guard expire before caller's wait timeout.
+		InitialChangeTimeout: effectiveInitialChangeTimeout(waitTimeout),
 	}, tmuxOpts, tmuxCapturePaneTail, preHash, preContent)
+}
+
+func effectiveInitialChangeTimeout(waitTimeout time.Duration) time.Duration {
+	if waitTimeout > 0 {
+		return waitTimeout
+	}
+	return waitResponseInitialChangeTimeout
 }
 
 func captureWaitBaselineWithRetry(sessionName string, opts tmux.Options) string {

@@ -8,7 +8,15 @@
 
 set -euo pipefail
 
-AMUX_BIN="${AMUX_BIN:-amux}"
+AMUX_BIN_DEFAULT="$(command -v amux 2>/dev/null || true)"
+if [[ -z "${AMUX_BIN_DEFAULT// }" ]]; then
+  if [[ -x "/usr/local/bin/amux" ]]; then
+    AMUX_BIN_DEFAULT="/usr/local/bin/amux"
+  else
+    AMUX_BIN_DEFAULT="amux"
+  fi
+fi
+AMUX_BIN="${AMUX_BIN:-$AMUX_BIN_DEFAULT}"
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd -P)/text-detect.sh"
 
@@ -55,6 +63,73 @@ shell_quote() {
 
 is_positive_int() {
   [[ "${1:-}" =~ ^[0-9]+$ ]] && [[ "$1" -gt 0 ]]
+}
+
+hash_text_short() {
+  local value="$1"
+  local hash=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    hash="$(printf '%s' "$value" | sha256sum | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    hash="$(printf '%s' "$value" | shasum -a 256 | awk '{print $1}')"
+  elif command -v openssl >/dev/null 2>&1; then
+    hash="$(printf '%s' "$value" | openssl dgst -sha256 -r | awk '{print $1}')"
+  else
+    hash="$(printf '%s' "$value" | cksum | awk '{print $1}')"
+  fi
+  if [[ -z "${hash// }" ]]; then
+    hash="$(printf '%s' "$value" | cksum | awk '{print $1}')"
+  fi
+  printf '%s' "${hash:0:16}"
+}
+
+idempotency_slug_token() {
+  local value="$1"
+  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]_.-' '-' | sed -E 's/^-+//; s/-+$//')"
+  if [[ -z "${value// }" ]]; then
+    value="na"
+  fi
+  printf '%s' "$value"
+}
+
+review_turn_idempotency_key() {
+  local workspace="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local phase="$4"
+  local window_seconds="${AMUX_ASSISTANT_DX_REVIEW_IDEMPOTENCY_WINDOW_SECONDS:-300}"
+  if ! is_positive_int "$window_seconds"; then
+    window_seconds=300
+  fi
+
+  local bucket workspace_key assistant_key phase_key prompt_hash key
+  bucket="$(( $(date +%s) / window_seconds ))"
+  workspace_key="$(idempotency_slug_token "$workspace")"
+  assistant_key="$(idempotency_slug_token "$assistant")"
+  phase_key="$(idempotency_slug_token "$phase")"
+  prompt_hash="$(hash_text_short "$prompt")"
+  key="dx-review-${workspace_key}-${assistant_key}-${phase_key}-w${bucket}-${prompt_hash}"
+  printf '%s' "${key:0:180}"
+}
+
+start_turn_idempotency_key() {
+  local workspace="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local phase="$4"
+  local window_seconds="${AMUX_ASSISTANT_DX_START_IDEMPOTENCY_WINDOW_SECONDS:-300}"
+  if ! is_positive_int "$window_seconds"; then
+    window_seconds=300
+  fi
+
+  local bucket workspace_key assistant_key phase_key prompt_hash key
+  bucket="$(( $(date +%s) / window_seconds ))"
+  workspace_key="$(idempotency_slug_token "$workspace")"
+  assistant_key="$(idempotency_slug_token "$assistant")"
+  phase_key="$(idempotency_slug_token "$phase")"
+  prompt_hash="$(hash_text_short "$prompt")"
+  key="dx-start-${workspace_key}-${assistant_key}-${phase_key}-w${bucket}-${prompt_hash}"
+  printf '%s' "${key:0:180}"
 }
 
 is_valid_hostname() {
@@ -109,6 +184,39 @@ is_permission_mode_hint() {
     return 0
   fi
   if [[ "$lower" == *"choose"* && "$lower" == *"permission"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+interactive_prompt_signal_present() {
+  local text="$1"
+  local lower
+  if [[ -z "${text// }" ]]; then
+    return 1
+  fi
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+
+  # Structured reply prompts are strong needs_input signals.
+  if text_has_yes_no_prompt "$text" || text_has_press_enter_prompt "$text"; then
+    return 0
+  fi
+  if text_has_reply_option_number "$text" "1" || text_has_reply_option_number "$text" "2" || text_has_reply_option_number "$text" "3" || text_has_reply_option_number "$text" "4" || text_has_reply_option_number "$text" "5"; then
+    return 0
+  fi
+  if text_has_reply_option_letter "$text" "A" || text_has_reply_option_letter "$text" "B" || text_has_reply_option_letter "$text" "C" || text_has_reply_option_letter "$text" "D" || text_has_reply_option_letter "$text" "E"; then
+    return 0
+  fi
+
+  case "$lower" in
+    *"pick one:"*|*"choose one:"*|*"choose an option"*|*"which option"*)
+      return 0
+      ;;
+  esac
+  if [[ "$lower" == *"would you like me to"* && "$lower" == *"?"* ]]; then
+    return 0
+  fi
+  if [[ "$lower" == *"should i "* && "$lower" == *"?"* ]]; then
     return 0
   fi
   return 1
@@ -293,6 +401,69 @@ amux_ok_json() {
     return 1
   fi
   printf '%s' "$out"
+}
+
+amux_capture_ok_json() {
+  local session_name="$1"
+  local lines="$2"
+  local timeout_sec="${AMUX_ASSISTANT_DX_CAPTURE_TIMEOUT_SECONDS:-2}"
+  local out_file timeout_file
+  local cmd_pid watchdog_pid wait_status output timed_out
+
+  if ! [[ "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -le 0 ]]; then
+    timeout_sec=2
+  fi
+
+  out_file="$(mktemp "${TMPDIR:-/tmp}/amux-assistant-dx-capture.out.XXXXXX" 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/amux-assistant-dx-capture.out.$$")"
+  timeout_file="$(mktemp "${TMPDIR:-/tmp}/amux-assistant-dx-capture.timeout.XXXXXX" 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/amux-assistant-dx-capture.timeout.$$")"
+
+  "$AMUX_BIN" --json agent capture "$session_name" --lines "$lines" >"$out_file" 2>&1 &
+  cmd_pid=$!
+
+  (
+    sleep "$timeout_sec"
+    if kill -0 "$cmd_pid" 2>/dev/null; then
+      : >"$timeout_file"
+      kill -TERM "$cmd_pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "$cmd_pid" 2>/dev/null || true
+    fi
+  ) >/dev/null 2>&1 &
+  watchdog_pid=$!
+
+  set +e
+  wait "$cmd_pid" 2>/dev/null
+  wait_status=$?
+  set -e
+  kill "$watchdog_pid" >/dev/null 2>&1 || true
+  set +e
+  wait "$watchdog_pid" >/dev/null 2>&1
+  set -e
+
+  output="$(cat "$out_file" 2>/dev/null || true)"
+  timed_out=false
+  if [[ -s "$timeout_file" && "$wait_status" != "0" ]]; then
+    timed_out=true
+  fi
+  rm -f "$out_file" "$timeout_file" >/dev/null 2>&1 || true
+
+  if [[ "$timed_out" == "true" ]]; then
+    AMUX_ERROR_OUTPUT="agent capture timed out for $session_name after ${timeout_sec}s"
+    return 124
+  fi
+  if [[ "$wait_status" != "0" ]]; then
+    AMUX_ERROR_OUTPUT="$output"
+    return "$wait_status"
+  fi
+  if ! jq -e . >/dev/null 2>&1 <<<"$output"; then
+    AMUX_ERROR_OUTPUT="$output"
+    return 1
+  fi
+  if [[ "$(jq -r '.ok // false' <<<"$output")" != "true" ]]; then
+    AMUX_ERROR_OUTPUT="$output"
+    return 1
+  fi
+  printf '%s' "$output"
 }
 
 # Result envelope globals.
@@ -735,6 +906,20 @@ agent_for_workspace() {
   fi
   local agents_json agent_count first_agent
   agents_json="$(jq -c '.data // []' <<<"$agents_out")"
+  # Prefer assistant-run tabs (t_*) over generic tab-* sessions when auto-selecting.
+  agents_json="$(jq -c '
+    sort_by(
+      (
+        if (((.tab_id // ((.agent_id // "" | split(":") | .[1] // ""))) | test("^tab-[0-9]+$"))) then
+          1
+        else
+          0
+        end
+      ),
+      (.session_name // ""),
+      (.agent_id // "")
+    )
+  ' <<<"$agents_json")"
   agent_count="$(jq -r 'length' <<<"$agents_json")"
   first_agent="$(jq -r '.[0].agent_id // ""' <<<"$agents_json")"
 
@@ -760,13 +945,21 @@ agent_for_workspace() {
     [[ -z "${agent_id// }" ]] && continue
     [[ -z "${session_name// }" ]] && continue
 
-    local capture_out capture_status capture_needs_input capture_hint capture_hint_trim
-    if ! capture_out="$(amux_ok_json agent capture "$session_name" --lines 48)"; then
+    local capture_out capture_status capture_needs_input capture_hint capture_hint_trim capture_summary capture_content
+    if ! capture_out="$(amux_capture_ok_json "$session_name" 48)"; then
       continue
     fi
     capture_status="$(jq -r '.data.status // "captured"' <<<"$capture_out")"
     capture_needs_input="$(jq -r '.data.needs_input // false' <<<"$capture_out")"
     capture_hint="$(jq -r '.data.input_hint // ""' <<<"$capture_out")"
+    capture_summary="$(jq -r '.data.summary // .data.latest_line // ""' <<<"$capture_out")"
+    capture_content="$(jq -r '.data.content // ""' <<<"$capture_out")"
+    if [[ "$capture_needs_input" != "true" ]] && interactive_prompt_signal_present "$(printf '%s\n%s\n%s' "$capture_hint" "$capture_summary" "$capture_content")"; then
+      capture_needs_input=true
+      if [[ -z "${capture_hint// }" ]]; then
+        capture_hint="$capture_summary"
+      fi
+    fi
     capture_hint_trim="$(printf '%s' "$capture_hint" | tr -d '\r')"
     capture_hint_trim="${capture_hint_trim#"${capture_hint_trim%%[![:space:]]*}"}"
     capture_hint_trim="${capture_hint_trim%"${capture_hint_trim##*[![:space:]]}"}"
@@ -795,6 +988,236 @@ agent_for_workspace() {
     return 0
   fi
   printf '%s' "$first_agent"
+}
+
+session_for_agent_id() {
+  local agent_id="$1"
+  if [[ -z "${agent_id// }" ]]; then
+    printf ''
+    return 0
+  fi
+  local agents_out
+  agents_out="$("$AMUX_BIN" --json agent list 2>/dev/null || true)"
+  if ! jq -e '.ok == true' >/dev/null 2>&1 <<<"$agents_out"; then
+    printf ''
+    return 0
+  fi
+  jq -r --arg id "$agent_id" '
+    (.data // [])
+    | if type == "array" then . else [] end
+    | map(select((.agent_id // "") == $id))
+    | .[0].session_name // ""
+  ' <<<"$agents_out"
+}
+
+review_agent_inflight_by_id() {
+  local agent_id="$1"
+  if [[ -z "${agent_id// }" ]]; then
+    return 1
+  fi
+  local session_name
+  session_name="$(session_for_agent_id "$agent_id")"
+  if [[ -z "${session_name// }" ]]; then
+    return 1
+  fi
+
+  local capture_lines capture_out capture_status capture_summary capture_latest capture_content
+  capture_lines="${AMUX_ASSISTANT_DX_REVIEW_REUSE_CAPTURE_LINES:-120}"
+  if ! [[ "$capture_lines" =~ ^[0-9]+$ ]] || [[ "$capture_lines" -le 0 ]]; then
+    capture_lines=120
+  fi
+  if ! capture_out="$(amux_capture_ok_json "$session_name" "$capture_lines")"; then
+    # If capture fails but the session still exists, avoid opening a duplicate tab.
+    return 0
+  fi
+  capture_status="$(jq -r '.data.status // "captured"' <<<"$capture_out")"
+  if [[ "$capture_status" == "session_exited" ]]; then
+    return 1
+  fi
+  capture_summary="$(jq -r '.data.summary // ""' <<<"$capture_out")"
+  capture_latest="$(jq -r '.data.latest_line // ""' <<<"$capture_out")"
+  capture_content="$(jq -r '.data.content // ""' <<<"$capture_out")"
+  if [[ -z "${capture_summary// }" ]]; then
+    capture_summary="$capture_latest"
+  fi
+  if completion_signal_present "$capture_summary" || completion_signal_present "$capture_content"; then
+    return 1
+  fi
+  return 0
+}
+
+review_workspace_agent_ids_json() {
+  local workspace_id="$1"
+  local assistant="$2"
+  if [[ -z "${workspace_id// }" ]]; then
+    printf '[]'
+    return 0
+  fi
+  local agents_out agents_json
+  if ! agents_out="$(amux_ok_json agent list --workspace "$workspace_id")"; then
+    printf '[]'
+    return 0
+  fi
+  agents_json="$(jq -c '.data // []' <<<"$agents_out" 2>/dev/null || printf '[]')"
+  jq -c --arg assistant "$assistant" '
+    if type == "array" then . else [] end
+    | map(select((.agent_id // "") | length > 0))
+    | map(select(
+        ($assistant | length) == 0
+        or (.assistant // "") == $assistant
+        or ((.assistant // "") | length) == 0
+      ))
+    | sort_by(
+        (
+          if (((.tab_id // ((.agent_id // "" | split(":") | .[1] // ""))) | test("^tab-[0-9]+$"))) then
+            1
+          else
+            0
+          end
+        ),
+        (.session_name // ""),
+        (.agent_id // "")
+      )
+    | map(.agent_id)
+    | unique
+  ' <<<"$agents_json" 2>/dev/null || printf '[]'
+}
+
+review_infer_new_inflight_agent() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local before_ids_json="$3"
+  if ! jq -e . >/dev/null 2>&1 <<<"$before_ids_json"; then
+    before_ids_json='[]'
+  fi
+
+  local after_ids_json
+  after_ids_json="$(review_workspace_agent_ids_json "$workspace_id" "$assistant")"
+  if ! jq -e . >/dev/null 2>&1 <<<"$after_ids_json"; then
+    printf ''
+    return 0
+  fi
+
+  local candidate_agent
+  while IFS= read -r candidate_agent; do
+    [[ -z "${candidate_agent// }" ]] && continue
+    if review_agent_inflight_by_id "$candidate_agent"; then
+      printf '%s' "$candidate_agent"
+      return 0
+    fi
+  done < <(jq -r --argjson before "$before_ids_json" '
+    [
+      .[] as $agent_id
+      | select(($before | index($agent_id)) == null)
+      | $agent_id
+    ]
+    | .[]
+  ' <<<"$after_ids_json")
+
+  # Fallback: if this call is a retry and the in-flight review agent already existed
+  # before this invocation, reuse it instead of reporting a false startup failure.
+  while IFS= read -r candidate_agent; do
+    [[ -z "${candidate_agent// }" ]] && continue
+    if review_agent_inflight_by_id "$candidate_agent"; then
+      printf '%s' "$candidate_agent"
+      return 0
+    fi
+  done < <(jq -r '.[]' <<<"$after_ids_json")
+
+  printf ''
+}
+
+review_inflight_agent_snapshot_by_id() {
+  local agent_id="$1"
+  if [[ -z "${agent_id// }" ]]; then
+    printf ''
+    return 0
+  fi
+
+  local session_name
+  session_name="$(session_for_agent_id "$agent_id")"
+  if [[ -z "${session_name// }" ]]; then
+    printf ''
+    return 0
+  fi
+
+  local capture_lines capture_out capture_status capture_summary capture_latest capture_content capture_needs_input
+  capture_lines="${AMUX_ASSISTANT_DX_REVIEW_REUSE_CAPTURE_LINES:-120}"
+  if ! [[ "$capture_lines" =~ ^[0-9]+$ ]] || [[ "$capture_lines" -le 0 ]]; then
+    capture_lines=120
+  fi
+  if ! capture_out="$(amux_capture_ok_json "$session_name" "$capture_lines")"; then
+    jq -cn \
+      --arg agent_id "$agent_id" \
+      --arg session_name "$session_name" \
+      '{
+        agent_id: $agent_id,
+        session_name: $session_name,
+        status: "captured",
+        needs_input: false,
+        summary: "",
+        latest_line: "",
+        content: ""
+      }'
+    return 0
+  fi
+
+  capture_status="$(jq -r '.data.status // "captured"' <<<"$capture_out")"
+  if [[ "$capture_status" == "session_exited" ]]; then
+    printf ''
+    return 0
+  fi
+  capture_summary="$(jq -r '.data.summary // ""' <<<"$capture_out")"
+  capture_latest="$(jq -r '.data.latest_line // ""' <<<"$capture_out")"
+  capture_content="$(jq -r '.data.content // ""' <<<"$capture_out")"
+  capture_needs_input="$(jq -r '.data.needs_input // false' <<<"$capture_out")"
+  if [[ -z "${capture_summary// }" ]]; then
+    capture_summary="$capture_latest"
+  fi
+  if completion_signal_present "$capture_summary" || completion_signal_present "$capture_content"; then
+    printf ''
+    return 0
+  fi
+  jq -cn \
+    --arg agent_id "$agent_id" \
+    --arg session_name "$session_name" \
+    --arg status "$capture_status" \
+    --arg summary "$capture_summary" \
+    --arg latest_line "$capture_latest" \
+    --arg content "$capture_content" \
+    --argjson needs_input "$capture_needs_input" \
+    '{
+      agent_id: $agent_id,
+      session_name: $session_name,
+      status: $status,
+      needs_input: $needs_input,
+      summary: $summary,
+      latest_line: $latest_line,
+      content: $content
+    }'
+}
+
+review_find_inflight_agent_snapshot() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local agent_ids_json
+  agent_ids_json="$(review_workspace_agent_ids_json "$workspace_id" "$assistant")"
+  if ! jq -e . >/dev/null 2>&1 <<<"$agent_ids_json"; then
+    printf ''
+    return 0
+  fi
+
+  local candidate_agent candidate_snapshot
+  while IFS= read -r candidate_agent; do
+    [[ -z "${candidate_agent// }" ]] && continue
+    candidate_snapshot="$(review_inflight_agent_snapshot_by_id "$candidate_agent")"
+    if jq -e '.agent_id // "" | length > 0' >/dev/null 2>&1 <<<"$candidate_snapshot"; then
+      printf '%s' "$candidate_snapshot"
+      return 0
+    fi
+  done < <(jq -r '.[]' <<<"$agent_ids_json")
+
+  printf ''
 }
 
 turn_reports_permission_mode_gate() {
@@ -843,6 +1266,27 @@ turn_reports_choice_prompt() {
       choice_text | test("press enter|hit enter|press return|hit return|just press enter|enter to continue"; "i");
     ((.overall_status // .status // "") == "needs_input")
     and (has_numeric_or_letter_options or has_yes_no_prompt or has_press_enter_prompt)
+  ' >/dev/null 2>&1 <<<"$turn_json"
+}
+
+turn_reports_fix_offer_prompt() {
+  local turn_json="$1"
+  if ! jq -e . >/dev/null 2>&1 <<<"$turn_json"; then
+    return 1
+  fi
+  jq -e '
+    def prompt_text:
+      [
+        (.response.input_hint // ""),
+        (.input_hint // ""),
+        (.summary // ""),
+        (.channel.message // ""),
+        ((.events // []) | map(.response.input_hint // .input_hint // .summary // "") | join("\n"))
+      ] | join("\n");
+    ((.overall_status // .status // "") == "needs_input")
+    and (
+      prompt_text | test("would you like me to (fix|apply|implement|proceed)|do you want me to (fix|apply|implement|proceed)|should i (fix|apply|implement|proceed)"; "i")
+    )
   ' >/dev/null 2>&1 <<<"$turn_json"
 }
 
@@ -1320,6 +1764,438 @@ context_set_agent() {
     | .updated_at = $ts
   ' <<<"$ctx")"
   context_write_json "$updated"
+}
+
+context_last_guide_task_json() {
+  jq -c '.guide.last_task // {}' <<<"$(context_read_json)"
+}
+
+context_set_guide_task() {
+  local task_text="$1"
+  local task_intent="$2"
+  if [[ -z "${task_text// }" || -z "${task_intent// }" ]]; then
+    return 0
+  fi
+  local ctx ts updated
+  ctx="$(context_read_json)"
+  ts="$(context_timestamp_utc)"
+  updated="$(jq -c \
+    --arg task "$task_text" \
+    --arg intent "$task_intent" \
+    --arg ts "$ts" '
+      .guide = (.guide // {})
+      | .guide.last_task = {
+          text: $task,
+          intent: $intent,
+          updated_at: $ts
+        }
+      | .updated_at = $ts
+    ' <<<"$ctx")"
+  context_write_json "$updated"
+}
+
+context_review_inflight_agent() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  if [[ -z "${workspace_id// }" ]]; then
+    printf ''
+    return 0
+  fi
+  local ttl_seconds prompt_hash now match_prompt
+  ttl_seconds="${AMUX_ASSISTANT_DX_REVIEW_INFLIGHT_TTL_SECONDS:-3600}"
+  if ! is_positive_int "$ttl_seconds"; then
+    ttl_seconds=3600
+  fi
+  match_prompt="${AMUX_ASSISTANT_DX_REVIEW_INFLIGHT_MATCH_PROMPT:-false}"
+  prompt_hash="$(hash_text_short "$prompt")"
+  now="$(date +%s)"
+  jq -r \
+    --arg workspace "$workspace_id" \
+    --arg assistant "$assistant" \
+    --arg prompt_hash "$prompt_hash" \
+    --arg match_prompt "$match_prompt" \
+    --argjson now "$now" \
+    --argjson ttl "$ttl_seconds" '
+      (.review.inflight // {}) as $r
+      | (($r.updated_epoch // 0) | tonumber? // 0) as $updated
+      | if (($r.workspace_id // "") == $workspace)
+          and ((($r.assistant // "") == $assistant) or (($assistant | length) == 0))
+          and (
+            if (($match_prompt | ascii_downcase) == "true") then
+              (($r.prompt_hash // "") == $prompt_hash)
+            else
+              true
+            end
+          )
+          and ((($now - $updated) >= 0) and (($now - $updated) <= $ttl))
+        then
+          ($r.agent_id // "")
+        else
+          ""
+        end
+    ' <<<"$(context_read_json)"
+}
+
+context_set_review_inflight() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local agent_id="$4"
+  if [[ -z "${workspace_id// }" || -z "${agent_id// }" ]]; then
+    return 0
+  fi
+  local ctx ts epoch prompt_hash updated
+  ctx="$(context_read_json)"
+  ts="$(context_timestamp_utc)"
+  epoch="$(date +%s)"
+  prompt_hash="$(hash_text_short "$prompt")"
+  updated="$(jq -c \
+    --arg workspace "$workspace_id" \
+    --arg assistant "$assistant" \
+    --arg prompt_hash "$prompt_hash" \
+    --arg agent "$agent_id" \
+    --arg ts "$ts" \
+    --argjson epoch "$epoch" '
+      .review = (.review // {})
+      | .review.inflight = {
+          workspace_id: $workspace,
+          assistant: $assistant,
+          prompt_hash: $prompt_hash,
+          agent_id: $agent,
+          updated_epoch: $epoch
+        }
+      | .updated_at = $ts
+    ' <<<"$ctx")"
+  context_write_json "$updated"
+}
+
+context_clear_review_inflight() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local ctx ts prompt_hash updated match_prompt
+  ctx="$(context_read_json)"
+  ts="$(context_timestamp_utc)"
+  match_prompt="${AMUX_ASSISTANT_DX_REVIEW_INFLIGHT_MATCH_PROMPT:-false}"
+  prompt_hash="$(hash_text_short "$prompt")"
+  updated="$(jq -c \
+    --arg workspace "$workspace_id" \
+    --arg assistant "$assistant" \
+    --arg prompt_hash "$prompt_hash" \
+    --arg match_prompt "$match_prompt" \
+    --arg ts "$ts" '
+      if ((.review.inflight.workspace_id // "") == $workspace)
+        and ((.review.inflight.assistant // "") == $assistant)
+        and (
+          if (($match_prompt | ascii_downcase) == "true") then
+            ((.review.inflight.prompt_hash // "") == $prompt_hash)
+          else
+            true
+          end
+        ) then
+          del(.review.inflight)
+      else
+          .
+      end
+      | .updated_at = $ts
+    ' <<<"$ctx")"
+  context_write_json "$updated"
+}
+
+context_start_inflight_agent() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  if [[ -z "${workspace_id// }" ]]; then
+    printf ''
+    return 0
+  fi
+  local ttl_seconds prompt_hash now match_prompt
+  ttl_seconds="${AMUX_ASSISTANT_DX_START_INFLIGHT_TTL_SECONDS:-180}"
+  if ! is_positive_int "$ttl_seconds"; then
+    ttl_seconds=180
+  fi
+  match_prompt="${AMUX_ASSISTANT_DX_START_INFLIGHT_MATCH_PROMPT:-false}"
+  prompt_hash="$(hash_text_short "$prompt")"
+  now="$(date +%s)"
+  jq -r \
+    --arg workspace "$workspace_id" \
+    --arg assistant "$assistant" \
+    --arg prompt_hash "$prompt_hash" \
+    --arg match_prompt "$match_prompt" \
+    --argjson now "$now" \
+    --argjson ttl "$ttl_seconds" '
+      (.start.inflight // {}) as $r
+      | (($r.updated_epoch // 0) | tonumber? // 0) as $updated
+      | if (($r.workspace_id // "") == $workspace)
+          and ((($r.assistant // "") == $assistant) or (($assistant | length) == 0))
+          and (
+            if (($match_prompt | ascii_downcase) == "true") then
+              (($r.prompt_hash // "") == $prompt_hash)
+            else
+              true
+            end
+          )
+          and ((($now - $updated) >= 0) and (($now - $updated) <= $ttl))
+        then
+          ($r.agent_id // "")
+        else
+          ""
+        end
+    ' <<<"$(context_read_json)"
+}
+
+context_set_start_inflight() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local agent_id="$4"
+  if [[ -z "${workspace_id// }" || -z "${agent_id// }" ]]; then
+    return 0
+  fi
+  local ctx ts epoch prompt_hash updated
+  ctx="$(context_read_json)"
+  ts="$(context_timestamp_utc)"
+  epoch="$(date +%s)"
+  prompt_hash="$(hash_text_short "$prompt")"
+  updated="$(jq -c \
+    --arg workspace "$workspace_id" \
+    --arg assistant "$assistant" \
+    --arg prompt_hash "$prompt_hash" \
+    --arg agent "$agent_id" \
+    --arg ts "$ts" \
+    --argjson epoch "$epoch" '
+      .start = (.start // {})
+      | .start.inflight = {
+          workspace_id: $workspace,
+          assistant: $assistant,
+          prompt_hash: $prompt_hash,
+          agent_id: $agent,
+          updated_epoch: $epoch
+        }
+      | .updated_at = $ts
+    ' <<<"$ctx")"
+  context_write_json "$updated"
+}
+
+context_clear_start_inflight() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local ctx ts prompt_hash updated match_prompt
+  ctx="$(context_read_json)"
+  ts="$(context_timestamp_utc)"
+  match_prompt="${AMUX_ASSISTANT_DX_START_INFLIGHT_MATCH_PROMPT:-false}"
+  prompt_hash="$(hash_text_short "$prompt")"
+  updated="$(jq -c \
+    --arg workspace "$workspace_id" \
+    --arg assistant "$assistant" \
+    --arg prompt_hash "$prompt_hash" \
+    --arg match_prompt "$match_prompt" \
+    --arg ts "$ts" '
+      if ((.start.inflight.workspace_id // "") == $workspace)
+        and ((.start.inflight.assistant // "") == $assistant)
+        and (
+          if (($match_prompt | ascii_downcase) == "true") then
+            ((.start.inflight.prompt_hash // "") == $prompt_hash)
+          else
+            true
+          end
+        ) then
+          del(.start.inflight)
+      else
+          .
+      end
+      | .updated_at = $ts
+    ' <<<"$ctx")"
+  context_write_json "$updated"
+}
+
+review_start_lock_path_for() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local override="${AMUX_ASSISTANT_DX_REVIEW_START_LOCK_PATH:-}"
+  if [[ -n "${override// }" ]]; then
+    printf '%s' "$override"
+    return 0
+  fi
+  local lock_dir
+  lock_dir="${AMUX_ASSISTANT_DX_REVIEW_START_LOCK_DIR:-}"
+  if [[ -z "${lock_dir// }" ]]; then
+    lock_dir="$(dirname "$(context_file_path)")"
+  fi
+  mkdir -p "$lock_dir" >/dev/null 2>&1 || true
+  local lock_scope
+  lock_scope="${AMUX_ASSISTANT_DX_REVIEW_START_LOCK_SCOPE:-workspace}"
+  case "$lock_scope" in
+    prompt|strict)
+      printf '%s/review-start-%s-%s-%s.lock' \
+        "$lock_dir" \
+        "$(idempotency_slug_token "$workspace_id")" \
+        "$(idempotency_slug_token "$assistant")" \
+        "$(hash_text_short "$prompt")"
+      ;;
+    *)
+      printf '%s/review-start-%s-%s.lock' \
+        "$lock_dir" \
+        "$(idempotency_slug_token "$workspace_id")" \
+        "$(idempotency_slug_token "$assistant")"
+      ;;
+  esac
+}
+
+review_start_lock_is_stale() {
+  local lock_path="$1"
+  local ttl_seconds="$2"
+  if [[ ! -f "$lock_path" ]]; then
+    return 0
+  fi
+  local raw created pid now age
+  raw="$(cat "$lock_path" 2>/dev/null || true)"
+  created="$(printf '%s' "$raw" | awk '{print $1}')"
+  pid="$(printf '%s' "$raw" | awk '{print $2}')"
+  now="$(date +%s)"
+  if ! [[ "$created" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  age=$((now - created))
+  if [[ "$age" -lt 0 ]]; then
+    age=0
+  fi
+  if [[ "$age" -gt "$ttl_seconds" ]]; then
+    return 0
+  fi
+  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+    return 1
+  fi
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
+review_start_lock_acquire() {
+  local lock_path="$1"
+  local ttl_seconds="$2"
+  local now
+  now="$(date +%s)"
+  if [[ -f "$lock_path" ]] && review_start_lock_is_stale "$lock_path" "$ttl_seconds"; then
+    rm -f "$lock_path" >/dev/null 2>&1 || true
+  fi
+  if (
+    set -o noclobber
+    printf '%s %s\n' "$now" "$$" >"$lock_path"
+  ) 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+review_start_lock_release() {
+  local lock_path="$1"
+  if [[ -z "${lock_path// }" || ! -f "$lock_path" ]]; then
+    return 0
+  fi
+  local owner_pid
+  owner_pid="$(awk '{print $2}' "$lock_path" 2>/dev/null || true)"
+  if [[ -z "${owner_pid// }" || "$owner_pid" == "$$" ]]; then
+    rm -f "$lock_path" >/dev/null 2>&1 || true
+  fi
+}
+
+start_lock_path_for() {
+  local workspace_id="$1"
+  local assistant="$2"
+  local prompt="$3"
+  local override="${AMUX_ASSISTANT_DX_START_LOCK_PATH:-}"
+  if [[ -n "${override// }" ]]; then
+    printf '%s' "$override"
+    return 0
+  fi
+  local lock_dir
+  lock_dir="${AMUX_ASSISTANT_DX_START_LOCK_DIR:-}"
+  if [[ -z "${lock_dir// }" ]]; then
+    lock_dir="$(dirname "$(context_file_path)")"
+  fi
+  mkdir -p "$lock_dir" >/dev/null 2>&1 || true
+  local lock_scope
+  lock_scope="${AMUX_ASSISTANT_DX_START_LOCK_SCOPE:-workspace}"
+  case "$lock_scope" in
+    prompt|strict)
+      printf '%s/start-%s-%s-%s.lock' \
+        "$lock_dir" \
+        "$(idempotency_slug_token "$workspace_id")" \
+        "$(idempotency_slug_token "$assistant")" \
+        "$(hash_text_short "$prompt")"
+      ;;
+    *)
+      printf '%s/start-%s-%s.lock' \
+        "$lock_dir" \
+        "$(idempotency_slug_token "$workspace_id")" \
+        "$(idempotency_slug_token "$assistant")"
+      ;;
+  esac
+}
+
+start_lock_is_stale() {
+  local lock_path="$1"
+  local ttl_seconds="$2"
+  if [[ ! -f "$lock_path" ]]; then
+    return 0
+  fi
+  local raw created pid now age
+  raw="$(cat "$lock_path" 2>/dev/null || true)"
+  created="$(printf '%s' "$raw" | awk '{print $1}')"
+  pid="$(printf '%s' "$raw" | awk '{print $2}')"
+  now="$(date +%s)"
+  if ! [[ "$created" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  age=$((now - created))
+  if [[ "$age" -lt 0 ]]; then
+    age=0
+  fi
+  if [[ "$age" -gt "$ttl_seconds" ]]; then
+    return 0
+  fi
+  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+    return 1
+  fi
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
+start_lock_acquire() {
+  local lock_path="$1"
+  local ttl_seconds="$2"
+  local now
+  now="$(date +%s)"
+  if [[ -f "$lock_path" ]] && start_lock_is_stale "$lock_path" "$ttl_seconds"; then
+    rm -f "$lock_path" >/dev/null 2>&1 || true
+  fi
+  if (
+    set -o noclobber
+    printf '%s %s\n' "$now" "$$" >"$lock_path"
+  ) 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+start_lock_release() {
+  local lock_path="$1"
+  if [[ -z "${lock_path// }" || ! -f "$lock_path" ]]; then
+    return 0
+  fi
+  local owner_pid
+  owner_pid="$(awk '{print $2}' "$lock_path" 2>/dev/null || true)"
+  if [[ -z "${owner_pid// }" || "$owner_pid" == "$$" ]]; then
+    rm -f "$lock_path" >/dev/null 2>&1 || true
+  fi
 }
 
 context_set_workspace_with_lookup() {
@@ -1845,6 +2721,104 @@ workspace_scope_hint_from_task() {
   esac
 }
 
+guide_task_intent() {
+  local task="${1:-}"
+  if [[ -z "${task// }" ]]; then
+    printf 'generic'
+    return 0
+  fi
+  local lower
+  lower="$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    *"status"*|*"active agent"*|*"active agents"*|*"active workspace"*|*"active workspaces"*|*"blocked"*|*"what is running"*|*"what's running"*)
+      printf 'status'
+      ;;
+    *"alert"*|*"warnings"*|*"stale session"*|*"stale sessions"*)
+      printf 'alerts'
+      ;;
+    *"review"*|*"audit"*|*"correctness"*|*"security review"*)
+      printf 'review'
+      ;;
+    *"commit"*|*"push"*|*"rebase"*|*"ship"*)
+      printf 'ship'
+      ;;
+    *"create a nested workspace"*|*"create nested workspace"*|*"nested workspace"*)
+      printf 'nested_workspace'
+      ;;
+    *"recover"*|*"hung assistant"*|*"hanging"*|*"stuck"*|*"timed out"*|*"timeout"*)
+      printf 'recover'
+      ;;
+    *"switch to codex"*|*"use codex"*)
+      printf 'switch_codex'
+      ;;
+    *)
+      printf 'generic'
+      ;;
+  esac
+}
+
+guide_workspace_hint_from_task() {
+  local task="${1:-}"
+  local workspaces_json="${2:-[]}"
+  if [[ -z "${task// }" ]]; then
+    printf ''
+    return 0
+  fi
+  local task_lower
+  task_lower="$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]')"
+  jq -r --arg task "$task_lower" '
+    (if type == "array" then . else [] end)
+    | map({
+        id: (.id // ""),
+        name: (.name // ""),
+        id_l: ((.id // "") | ascii_downcase),
+        name_l: ((.name // "") | ascii_downcase)
+      })
+    | map(
+        (.name_l as $name_l | .id_l as $id_l
+        | . + {
+            score: (
+              (if ($name_l | length) >= 2 and ($task | contains($name_l + " workspace")) then 500 else 0 end)
+              + (if ($name_l | length) >= 2 and ($task | contains("workspace " + $name_l)) then 450 else 0 end)
+              + (if ($name_l | length) >= 3 and ($task | contains($name_l)) then ($name_l | length) else 0 end)
+              + (if ($id_l | length) >= 6 and ($task | contains($id_l)) then 200 else 0 end)
+            )
+          })
+      )
+    | map(select((.id | length) > 0 and (.score > 0)))
+    | sort_by([.score, (.name_l | length)])
+    | reverse
+    | .[0].id // ""
+  ' <<<"$workspaces_json"
+}
+
+task_requests_push() {
+  local task="${1:-}"
+  local lower
+  lower="$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]')"
+  [[ "$lower" == *"push"* ]]
+}
+
+task_is_amux_transport_only() {
+  local task="${1:-}"
+  if [[ -z "${task// }" ]]; then
+    return 1
+  fi
+  local lower normalized
+  lower="$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]')"
+  normalized="$(printf '%s' "$lower" | sed -E 's/[^a-z0-9[:space:]]+/ /g' | tr -s '[:space:]' ' ' | sed -E 's/^ +| +$//g')"
+  if [[ -z "${normalized// }" ]]; then
+    return 1
+  fi
+  if [[ "$normalized" =~ ^(please[[:space:]]+)?(can[[:space:]]+you[[:space:]]+|could[[:space:]]+you[[:space:]]+|can[[:space:]]+u[[:space:]]+|just[[:space:]]+)?(use|using|via|with|through|on|run)([[:space:]]+the)?[[:space:]]+amux([[:space:]]+(only|please|now|pls|plz))?$ ]]; then
+    return 0
+  fi
+  if [[ "$normalized" =~ ^(please[[:space:]]+)?amux([[:space:]]+(only|please|now|pls|plz))?$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
 run_self_json() {
   local out
   if [[ ! -x "$SELF_SCRIPT" ]]; then
@@ -1882,14 +2856,142 @@ recover_timeout_turn_once() {
     printf '%s' "$turn_json"
     return
   fi
-  if [[ ! -x "$step_script" ]]; then
-    printf '%s' "$turn_json"
-    return
-  fi
 
   local agent_id
   agent_id="$(jq -r '.agent_id // ""' <<<"$turn_json")"
   if [[ -z "${agent_id// }" ]]; then
+    printf '%s' "$turn_json"
+    return
+  fi
+
+  # Passive recovery: wait on the existing session first, then capture.
+  # This avoids injecting follow-up text into long-running tasks that are still
+  # progressing and may finish shortly after the first timeout.
+  local passive_wait_seconds passive_idle_seconds passive_wait_script
+  local passive_wait_default passive_wait_max
+  local passive_wait_exit session_name capture_lines
+  passive_wait_default=30
+  passive_wait_max="${AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_PASSIVE_WAIT_MAX_SECONDS:-60}"
+  if ! [[ "$passive_wait_max" =~ ^[0-9]+$ ]] || [[ "$passive_wait_max" -le 0 ]]; then
+    passive_wait_max=60
+  fi
+  if [[ "$passive_wait_default" -gt "$passive_wait_max" ]]; then
+    passive_wait_default="$passive_wait_max"
+  fi
+  passive_wait_seconds="${AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_PASSIVE_WAIT_SECONDS:-$passive_wait_default}"
+  if ! [[ "$passive_wait_seconds" =~ ^[0-9]+$ ]]; then
+    passive_wait_seconds="$passive_wait_default"
+  fi
+  if [[ "$passive_wait_seconds" -gt "$passive_wait_max" ]]; then
+    passive_wait_seconds="$passive_wait_max"
+  fi
+  passive_idle_seconds="$(wait_timeout_to_seconds_or_zero "$idle_threshold")"
+  if ! [[ "$passive_idle_seconds" =~ ^[0-9]+$ ]] || [[ "$passive_idle_seconds" -le 0 ]]; then
+    passive_idle_seconds=10
+  fi
+  passive_wait_script="${AMUX_ASSISTANT_DX_WAIT_FOR_IDLE_SCRIPT:-$SCRIPT_DIR/wait-for-idle.sh}"
+  passive_wait_exit=2
+  session_name="$(session_for_agent_id "$agent_id")"
+  if [[ "$passive_wait_seconds" -gt 0 && -n "${session_name// }" && -x "$passive_wait_script" ]]; then
+    set +e
+    "$passive_wait_script" \
+      --session "$session_name" \
+      --timeout "$passive_wait_seconds" \
+      --idle-threshold "$passive_idle_seconds" >/dev/null 2>&1
+    passive_wait_exit=$?
+    set -e
+  fi
+
+  capture_lines="${AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_CAPTURE_LINES:-160}"
+  if ! [[ "$capture_lines" =~ ^[0-9]+$ ]] || [[ "$capture_lines" -le 0 ]]; then
+    capture_lines=160
+  fi
+  if [[ -n "${session_name// }" ]]; then
+    local capture_json capture_status capture_summary capture_latest capture_needs_input capture_input_hint
+    local capture_session_exited capture_content capture_delta capture_meaningful
+    capture_json="$(amux_capture_ok_json "$session_name" "$capture_lines" 2>/dev/null || true)"
+    if jq -e '.ok == true' >/dev/null 2>&1 <<<"$capture_json"; then
+      capture_status="$(jq -r '.data.status // "captured"' <<<"$capture_json")"
+      capture_summary="$(jq -r '.data.summary // ""' <<<"$capture_json")"
+      capture_latest="$(jq -r '.data.latest_line // ""' <<<"$capture_json")"
+      capture_needs_input="$(jq -r '.data.needs_input // false' <<<"$capture_json")"
+      capture_input_hint="$(jq -r '.data.input_hint // ""' <<<"$capture_json")"
+      capture_content="$(jq -r '.data.content // ""' <<<"$capture_json")"
+      if [[ "$capture_needs_input" != "true" ]] && interactive_prompt_signal_present "$(printf '%s\n%s\n%s' "$capture_input_hint" "$capture_summary" "$capture_content")"; then
+        capture_needs_input=true
+        if [[ -z "${capture_input_hint// }" ]]; then
+          capture_input_hint="$capture_summary"
+        fi
+      fi
+      capture_session_exited=false
+      if [[ "$capture_status" == "session_exited" ]]; then
+        capture_session_exited=true
+      fi
+      if [[ -z "${capture_summary// }" && -n "${capture_latest// }" ]]; then
+        capture_summary="$capture_latest"
+      fi
+      capture_meaningful=false
+      if [[ "$capture_needs_input" == "true" || "$capture_session_exited" == "true" ]]; then
+        capture_meaningful=true
+      elif [[ -n "${capture_summary// }" && "$capture_summary" != "(no output yet)" ]]; then
+        capture_meaningful=true
+      fi
+      if [[ "$capture_meaningful" == "true" ]]; then
+        local passive_status passive_overall
+        passive_status="timed_out"
+        passive_overall="partial"
+        if [[ "$capture_session_exited" == "true" ]]; then
+          passive_status="session_exited"
+          passive_overall="session_exited"
+        elif [[ "$capture_needs_input" == "true" ]]; then
+          passive_status="needs_input"
+          passive_overall="needs_input"
+        elif [[ "$passive_wait_exit" -eq 0 ]] \
+          || completion_signal_present "$capture_summary" \
+          || completion_signal_present "$capture_content"; then
+          passive_status="idle"
+          passive_overall="completed"
+        fi
+        capture_delta="$capture_content"
+        if [[ "${#capture_delta}" -gt 4000 ]]; then
+          capture_delta="${capture_delta:0:4000}"
+        fi
+        jq -c \
+          --arg status "$passive_status" \
+          --arg overall_status "$passive_overall" \
+          --arg summary "$capture_summary" \
+          --arg latest_line "$capture_latest" \
+          --arg delta "$capture_delta" \
+          --arg input_hint "$capture_input_hint" \
+          --argjson needs_input "$capture_needs_input" \
+          --argjson session_exited "$capture_session_exited" '
+            .status = $status
+            | .overall_status = $overall_status
+            | .summary = (if ($summary | length) > 0 then $summary else (.summary // "") end)
+            | .response = ((.response // {}) + {
+                status: $status,
+                latest_line: $latest_line,
+                summary: $summary,
+                delta: $delta,
+                needs_input: $needs_input,
+                input_hint: $input_hint,
+                timed_out: ($status == "timed_out"),
+                session_exited: $session_exited,
+                changed: true,
+                substantive_output: true
+              })
+          ' <<<"$turn_json"
+        return
+      fi
+    fi
+  fi
+
+  if [[ "${AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_DISABLE_SEND_FALLBACK:-false}" == "true" ]]; then
+    printf '%s' "$turn_json"
+    return
+  fi
+
+  if [[ ! -x "$step_script" ]]; then
     printf '%s' "$turn_json"
     return
   fi
@@ -1937,6 +3039,202 @@ recover_timeout_turn_once() {
   fi
 
   printf '%s' "$follow_json"
+}
+
+start_mark_inflight_timeout() {
+  local turn_json="$1"
+  local workspace_id="${2:-}"
+
+  if ! jq -e . >/dev/null 2>&1 <<<"$turn_json"; then
+    printf '%s' "$turn_json"
+    return
+  fi
+  if ! jq -e '
+    ((.overall_status // .status // "") == "timed_out")
+    and ((.agent_id // "") | length > 0)
+  ' >/dev/null 2>&1 <<<"$turn_json"; then
+    printf '%s' "$turn_json"
+    return
+  fi
+
+  local agent_id session_name
+  agent_id="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+  session_name="$(session_for_agent_id "$agent_id")"
+  if [[ -z "${session_name// }" ]]; then
+    printf '%s' "$turn_json"
+    return
+  fi
+
+  local capture_lines capture_json capture_summary capture_latest capture_status
+  capture_lines="${AMUX_ASSISTANT_DX_START_INFLIGHT_CAPTURE_LINES:-80}"
+  if ! [[ "$capture_lines" =~ ^[0-9]+$ ]] || [[ "$capture_lines" -le 0 ]]; then
+    capture_lines=80
+  fi
+  capture_summary=""
+  capture_latest=""
+  capture_status=""
+  capture_json="$(amux_capture_ok_json "$session_name" "$capture_lines" 2>/dev/null || true)"
+  if jq -e '.ok == true' >/dev/null 2>&1 <<<"$capture_json"; then
+    capture_status="$(jq -r '.data.status // ""' <<<"$capture_json")"
+    capture_summary="$(jq -r '.data.summary // ""' <<<"$capture_json")"
+    capture_latest="$(jq -r '.data.latest_line // ""' <<<"$capture_json")"
+    capture_summary="${capture_summary//$'\r'/ }"
+    capture_summary="${capture_summary//$'\n'/ }"
+    capture_latest="${capture_latest//$'\r'/ }"
+    capture_latest="${capture_latest//$'\n'/ }"
+  fi
+  capture_summary="$(redact_secrets_text "$capture_summary")"
+  capture_latest="$(redact_secrets_text "$capture_latest")"
+
+  local summary_text next_action suggested_command channel_message
+  summary_text="Coding turn is still running in the assistant tab; no visible output yet."
+  if [[ -n "${capture_summary// }" && "$capture_summary" != "(no output yet)" ]]; then
+    summary_text="Coding turn is still running. Latest visible output: $capture_summary"
+  elif [[ -n "${capture_latest// }" && "$capture_latest" != "(no output yet)" ]]; then
+    summary_text="Coding turn is still running. Latest visible line: $capture_latest"
+  fi
+  next_action="Keep the assistant tab open and re-check status in about 60 seconds."
+  suggested_command="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"Provide a one-line progress status.\" --enter"
+  if [[ -n "${workspace_id// }" ]]; then
+    suggested_command="skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$workspace_id")"
+  fi
+  channel_message="⏳ $summary_text"$'\n'"Session: $session_name"$'\n'"Next: $next_action"
+
+  local inflight_actions='[]'
+  if [[ -n "${workspace_id// }" ]]; then
+    inflight_actions="$(append_action "$inflight_actions" "status_ws" "WS Status" "skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$workspace_id")" "primary" "Check live workspace status")"
+    inflight_actions="$(append_action "$inflight_actions" "alerts_ws" "Alerts" "skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$workspace_id") --include-stale" "secondary" "Check blocking alerts and stale sessions")"
+  fi
+  inflight_actions="$(append_action "$inflight_actions" "continue_status" "Progress" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"Provide a one-line progress status.\" --enter" "primary" "Ask the running agent for a one-line progress update")"
+
+  jq -c \
+    --arg summary "$summary_text" \
+    --arg next_action "$next_action" \
+    --arg suggested_command "$suggested_command" \
+    --arg channel_message "$channel_message" \
+    --arg session_name "$session_name" \
+    --arg capture_status "$capture_status" \
+    --arg capture_summary "$capture_summary" \
+    --arg capture_latest "$capture_latest" \
+    --argjson actions "$inflight_actions" '
+      .status = "attention"
+      | .overall_status = "in_progress"
+      | .summary = $summary
+      | .next_action = $next_action
+      | .suggested_command = $suggested_command
+      | .in_progress = true
+      | .inflight = ((.inflight // {}) + {
+          session_name: $session_name,
+          capture_status: $capture_status,
+          capture_summary: $capture_summary,
+          capture_latest_line: $capture_latest
+        })
+      | .response = ((.response // {}) + {timed_out: true, in_progress: true})
+      | .quick_actions = (((.quick_actions // []) + $actions) | unique_by(.id))
+      | .channel = ((.channel // {}) + {
+          message: $channel_message,
+          chunks: [$channel_message],
+          chunks_meta: [{index: 1, total: 1, text: $channel_message}]
+        })
+    ' <<<"$turn_json"
+}
+
+review_mark_inflight_timeout() {
+  local turn_json="$1"
+  local workspace_id="${2:-}"
+
+  if ! jq -e . >/dev/null 2>&1 <<<"$turn_json"; then
+    printf '%s' "$turn_json"
+    return
+  fi
+  if ! jq -e '
+    ((.overall_status // .status // "") == "timed_out")
+    and ((.agent_id // "") | length > 0)
+  ' >/dev/null 2>&1 <<<"$turn_json"; then
+    printf '%s' "$turn_json"
+    return
+  fi
+
+  local agent_id session_name
+  agent_id="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+  session_name="$(session_for_agent_id "$agent_id")"
+  if [[ -z "${session_name// }" ]]; then
+    printf '%s' "$turn_json"
+    return
+  fi
+
+  local capture_lines capture_json capture_summary capture_latest capture_status
+  capture_lines="${AMUX_ASSISTANT_DX_REVIEW_INFLIGHT_CAPTURE_LINES:-80}"
+  if ! [[ "$capture_lines" =~ ^[0-9]+$ ]] || [[ "$capture_lines" -le 0 ]]; then
+    capture_lines=80
+  fi
+  capture_summary=""
+  capture_latest=""
+  capture_status=""
+  capture_json="$(amux_capture_ok_json "$session_name" "$capture_lines" 2>/dev/null || true)"
+  if jq -e '.ok == true' >/dev/null 2>&1 <<<"$capture_json"; then
+    capture_status="$(jq -r '.data.status // ""' <<<"$capture_json")"
+    capture_summary="$(jq -r '.data.summary // ""' <<<"$capture_json")"
+    capture_latest="$(jq -r '.data.latest_line // ""' <<<"$capture_json")"
+    capture_summary="${capture_summary//$'\r'/ }"
+    capture_summary="${capture_summary//$'\n'/ }"
+    capture_latest="${capture_latest//$'\r'/ }"
+    capture_latest="${capture_latest//$'\n'/ }"
+  fi
+  capture_summary="$(redact_secrets_text "$capture_summary")"
+  capture_latest="$(redact_secrets_text "$capture_latest")"
+
+  local summary_text next_action suggested_command channel_message
+  summary_text="Review is still running in the assistant tab; no visible output yet."
+  if [[ -n "${capture_summary// }" && "$capture_summary" != "(no output yet)" ]]; then
+    summary_text="Review is still running. Latest visible output: $capture_summary"
+  elif [[ -n "${capture_latest// }" && "$capture_latest" != "(no output yet)" ]]; then
+    summary_text="Review is still running. Latest visible line: $capture_latest"
+  fi
+  next_action="Keep the Codex tab open and re-check status in about 60 seconds."
+  suggested_command="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"Provide a one-line progress status.\" --enter"
+  if [[ -n "${workspace_id// }" ]]; then
+    suggested_command="skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$workspace_id")"
+  fi
+  channel_message="⏳ $summary_text"$'\n'"Session: $session_name"$'\n'"Next: $next_action"
+
+  local inflight_actions='[]'
+  if [[ -n "${workspace_id// }" ]]; then
+    inflight_actions="$(append_action "$inflight_actions" "status_ws" "WS Status" "skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$workspace_id")" "primary" "Check live workspace status")"
+    inflight_actions="$(append_action "$inflight_actions" "alerts_ws" "Alerts" "skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$workspace_id") --include-stale" "secondary" "Check blocking alerts and stale sessions")"
+  fi
+  inflight_actions="$(append_action "$inflight_actions" "continue_status" "Progress" "skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$agent_id") --text \"Provide a one-line progress status.\" --enter" "primary" "Ask the running agent for a one-line progress update")"
+
+  jq -c \
+    --arg summary "$summary_text" \
+    --arg next_action "$next_action" \
+    --arg suggested_command "$suggested_command" \
+    --arg channel_message "$channel_message" \
+    --arg session_name "$session_name" \
+    --arg capture_status "$capture_status" \
+    --arg capture_summary "$capture_summary" \
+    --arg capture_latest "$capture_latest" \
+    --argjson actions "$inflight_actions" '
+      .status = "attention"
+      | .overall_status = "in_progress"
+      | .summary = $summary
+      | .next_action = $next_action
+      | .suggested_command = $suggested_command
+      | .in_progress = true
+      | .inflight = ((.inflight // {}) + {
+          session_name: $session_name,
+          capture_status: $capture_status,
+          capture_summary: $capture_summary,
+          capture_latest_line: $capture_latest
+        })
+      | .response = ((.response // {}) + {timed_out: true, in_progress: true})
+      | .quick_actions = (((.quick_actions // []) + $actions) | unique_by(.id))
+      | .channel = ((.channel // {}) + {
+          message: $channel_message,
+          chunks: [$channel_message],
+          chunks_meta: [{index: 1, total: 1, text: $channel_message}]
+        })
+    ' <<<"$turn_json"
 }
 
 wait_timeout_to_seconds_or_zero() {
@@ -2138,6 +3436,10 @@ emit_turn_passthrough() {
           "Ask the user to choose the permission mode locally. If local selection is unavailable, switch to a probe-passed non-interactive assistant."
         elif ((.overall_status // .status // "") == "needs_input") then
           "Ask the user to choose one of the offered options (or press Enter when requested), then continue the turn with that exact reply."
+        elif ((.overall_status // .status // "") == "timed_out") and ((.agent_id // "") | length > 0) then
+          "The assistant may still be running in its tab. Re-check workspace status or ask for a one-line progress update on the same agent."
+        elif ((.overall_status // .status // "") == "timed_out") then
+          "The step timed out waiting for visible output. Retry with a focused follow-up."
         elif (is_workspace_error) and ((hint_workspace_id | length) > 0) and (is_turn_command) then
           "Check workspace status and assistant readiness, then retry with a focused follow-up."
         elif (is_workspace_error) and ((hint_workspace_id | length) > 0) then
@@ -2161,6 +3463,10 @@ emit_turn_passthrough() {
             (.quick_actions | map(.command // "") | map(select(length > 0)) | .[0])
             // ""
           )
+        elif ((.overall_status // .status // "") == "timed_out") and ((hint_workspace_id | length) > 0) then
+          ($dx_ref + " status --workspace " + (hint_workspace_id))
+        elif ((.overall_status // .status // "") == "timed_out") and ((.agent_id // "") | length) > 0 then
+          ($dx_ref + " continue --agent " + .agent_id + " --text \"Provide a one-line progress status.\" --enter")
         elif ((hint_workspace_id | length) > 0) then
           ($dx_ref + " status --workspace " + (hint_workspace_id))
         elif ((.agent_id // "") | length) > 0 then
@@ -3166,6 +4472,14 @@ cmd_guide() {
   ws_json="$(jq -c '.data // []' <<<"$ws_out")"
   ws_json="$(workspace_enrich_scope_json "$ws_json")"
 
+  if [[ -z "${workspace// }" && -n "${task// }" ]]; then
+    local inferred_workspace_id
+    inferred_workspace_id="$(guide_workspace_hint_from_task "$task" "$ws_json")"
+    if [[ -n "${inferred_workspace_id// }" ]]; then
+      workspace="$inferred_workspace_id"
+    fi
+  fi
+
   local selected_workspace='null'
   local selected_workspace_id=""
   local selected_workspace_name=""
@@ -3270,14 +4584,22 @@ cmd_guide() {
   local capture_summary=""
   local capture_needs_input="false"
   local capture_hint=""
+  local capture_content=""
   local capture_has_completion="false"
   if [[ -n "$primary_session" ]]; then
     local capture_out
-    if capture_out="$(amux_ok_json agent capture "$primary_session" --lines "$capture_lines")"; then
+    if capture_out="$(amux_capture_ok_json "$primary_session" "$capture_lines")"; then
       capture_status="$(jq -r '.data.status // ""' <<<"$capture_out")"
       capture_summary="$(jq -r '.data.summary // .data.latest_line // ""' <<<"$capture_out")"
       capture_needs_input="$(jq -r '.data.needs_input // false' <<<"$capture_out")"
       capture_hint="$(jq -r '.data.input_hint // ""' <<<"$capture_out")"
+      capture_content="$(jq -r '.data.content // ""' <<<"$capture_out")"
+      if [[ "$capture_needs_input" != "true" ]] && interactive_prompt_signal_present "$(printf '%s\n%s\n%s' "$capture_hint" "$capture_summary" "$capture_content")"; then
+        capture_needs_input=true
+        if [[ -z "${capture_hint// }" ]]; then
+          capture_hint="$capture_summary"
+        fi
+      fi
       if completion_signal_present "$capture_summary"; then
         capture_has_completion="true"
       fi
@@ -3296,9 +4618,37 @@ cmd_guide() {
   capture_mode_key="$(jq -r '.key // ""' <<<"$capture_mode_json")"
   capture_mode_label="$(jq -r '.label // ""' <<<"$capture_mode_json")"
 
+  local original_task="$task"
+  local task_source="user"
+  local task_intent task_wants_push ship_push_suffix
+  task_intent="$(guide_task_intent "$task")"
+  if [[ "$task_intent" == "generic" ]] && task_is_amux_transport_only "$task"; then
+    local last_task_json last_task_text last_task_intent
+    last_task_json="$(context_last_guide_task_json)"
+    last_task_text="$(jq -r '.text // ""' <<<"$last_task_json")"
+    last_task_intent="$(jq -r '.intent // ""' <<<"$last_task_json")"
+    if [[ -n "${last_task_text// }" && "$last_task_intent" != "generic" ]]; then
+      task="$last_task_text"
+      task_intent="$last_task_intent"
+      task_source="context_last_task"
+    fi
+  fi
+  if [[ "$task_intent" != "generic" ]] && [[ -n "${task// }" ]]; then
+    context_set_guide_task "$task" "$task_intent"
+  fi
+
   local kickoff_prompt="$task"
   if [[ -z "${kickoff_prompt// }" ]]; then
     kickoff_prompt="Analyze current workspace, identify highest-impact work, implement it, and summarize validation plus next action."
+  fi
+  if task_requests_push "$task"; then
+    task_wants_push=true
+  else
+    task_wants_push=false
+  fi
+  ship_push_suffix=""
+  if [[ "$task_wants_push" == "true" ]]; then
+    ship_push_suffix=" --push"
   fi
 
   local stage="unknown"
@@ -3339,9 +4689,44 @@ cmd_guide() {
   elif [[ "$workspace_agent_count" -eq 0 ]]; then
     stage="start_agent"
     reason="No active coding agent is running in this workspace."
-    RESULT_SUMMARY="Guide: start a coding turn"
-    RESULT_NEXT_ACTION="Start an agent turn in this workspace."
-    RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$selected_workspace_id") --assistant $(shell_quote "$assistant") --prompt $(shell_quote "$kickoff_prompt")"
+    case "$task_intent" in
+      status)
+        RESULT_SUMMARY="Guide: check workspace status"
+        RESULT_NEXT_ACTION="Inspect active/blocked agents for this workspace."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$selected_workspace_id")"
+        ;;
+      alerts)
+        RESULT_SUMMARY="Guide: check workspace alerts"
+        RESULT_NEXT_ACTION="Inspect blocking alerts for this workspace."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$selected_workspace_id") --include-stale"
+        ;;
+      review)
+        RESULT_SUMMARY="Guide: run code review"
+        RESULT_NEXT_ACTION="Run a bounded review pass for uncommitted changes."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh review --workspace $(shell_quote "$selected_workspace_id") --assistant codex"
+        ;;
+      ship)
+        RESULT_SUMMARY="Guide: ship current changes"
+        RESULT_NEXT_ACTION="Commit (and optionally push) current workspace changes."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh git ship --workspace $(shell_quote "$selected_workspace_id")$ship_push_suffix"
+        ;;
+      nested_workspace)
+        RESULT_SUMMARY="Guide: create nested workspace"
+        RESULT_NEXT_ACTION="Create a nested workspace for isolated risky/refactor work."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh workspace create --name refactor --from-workspace $(shell_quote "$selected_workspace_id") --scope nested --assistant $(shell_quote "$assistant")"
+        ;;
+      recover)
+        RESULT_STATUS="attention"
+        RESULT_SUMMARY="Guide: recover hung assistant"
+        RESULT_NEXT_ACTION="Check alerts/stale sessions, then continue or restart."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$selected_workspace_id") --include-stale"
+        ;;
+      *)
+        RESULT_SUMMARY="Guide: start a coding turn"
+        RESULT_NEXT_ACTION="Start an agent turn in this workspace."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$selected_workspace_id") --assistant $(shell_quote "$assistant") --prompt $(shell_quote "$kickoff_prompt")"
+        ;;
+    esac
   elif [[ "$capture_needs_input" == "true" ]]; then
     stage="reply_agent"
     reason="Active agent is waiting for user input."
@@ -3384,13 +4769,49 @@ cmd_guide() {
   else
     stage="continue_agent"
     reason="Agent is active and can continue with the next task."
-    RESULT_SUMMARY="Guide: continue current turn"
-    RESULT_NEXT_ACTION="Continue the agent or monitor status/alerts."
-    if [[ -n "$primary_agent" ]]; then
-      RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$primary_agent") --text \"Continue from current state and report status plus next action.\" --enter"
-    else
-      RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --workspace $(shell_quote "$selected_workspace_id") --text \"Continue from current state and report status plus next action.\" --enter"
-    fi
+    case "$task_intent" in
+      status)
+        RESULT_SUMMARY="Guide: check workspace status"
+        RESULT_NEXT_ACTION="Inspect active/blocked agents and decide next step."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$selected_workspace_id")"
+        ;;
+      alerts)
+        RESULT_SUMMARY="Guide: check workspace alerts"
+        RESULT_NEXT_ACTION="Inspect blocking alerts and stale sessions first."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$selected_workspace_id") --include-stale"
+        ;;
+      review)
+        RESULT_SUMMARY="Guide: run code review"
+        RESULT_NEXT_ACTION="Run a bounded review pass for uncommitted changes."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh review --workspace $(shell_quote "$selected_workspace_id") --assistant codex"
+        ;;
+      ship)
+        RESULT_SUMMARY="Guide: ship current changes"
+        RESULT_NEXT_ACTION="Commit (and optionally push) current workspace changes."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh git ship --workspace $(shell_quote "$selected_workspace_id")$ship_push_suffix"
+        ;;
+      recover)
+        RESULT_STATUS="attention"
+        RESULT_SUMMARY="Guide: recover hung assistant"
+        RESULT_NEXT_ACTION="Check stale/blocked state, then continue or restart."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh alerts --workspace $(shell_quote "$selected_workspace_id") --include-stale"
+        ;;
+      switch_codex)
+        RESULT_STATUS="attention"
+        RESULT_SUMMARY="Guide: switch to codex"
+        RESULT_NEXT_ACTION="Start codex in this workspace for non-interactive continuation."
+        RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh start --workspace $(shell_quote "$selected_workspace_id") --assistant codex --prompt \"Continue from current state and report status plus next action.\""
+        ;;
+      *)
+        RESULT_SUMMARY="Guide: continue current turn"
+        RESULT_NEXT_ACTION="Continue the agent or monitor status/alerts."
+        if [[ -n "$primary_agent" ]]; then
+          RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$primary_agent") --text \"Continue from current state and report status plus next action.\" --enter"
+        else
+          RESULT_SUGGESTED_COMMAND="skills/amux/scripts/assistant-dx.sh continue --workspace $(shell_quote "$selected_workspace_id") --text \"Continue from current state and report status plus next action.\" --enter"
+        fi
+        ;;
+    esac
   fi
   if [[ "$capture_mode_assistant" == "claude" || "$capture_mode_assistant" == "droid" ]]; then
     if [[ -n "${capture_mode_label// }" ]]; then
@@ -3496,6 +4917,8 @@ cmd_guide() {
     --arg project_query "$project" \
     --arg workspace_query "$workspace" \
     --arg task "$task" \
+    --arg task_input "$original_task" \
+    --arg task_source "$task_source" \
     --arg assistant "$assistant" \
     --arg selected_workspace_id "$selected_workspace_id" \
     --arg selected_workspace_name "$selected_workspace_name" \
@@ -3526,6 +4949,8 @@ cmd_guide() {
       project_query: $project_query,
       workspace_query: $workspace_query,
       task: $task,
+      task_input: $task_input,
+      task_source: $task_source,
       assistant: $assistant,
       project_count: $project_count,
       workspace_count_total: $workspace_count_total,
@@ -4739,16 +6164,136 @@ cmd_start() {
   fi
   context_set_workspace_with_lookup "$workspace" "$assistant"
 
+  local start_reuse_inflight start_inflight_agent
+  start_reuse_inflight="${AMUX_ASSISTANT_DX_START_REUSE_INFLIGHT:-true}"
+  if [[ "$start_reuse_inflight" != "false" ]]; then
+    start_inflight_agent="$(context_start_inflight_agent "$workspace" "$assistant" "$prompt")"
+    if [[ -n "${start_inflight_agent// }" ]] && review_agent_inflight_by_id "$start_inflight_agent"; then
+      local reuse_json
+      reuse_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        --arg agent_id "$start_inflight_agent" \
+        '{
+          ok: true,
+          mode: "send",
+          status: "attention",
+          overall_status: "in_progress",
+          summary: "A coding turn is already running in an existing assistant tab.",
+          agent_id: $agent_id,
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Keep the current tab running and check status.",
+          suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+          quick_actions: [],
+          channel: {
+            message: "A coding turn is already running in an existing assistant tab.",
+            chunks: ["A coding turn is already running in an existing assistant tab."],
+            chunks_meta: [{index: 1, total: 1, text: "A coding turn is already running in an existing assistant tab."}]
+          }
+        }')"
+      context_set_start_inflight "$workspace" "$assistant" "$prompt" "$start_inflight_agent"
+      emit_turn_passthrough "start" "coding_turn" "$reuse_json" "$workspace" "$assistant"
+      return
+    fi
+  fi
+
+  local start_lock_enabled start_lock_ttl start_lock_file start_lock_acquired
+  start_lock_enabled="${AMUX_ASSISTANT_DX_START_LOCK_ENABLED:-true}"
+  start_lock_ttl="${AMUX_ASSISTANT_DX_START_LOCK_TTL_SECONDS:-120}"
+  if ! is_positive_int "$start_lock_ttl"; then
+    start_lock_ttl=120
+  fi
+  start_lock_file="$(start_lock_path_for "$workspace" "$assistant" "$prompt")"
+  start_lock_acquired=false
+  if [[ "$start_lock_enabled" != "false" ]]; then
+    if ! start_lock_acquire "$start_lock_file" "$start_lock_ttl"; then
+      if [[ "$start_reuse_inflight" != "false" ]]; then
+        start_inflight_agent="$(context_start_inflight_agent "$workspace" "$assistant" "$prompt")"
+        if [[ -n "${start_inflight_agent// }" ]] && review_agent_inflight_by_id "$start_inflight_agent"; then
+          local reuse_json
+          reuse_json="$(jq -cn \
+            --arg workspace "$workspace" \
+            --arg assistant "$assistant" \
+            --arg agent_id "$start_inflight_agent" \
+            '{
+              ok: true,
+              mode: "send",
+              status: "attention",
+              overall_status: "in_progress",
+              summary: "A coding turn is already running in an existing assistant tab.",
+              agent_id: $agent_id,
+              workspace_id: $workspace,
+              assistant: $assistant,
+              next_action: "Keep the current tab running and check status.",
+              suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+              quick_actions: [],
+              channel: {
+                message: "A coding turn is already running in an existing assistant tab.",
+                chunks: ["A coding turn is already running in an existing assistant tab."],
+                chunks_meta: [{index: 1, total: 1, text: "A coding turn is already running in an existing assistant tab."}]
+              }
+            }')"
+          context_set_start_inflight "$workspace" "$assistant" "$prompt" "$start_inflight_agent"
+          emit_turn_passthrough "start" "coding_turn" "$reuse_json" "$workspace" "$assistant"
+          return
+        fi
+      fi
+      local lock_json
+      lock_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        '{
+          ok: true,
+          mode: "run",
+          status: "attention",
+          overall_status: "in_progress",
+          summary: "A coding turn startup is already in progress for this workspace.",
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Wait for startup to finish, then check workspace status.",
+          suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+          quick_actions: [
+            {
+              id: "status_ws",
+              label: "WS Status",
+              command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+              style: "primary",
+              prompt: "Check workspace status"
+            }
+          ],
+          channel: {
+            message: "A coding turn startup is already in progress for this workspace. Check status shortly.",
+            chunks: ["A coding turn startup is already in progress for this workspace. Check status shortly."],
+            chunks_meta: [{index: 1, total: 1, text: "A coding turn startup is already in progress for this workspace. Check status shortly."}]
+          }
+        }')"
+      emit_turn_passthrough "start" "coding_turn" "$lock_json" "$workspace" "$assistant"
+      return
+    fi
+    start_lock_acquired=true
+  fi
+
   if [[ ! -x "$TURN_SCRIPT" ]]; then
+    if [[ "$start_lock_acquired" == "true" ]]; then
+      start_lock_release "$start_lock_file"
+    fi
     emit_error "start" "command_error" "turn script is not executable" "$TURN_SCRIPT"
     return
   fi
+
+  local start_run_idempotency_key
+  start_run_idempotency_key="$(start_turn_idempotency_key "$workspace" "$assistant" "$prompt" "run")"
+
+  local start_pre_run_agents_json='[]'
+  start_pre_run_agents_json="$(review_workspace_agent_ids_json "$workspace" "$assistant")"
 
   local turn_json
   turn_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "$TURN_SCRIPT" run \
     --workspace "$workspace" \
     --assistant "$assistant" \
     --prompt "$prompt" \
+    --idempotency-key "$start_run_idempotency_key" \
     --max-steps "$max_steps" \
     --turn-budget "$turn_budget" \
     --wait-timeout "$wait_timeout" \
@@ -4767,6 +6312,7 @@ cmd_start() {
         --workspace "$workspace" \
         --assistant "$assistant" \
         --prompt "$prompt" \
+        --idempotency-key "$start_run_idempotency_key" \
         --max-steps "$max_steps" \
         --turn-budget "$turn_budget" \
         --wait-timeout "$wait_timeout" \
@@ -4792,6 +6338,7 @@ cmd_start() {
         --workspace "$workspace" \
         --assistant "$assistant" \
         --prompt "$prompt" \
+        --idempotency-key "$start_run_idempotency_key" \
         --max-steps "$max_steps" \
         --turn-budget "$turn_budget" \
         --wait-timeout "$wait_timeout" \
@@ -4840,10 +6387,13 @@ cmd_start() {
       && -n "${start_command_error_fallback_assistant// }" \
       && "$start_command_error_fallback_assistant" != "$assistant" ]]; then
       local start_fallback_json
+      local start_fallback_idempotency_key
+      start_fallback_idempotency_key="$(start_turn_idempotency_key "$workspace" "$start_command_error_fallback_assistant" "$prompt" "run")"
       start_fallback_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "$TURN_SCRIPT" run \
         --workspace "$workspace" \
         --assistant "$start_command_error_fallback_assistant" \
         --prompt "$prompt" \
+        --idempotency-key "$start_fallback_idempotency_key" \
         --max-steps "$max_steps" \
         --turn-budget "$turn_budget" \
         --wait-timeout "$wait_timeout" \
@@ -4865,10 +6415,13 @@ cmd_start() {
   if [[ "$permission_retry_enabled" != "false" ]] && turn_reports_permission_mode_gate "$turn_json"; then
     if [[ -n "${permission_fallback_assistant// }" && "$permission_fallback_assistant" != "$assistant" ]]; then
       local retry_turn_json
+      local retry_idempotency_key
+      retry_idempotency_key="$(start_turn_idempotency_key "$workspace" "$permission_fallback_assistant" "$prompt" "run")"
       retry_turn_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "$TURN_SCRIPT" run \
         --workspace "$workspace" \
         --assistant "$permission_fallback_assistant" \
         --prompt "$prompt" \
+        --idempotency-key "$retry_idempotency_key" \
         --max-steps "$max_steps" \
         --turn-budget "$turn_budget" \
         --wait-timeout "$wait_timeout" \
@@ -4885,10 +6438,13 @@ cmd_start() {
   if [[ "$nochange_retry_enabled" != "false" ]] && turn_reports_no_workspace_change_claim "$turn_json"; then
     if [[ -n "${nochange_fallback_assistant// }" && "$nochange_fallback_assistant" != "$assistant" ]]; then
       local nochange_retry_json
+      local nochange_idempotency_key
+      nochange_idempotency_key="$(start_turn_idempotency_key "$workspace" "$nochange_fallback_assistant" "$prompt" "run")"
       nochange_retry_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "$TURN_SCRIPT" run \
         --workspace "$workspace" \
         --assistant "$nochange_fallback_assistant" \
         --prompt "$prompt" \
+        --idempotency-key "$nochange_idempotency_key" \
         --max-steps "$max_steps" \
         --turn-budget "$turn_budget" \
         --wait-timeout "$wait_timeout" \
@@ -4900,6 +6456,84 @@ cmd_start() {
   fi
 
   turn_json="$(recover_timeout_turn_once "$turn_json" "$wait_timeout" "$idle_threshold")"
+  turn_json="$(start_mark_inflight_timeout "$turn_json" "$workspace")"
+
+  local final_status final_agent
+  final_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+  final_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+  if [[ ("$final_status" == "command_error" || "$final_status" == "partial" || "$final_status" == "timed_out") && -z "${final_agent// }" ]]; then
+    local inferred_agent
+    inferred_agent="$(review_infer_new_inflight_agent "$workspace" "$assistant" "$start_pre_run_agents_json")"
+    if [[ -n "${inferred_agent// }" ]]; then
+      turn_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        --arg agent_id "$inferred_agent" \
+        '{
+          ok: true,
+          mode: "send",
+          status: "timed_out",
+          overall_status: "timed_out",
+          summary: "Coding turn appears to still be running in the assistant tab.",
+          agent_id: $agent_id,
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Keep the current tab running and check status.",
+          suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+          quick_actions: [],
+          channel: {
+            message: "Coding turn appears to still be running in the assistant tab.",
+            chunks: ["Coding turn appears to still be running in the assistant tab."],
+            chunks_meta: [{index: 1, total: 1, text: "Coding turn appears to still be running in the assistant tab."}]
+          }
+        }')"
+      turn_json="$(start_mark_inflight_timeout "$turn_json" "$workspace")"
+    fi
+  fi
+
+  if [[ "$start_reuse_inflight" != "false" ]]; then
+    final_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+    final_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+    if [[ ("$final_status" == "command_error" || "$final_status" == "partial" || "$final_status" == "timed_out") && -z "${final_agent// }" ]]; then
+      start_inflight_agent="$(context_start_inflight_agent "$workspace" "$assistant" "$prompt")"
+      if [[ -n "${start_inflight_agent// }" ]] && review_agent_inflight_by_id "$start_inflight_agent"; then
+        turn_json="$(jq -cn \
+          --arg workspace "$workspace" \
+          --arg assistant "$assistant" \
+          --arg agent_id "$start_inflight_agent" \
+          '{
+            ok: true,
+            mode: "send",
+            status: "timed_out",
+            overall_status: "timed_out",
+            summary: "Coding turn appears to already be running in an existing assistant tab.",
+            agent_id: $agent_id,
+            workspace_id: $workspace,
+            assistant: $assistant,
+            next_action: "Keep the current tab running and check status.",
+            suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+            quick_actions: [],
+            channel: {
+              message: "Coding turn appears to already be running in an existing assistant tab.",
+              chunks: ["Coding turn appears to already be running in an existing assistant tab."],
+              chunks_meta: [{index: 1, total: 1, text: "Coding turn appears to already be running in an existing assistant tab."}]
+            }
+          }')"
+        turn_json="$(start_mark_inflight_timeout "$turn_json" "$workspace")"
+      fi
+    fi
+  fi
+
+  final_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+  final_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+  if [[ -n "${final_agent// }" ]] && [[ "$final_status" == "in_progress" || "$final_status" == "attention" || "$final_status" == "timed_out" || "$final_status" == "partial" || "$final_status" == "partial_budget" || "$final_status" == "needs_input" ]]; then
+    context_set_start_inflight "$workspace" "$assistant" "$prompt" "$final_agent"
+  elif [[ "$final_status" == "completed" || "$final_status" == "idle" || "$final_status" == "session_exited" || "$final_status" == "command_error" || "$final_status" == "agent_error" ]]; then
+    context_clear_start_inflight "$workspace" "$assistant" "$prompt"
+  fi
+  if [[ "$start_lock_acquired" == "true" ]]; then
+    start_lock_release "$start_lock_file"
+  fi
 
   emit_turn_passthrough "start" "coding_turn" "$turn_json" "$workspace" "$assistant"
 }
@@ -4914,9 +6548,12 @@ cmd_continue() {
   local enter=false
   local auto_start=false
   local start_assistant=""
-  local max_steps="${AMUX_ASSISTANT_DX_MAX_STEPS:-3}"
-  local turn_budget="${AMUX_ASSISTANT_DX_TURN_BUDGET:-180}"
-  local wait_timeout="${AMUX_ASSISTANT_DX_WAIT_TIMEOUT:-60s}"
+  # Keep continue deterministic and bounded for chat UX by default.
+  local max_steps="${AMUX_ASSISTANT_DX_CONTINUE_MAX_STEPS:-1}"
+  local turn_budget="${AMUX_ASSISTANT_DX_CONTINUE_TURN_BUDGET:-120}"
+  local wait_timeout="${AMUX_ASSISTANT_DX_CONTINUE_WAIT_TIMEOUT:-${AMUX_ASSISTANT_DX_WAIT_TIMEOUT:-30s}}"
+  local recovery_wait_timeout="${AMUX_ASSISTANT_DX_CONTINUE_RECOVERY_WAIT_TIMEOUT:-15s}"
+  local continue_recovery_send_fallback="${AMUX_ASSISTANT_DX_CONTINUE_TIMEOUT_RECOVERY_SEND_FALLBACK:-false}"
   local idle_threshold="${AMUX_ASSISTANT_DX_IDLE_THRESHOLD:-10s}"
 
   while [[ $# -gt 0 ]]; do
@@ -4979,6 +6616,20 @@ cmd_continue() {
     local active_agents_out active_agents_json active_count
     if active_agents_out="$(amux_ok_json agent list)"; then
       active_agents_json="$(jq -c '.data // []' <<<"$active_agents_out")"
+      # Prefer assistant-run tabs (t_*) over generic tab-* sessions for automatic selection.
+      active_agents_json="$(jq -c '
+        sort_by(
+          (
+            if (((.tab_id // ((.agent_id // "" | split(":") | .[1] // ""))) | test("^tab-[0-9]+$"))) then
+              1
+            else
+              0
+            end
+          ),
+          (.session_name // ""),
+          (.agent_id // "")
+        )
+      ' <<<"$active_agents_json")"
       active_count="$(jq -r 'length' <<<"$active_agents_json")"
       if [[ "$active_count" == "1" ]]; then
         agent="$(jq -r '.[0].agent_id // ""' <<<"$active_agents_json")"
@@ -4993,16 +6644,32 @@ cmd_continue() {
         workspace_meta="$(workspace_scope_metadata_map)"
         prioritized_active_agents_json="$(jq -c --arg preferred_repo "$preferred_project_for_match" --argjson meta "$workspace_meta" '
           if ($preferred_repo | length) == 0 then
-            .
+            sort_by(
+              (
+                if (((.tab_id // ((.agent_id // "" | split(":") | .[1] // ""))) | test("^tab-[0-9]+$"))) then
+                  1
+                else
+                  0
+                end
+              ),
+              (.session_name // ""),
+              (.agent_id // "")
+            )
           else
             map(. + {
               __same_repo: (
                 (($meta[(.workspace_id // "")].repo_compare // "") as $repo
                   | ($repo == $preferred_repo))
+              ),
+              __plain_tab: (
+                (
+                  (.tab_id // ((.agent_id // "" | split(":") | .[1] // "")) // "")
+                  | test("^tab-[0-9]+$")
+                )
               )
             })
-            | sort_by((if .__same_repo then 0 else 1 end))
-            | map(del(.__same_repo))
+            | sort_by((if .__same_repo then 0 else 1 end), (if .__plain_tab then 1 else 0 end), (.session_name // ""), (.agent_id // ""))
+            | map(del(.__same_repo, .__plain_tab))
           end
         ' <<<"$active_agents_json")"
         same_project_count="$(jq -r --arg preferred_repo "$preferred_project_for_match" --argjson meta "$workspace_meta" '
@@ -5305,10 +6972,14 @@ cmd_continue() {
 
   local turn_json
   turn_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "${turn_args[@]}" 2>&1 || true)"
-  turn_json="$(recover_timeout_turn_once "$turn_json" "$wait_timeout" "$idle_threshold")"
+  local continue_disable_send_recovery="true"
+  if [[ "$continue_recovery_send_fallback" == "true" ]]; then
+    continue_disable_send_recovery="false"
+  fi
+  turn_json="$(AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_DISABLE_SEND_FALLBACK="$continue_disable_send_recovery" recover_timeout_turn_once "$turn_json" "$recovery_wait_timeout" "$idle_threshold")"
 
   local continue_auto_followup continue_auto_text
-  continue_auto_followup="${AMUX_ASSISTANT_DX_CONTINUE_NEEDS_INPUT_AUTO_CONTINUE:-true}"
+  continue_auto_followup="${AMUX_ASSISTANT_DX_CONTINUE_NEEDS_INPUT_AUTO_CONTINUE:-false}"
   continue_auto_text="${AMUX_ASSISTANT_DX_CONTINUE_NEEDS_INPUT_TEXT:-If a choice is required, pick the safest high-impact default, continue, and report status plus next action.}"
   if [[ "$continue_auto_followup" != "false" ]]; then
     local continue_status continue_agent
@@ -5333,7 +7004,7 @@ cmd_continue() {
           --enter
         )
         continue_retry_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "${continue_retry_args[@]}" 2>&1 || true)"
-        continue_retry_json="$(recover_timeout_turn_once "$continue_retry_json" "$wait_timeout" "$idle_threshold")"
+        continue_retry_json="$(AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_DISABLE_SEND_FALLBACK="$continue_disable_send_recovery" recover_timeout_turn_once "$continue_retry_json" "$recovery_wait_timeout" "$idle_threshold")"
         if jq -e . >/dev/null 2>&1 <<<"$continue_retry_json"; then
           continue_retry_ok="$(jq -r '.ok // false' <<<"$continue_retry_json")"
           continue_retry_status="$(jq -r '.overall_status // .status // ""' <<<"$continue_retry_json")"
@@ -5537,6 +7208,17 @@ cmd_status() {
   if [[ -n "$project" && -z "$workspace" ]]; then
     session_count="$agent_count"
   fi
+  if [[ "$capture_agents_explicit" != "true" ]] && [[ -z "$workspace" ]] && [[ -z "$project" ]] && [[ "$agent_count" =~ ^[0-9]+$ ]]; then
+    capture_agents="$agent_count"
+    local capture_agents_max
+    capture_agents_max="${AMUX_ASSISTANT_DX_STATUS_CAPTURE_AGENTS_MAX:-40}"
+    if ! [[ "$capture_agents_max" =~ ^[0-9]+$ ]] || [[ "$capture_agents_max" -le 0 ]]; then
+      capture_agents_max=40
+    fi
+    if [[ "$capture_agents" -gt "$capture_agents_max" ]]; then
+      capture_agents="$capture_agents_max"
+    fi
+  fi
   prune_total="$(jq -r '.data.total // 0' <<<"$prune_out")"
 
   local alerts='[]'
@@ -5546,7 +7228,7 @@ cmd_status() {
     [[ -z "$session_name" ]] && continue
 
     local capture_out
-    if ! capture_out="$(amux_ok_json agent capture "$session_name" --lines "$capture_lines")"; then
+    if ! capture_out="$(amux_capture_ok_json "$session_name" "$capture_lines")"; then
       continue
     fi
 
@@ -5556,6 +7238,12 @@ cmd_status() {
     capture_needs_input="$(jq -r '.data.needs_input // false' <<<"$capture_out")"
     capture_hint="$(jq -r '.data.input_hint // ""' <<<"$capture_out")"
     capture_content="$(jq -r '.data.content // ""' <<<"$capture_out")"
+    if [[ "$capture_needs_input" != "true" ]] && interactive_prompt_signal_present "$(printf '%s\n%s\n%s' "$capture_hint" "$capture_summary" "$capture_content")"; then
+      capture_needs_input=true
+      if [[ -z "${capture_hint// }" ]]; then
+        capture_hint="$capture_summary"
+      fi
+    fi
     if [[ "$capture_needs_input" == "true" ]]; then
       local capture_hint_lc capture_summary_lc
       capture_hint_lc="$(printf '%s' "$capture_hint" | tr '[:upper:]' '[:lower:]')"
@@ -5587,19 +7275,29 @@ cmd_status() {
     capture_mode_key="$(jq -r '.key // ""' <<<"$capture_mode_json")"
     capture_mode_label="$(jq -r '.label // ""' <<<"$capture_mode_json")"
 
-    captures="$(jq -cn --argjson captures "$captures" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg status "$capture_status" --arg summary "$capture_summary" --arg hint "$capture_hint" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" --argjson needs_input "$capture_needs_input" '$captures + [{session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, status: $status, summary: $summary, needs_input: $needs_input, input_hint: $hint, mode_key: $mode_key, mode_label: $mode_label}]')"
-
+    local capture_work_state
+    capture_work_state="in_progress"
     if [[ "$capture_needs_input" == "true" ]]; then
+      capture_work_state="blocked"
+    elif [[ "$capture_status" == "session_exited" ]]; then
+      capture_work_state="session_exited"
+    elif completion_signal_present "$capture_summary"; then
+      capture_work_state="completed"
+    fi
+
+    captures="$(jq -cn --argjson captures "$captures" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg status "$capture_status" --arg summary "$capture_summary" --arg hint "$capture_hint" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" --arg work_state "$capture_work_state" --argjson needs_input "$capture_needs_input" '$captures + [{session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, status: $status, summary: $summary, needs_input: $needs_input, input_hint: $hint, mode_key: $mode_key, mode_label: $mode_label, work_state: $work_state}]')"
+
+    if [[ "$capture_work_state" == "blocked" ]]; then
       alerts="$(jq -cn --argjson alerts "$alerts" --arg type "needs_input" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg input_hint "$capture_hint" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, input_hint: $input_hint, mode_key: $mode_key, mode_label: $mode_label}]')"
       continue
     fi
 
-    if [[ "$capture_status" == "session_exited" ]]; then
+    if [[ "$capture_work_state" == "session_exited" ]]; then
       alerts="$(jq -cn --argjson alerts "$alerts" --arg type "session_exited" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, mode_key: $mode_key, mode_label: $mode_label}]')"
       continue
     fi
 
-    if completion_signal_present "$capture_summary"; then
+    if [[ "$capture_work_state" == "completed" ]]; then
       alerts="$(jq -cn --argjson alerts "$alerts" --arg type "completed" --arg session "$session_name" --arg agent_id "$agent_id" --arg assistant "$capture_assistant" --arg workspace_id "$workspace_id" --arg workspace_label "$workspace_label" --arg summary "$capture_summary" --arg mode_key "$capture_mode_key" --arg mode_label "$capture_mode_label" '$alerts + [{type: $type, session_name: $session, agent_id: $agent_id, assistant: $assistant, workspace_id: $workspace_id, workspace_label: $workspace_label, summary: $summary, mode_key: $mode_key, mode_label: $mode_label}]')"
     fi
   done < <(jq -r --argjson cap "$capture_agents" '.[:$cap][]?.session_name' <<<"$agents_json")
@@ -5667,7 +7365,21 @@ cmd_status() {
   first_needs_input_hint="$(jq -r '([.[] | select(.type == "needs_input") | (.input_hint // .summary // "")] | .[0] // "")' <<<"$alerts")"
   first_completed_workspace="$(jq -r '.[] | select(.type == "completed") | .workspace_id // empty' <<<"$alerts" | head -n 1)"
   first_completed_agent="$(jq -r '.[] | select(.type == "completed") | .agent_id // empty' <<<"$alerts" | head -n 1)"
-  first_active_agent="$(jq -r '.[] | .agent_id // empty | select(length > 0)' <<<"$captures" | head -n 1)"
+  first_active_agent="$(jq -r '
+    [
+      .[]
+      | .agent_id // ""
+      | select(length > 0)
+    ]
+    | sort_by(
+        if (((split(":") | .[1] // "") | test("^tab-[0-9]+$"))) then
+          1
+        else
+          0
+        end
+      )
+    | .[0] // ""
+  ' <<<"$captures")"
   first_active_mode_agent="$(jq -r '.[] | select((.assistant // "") == "claude" or (.assistant // "") == "droid") | .agent_id // empty | select(length > 0)' <<<"$captures" | head -n 1)"
   first_active_mode_assistant="$(jq -r '.[] | select((.assistant // "") == "claude" or (.assistant // "") == "droid") | .assistant // empty | select(length > 0)' <<<"$captures" | head -n 1)"
   first_active_mode_label="$(jq -r '.[] | select((.assistant // "") == "claude" or (.assistant // "") == "droid") | .mode_label // empty | select(length > 0)' <<<"$captures" | head -n 1)"
@@ -5724,23 +7436,117 @@ cmd_status() {
     suggested_command="$full_status_cmd"
   fi
 
-  local ws_enriched ws_preview ws_lines
-  ws_enriched="$(jq -cn --argjson ws "$ws_json" --argjson agents "$agents_json" --argjson terms "$terms_json" '
+  local ws_enriched ws_preview ws_lines workspace_activity
+  local active_workspace_count in_progress_workspace_count blocked_workspace_count completed_workspace_count
+  local active_workspaces_json active_lines
+  workspace_activity="$(jq -cn --argjson ws "$ws_json" --argjson captures "$captures" --argjson agents "$agents_json" '
     $ws
     | map(
         . as $w
+        | ($w.id // "") as $wid
+        | ($captures | map(select((.workspace_id // "") == $wid and (.agent_id // "") != ""))) as $rows
+        | ($agents | map(select((.workspace_id // "") == $wid and (.agent_id // "") != "")) | length) as $agent_total
+        | ($rows | map(select((.work_state // "") == "in_progress")) | length) as $in_progress_agents
+        | ($rows | map(select((.work_state // "") == "blocked")) | length) as $blocked_agents
+        | ($rows | map(select((.work_state // "") == "completed")) | length) as $completed_agents
+        | ($rows | map(select((.work_state // "") == "session_exited")) | length) as $exited_agents
+        | ($rows | length) as $captured_agents
+        | (($agent_total - $captured_agents) | if . > 0 then . else 0 end) as $uncaptured_agents
+        | {
+            workspace_id: $wid,
+            agent_total: $agent_total,
+            captured_agents: $captured_agents,
+            uncaptured_agents: $uncaptured_agents,
+            in_progress_agents: $in_progress_agents,
+            blocked_agents: $blocked_agents,
+            completed_agents: $completed_agents,
+            exited_agents: $exited_agents,
+            active_work: (
+              ($in_progress_agents > 0)
+              or ($blocked_agents > 0)
+              or ($uncaptured_agents > 0 and $agent_total > 0)
+            ),
+            work_state: (
+              if $in_progress_agents > 0 then "in_progress"
+              elif $blocked_agents > 0 then "blocked"
+              elif ($uncaptured_agents > 0 and $agent_total > 0) then "active_unknown"
+              elif $completed_agents > 0 then "completed"
+              elif $exited_agents > 0 then "session_exited"
+              else "idle" end
+            )
+          }
+      )
+  ')"
+  ws_enriched="$(jq -cn --argjson ws "$ws_json" --argjson agents "$agents_json" --argjson terms "$terms_json" --argjson activity "$workspace_activity" '
+    ($activity | map({key: (.workspace_id // ""), value: .}) | from_entries) as $activity_map
+    | $ws
+    | map(
+        . as $w
+        | ($activity_map[$w.id] // {}) as $activity_row
         | $w + {
+            workspace_label: (
+              (.id // "")
+              + (if (.name // "") != "" then " (" + (.name // "") + ")" else "" end)
+              + (if (.scope_label // "") != "" then
+                  " ["
+                  + (.scope_label // "")
+                  + (if (.parent_workspace // "") != "" then " <- " + (.parent_workspace // "") else "" end)
+                  + "]"
+                else "" end)
+            ),
             agent_count: ($agents | map(select(.workspace_id == $w.id)) | length),
-            terminal_count: ($terms | map(select(.workspace_id == $w.id)) | length)
+            terminal_count: ($terms | map(select(.workspace_id == $w.id)) | length),
+            active_work: ($activity_row.active_work // false),
+            work_state: ($activity_row.work_state // "idle"),
+            in_progress_agents: ($activity_row.in_progress_agents // 0),
+            blocked_agents: ($activity_row.blocked_agents // 0),
+            completed_agents: ($activity_row.completed_agents // 0),
+            exited_agents: ($activity_row.exited_agents // 0),
+            uncaptured_agents: ($activity_row.uncaptured_agents // 0)
           }
       )
     | sort_by(.created)
     | reverse
   ')"
+  active_workspace_count="$(jq -r '[.[] | select((.active_work // false) == true)] | length' <<<"$ws_enriched")"
+  in_progress_workspace_count="$(jq -r '[.[] | select((.in_progress_agents // 0) > 0)] | length' <<<"$ws_enriched")"
+  blocked_workspace_count="$(jq -r '[.[] | select((.blocked_agents // 0) > 0)] | length' <<<"$ws_enriched")"
+  completed_workspace_count="$(jq -r '[.[] | select((.completed_agents // 0) > 0)] | length' <<<"$ws_enriched")"
+  active_workspaces_json="$(jq -c '
+    [
+      .[]
+      | select((.active_work // false) == true)
+      | {
+          id: (.id // ""),
+          name: (.name // ""),
+          workspace_label: (.workspace_label // .id // ""),
+          work_state: (.work_state // "idle"),
+          in_progress_agents: (.in_progress_agents // 0),
+          blocked_agents: (.blocked_agents // 0),
+          uncaptured_agents: (.uncaptured_agents // 0)
+        }
+    ]
+  ' <<<"$ws_enriched")"
+  active_lines="$(jq -r --argjson limit "$limit" '
+    .[:$limit]
+    | map(
+        "- " + (.workspace_label // .id // "")
+        + ": "
+        + (if .work_state == "in_progress" then "in progress"
+           elif .work_state == "blocked" then "blocked (needs input)"
+           elif .work_state == "active_unknown" then "active (capture pending)"
+           else (.work_state // "active") end)
+        + (if (.in_progress_agents // 0) > 0 then " [in_progress_agents=" + ((.in_progress_agents // 0) | tostring) + "]" else "" end)
+        + (if (.blocked_agents // 0) > 0 then " [blocked_agents=" + ((.blocked_agents // 0) | tostring) + "]" else "" end)
+        + (if (.uncaptured_agents // 0) > 0 then " [uncaptured_agents=" + ((.uncaptured_agents // 0) | tostring) + "]" else "" end)
+      )
+    | join("\n")
+  ' <<<"$active_workspaces_json")"
+  summary+=" Active workspaces (work in progress): $active_workspace_count."
   ws_preview="$(jq -c --argjson limit "$limit" '.[0:$limit]' <<<"$ws_enriched")"
   ws_lines="$(jq -r '
     . | map(
-      "- \(.id) \(.name) [\(.scope_label)\(if (.parent_workspace // "") != "" then " <- " + .parent_workspace else "" end)] (a:\(.agent_count), t:\(.terminal_count))"
+      "- \(.id) \(.name) [\(.scope_label)\(if (.parent_workspace // "") != "" then " <- " + .parent_workspace else "" end)] (a:\(.agent_count), t:\(.terminal_count), work:\(.work_state))"
     ) | join("\n")
   ' <<<"$ws_preview")"
 
@@ -5905,22 +7711,27 @@ cmd_status() {
   RESULT_QUICK_ACTIONS="$actions"
 
   RESULT_DATA="$(jq -cn \
-    --argjson counts "$(jq -cn --argjson project_count "$project_count" --argjson workspace_count "$workspace_count" --argjson workspace_total_count "$workspace_total_count" --argjson project_scope_count "$project_scope_count" --argjson nested_scope_count "$nested_scope_count" --argjson agent_count "$agent_count" --argjson terminal_count "$terminal_count" --argjson session_count "$session_count" --argjson prune_total "$prune_total" --argjson completed_count "$completed_count" --argjson include_stale_alerts "$include_stale_alerts" --argjson recent_workspaces "$recent_workspaces" --argjson recent_workspaces_applied "$recent_workspaces_applied" '{projects: $project_count, workspaces: $workspace_count, workspace_total: $workspace_total_count, project_workspaces: $project_scope_count, nested_workspaces: $nested_scope_count, agents: $agent_count, terminals: $terminal_count, sessions: $session_count, prune_candidates: $prune_total, completed_alerts: $completed_count, include_stale_alerts: $include_stale_alerts, recent_workspaces: $recent_workspaces, recent_workspaces_applied: $recent_workspaces_applied}')" \
+    --argjson counts "$(jq -cn --argjson project_count "$project_count" --argjson workspace_count "$workspace_count" --argjson workspace_total_count "$workspace_total_count" --argjson project_scope_count "$project_scope_count" --argjson nested_scope_count "$nested_scope_count" --argjson agent_count "$agent_count" --argjson terminal_count "$terminal_count" --argjson session_count "$session_count" --argjson prune_total "$prune_total" --argjson completed_count "$completed_count" --argjson include_stale_alerts "$include_stale_alerts" --argjson recent_workspaces "$recent_workspaces" --argjson recent_workspaces_applied "$recent_workspaces_applied" --argjson active_workspace_count "$active_workspace_count" --argjson in_progress_workspace_count "$in_progress_workspace_count" --argjson blocked_workspace_count "$blocked_workspace_count" --argjson completed_workspace_count "$completed_workspace_count" '{projects: $project_count, workspaces: $workspace_count, workspace_total: $workspace_total_count, project_workspaces: $project_scope_count, nested_workspaces: $nested_scope_count, agents: $agent_count, terminals: $terminal_count, sessions: $session_count, prune_candidates: $prune_total, completed_alerts: $completed_count, include_stale_alerts: $include_stale_alerts, recent_workspaces: $recent_workspaces, recent_workspaces_applied: $recent_workspaces_applied, active_workspaces: $active_workspace_count, in_progress_workspaces: $in_progress_workspace_count, blocked_workspaces: $blocked_workspace_count, completed_workspaces: $completed_workspace_count}')" \
     --argjson workspaces "$ws_enriched" \
     --argjson workspace_details "$workspace_details" \
     --argjson alerts "$alerts" \
     --argjson captures "$captures" \
+    --argjson active_workspaces "$active_workspaces_json" \
     --argjson mode_signals "$mode_signals" \
-    '{counts: $counts, workspaces: $workspaces, workspace_details: $workspace_details, alerts: $alerts, captures: $captures, mode_signals: $mode_signals}')"
+    '{counts: $counts, workspaces: $workspaces, workspace_details: $workspace_details, alerts: $alerts, captures: $captures, active_workspaces: $active_workspaces, mode_signals: $mode_signals}')"
 
   RESULT_MESSAGE="$(printf '%s %s' "$(if [[ "$status" == "ok" ]]; then printf '✅'; elif [[ "$status" == "needs_input" ]]; then printf '❓'; else printf '⚠️'; fi)" "$summary")"
   RESULT_MESSAGE+=$'\n'"Counts: projects=$project_count workspaces=$workspace_count agents=$agent_count terminals=$terminal_count sessions=$session_count"
   RESULT_MESSAGE+=$'\n'"Workspace types: project=$project_scope_count nested=$nested_scope_count"
+  RESULT_MESSAGE+=$'\n'"Active workspaces (work in progress): $active_workspace_count (in_progress=$in_progress_workspace_count blocked=$blocked_workspace_count)"
   if [[ -n "$project" ]]; then
     RESULT_MESSAGE+=$'\n'"Project: $project"
   fi
   if [[ -n "$workspace" ]]; then
     RESULT_MESSAGE+=$'\n'"Workspace: $selected_workspace_label"
+  fi
+  if [[ -n "${active_lines// }" ]]; then
+    RESULT_MESSAGE+=$'\n'"Active workspace details:"$'\n'"$active_lines"
   fi
   if [[ "$recent_workspaces_applied" == "true" ]]; then
     RESULT_MESSAGE+=$'\n'"Scope: showing $workspace_count of $workspace_total_count most recent workspace(s) in this project"
@@ -6364,10 +8175,16 @@ cmd_review() {
   local workspace=""
   local assistant="${AMUX_ASSISTANT_DX_REVIEW_ASSISTANT:-codex}"
   local prompt="${AMUX_ASSISTANT_DX_REVIEW_PROMPT:-Review current uncommitted changes. Return findings first ordered by severity with file references, then residual risks and test gaps.}"
-  local max_steps="${AMUX_ASSISTANT_DX_REVIEW_MAX_STEPS:-2}"
-  local turn_budget="${AMUX_ASSISTANT_DX_REVIEW_TURN_BUDGET:-180}"
-  local wait_timeout="${AMUX_ASSISTANT_DX_WAIT_TIMEOUT:-60s}"
-  local idle_threshold="${AMUX_ASSISTANT_DX_IDLE_THRESHOLD:-10s}"
+  # Keep review runs bounded by default for mobile/chat responsiveness.
+  local max_steps="${AMUX_ASSISTANT_DX_REVIEW_MAX_STEPS:-1}"
+  local turn_budget="${AMUX_ASSISTANT_DX_REVIEW_TURN_BUDGET:-120}"
+  local wait_timeout="${AMUX_ASSISTANT_DX_REVIEW_WAIT_TIMEOUT:-30s}"
+  local recovery_wait_timeout="${AMUX_ASSISTANT_DX_REVIEW_RECOVERY_WAIT_TIMEOUT:-15s}"
+  local review_timeout_recovery="${AMUX_ASSISTANT_DX_REVIEW_TIMEOUT_RECOVERY:-false}"
+  local review_recovery_send_fallback="${AMUX_ASSISTANT_DX_REVIEW_TIMEOUT_RECOVERY_SEND_FALLBACK:-false}"
+  local review_allow_new_run_with_active_agent="${AMUX_ASSISTANT_DX_REVIEW_ALLOW_NEW_RUN_WITH_ACTIVE_AGENT:-false}"
+  local allow_new_run_with_active_agent="false"
+  local idle_threshold="${AMUX_ASSISTANT_DX_REVIEW_IDLE_THRESHOLD:-10s}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -6395,6 +8212,8 @@ cmd_review() {
         wait_timeout="$2"; shift 2 ;;
       --idle-threshold)
         idle_threshold="$2"; shift 2 ;;
+      --allow-new-run)
+        allow_new_run_with_active_agent="true"; shift ;;
       *)
         emit_error "review" "command_error" "unknown flag" "$1"
         return
@@ -6415,21 +8234,348 @@ cmd_review() {
   fi
   context_set_workspace_with_lookup "$workspace" "$assistant"
 
+  local review_reuse_inflight review_inflight_agent
+  review_reuse_inflight="${AMUX_ASSISTANT_DX_REVIEW_REUSE_INFLIGHT:-true}"
+  local review_start_lock_enabled review_start_lock_ttl review_start_lock_file review_start_lock_acquired
+  review_start_lock_enabled="${AMUX_ASSISTANT_DX_REVIEW_START_LOCK_ENABLED:-true}"
+  review_start_lock_ttl="${AMUX_ASSISTANT_DX_REVIEW_START_LOCK_TTL_SECONDS:-120}"
+  if ! is_positive_int "$review_start_lock_ttl"; then
+    review_start_lock_ttl=120
+  fi
+  review_start_lock_file="$(review_start_lock_path_for "$workspace" "$assistant" "$prompt")"
+  review_start_lock_acquired=false
+  if [[ "$review_reuse_inflight" != "false" ]]; then
+    review_inflight_agent="$(context_review_inflight_agent "$workspace" "$assistant" "$prompt")"
+    if [[ -n "${review_inflight_agent// }" ]] && review_agent_inflight_by_id "$review_inflight_agent"; then
+      local reuse_json
+      reuse_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        --arg agent_id "$review_inflight_agent" \
+        '{
+          ok: true,
+          mode: "send",
+          status: "timed_out",
+          overall_status: "timed_out",
+          summary: "Review is already running in an existing assistant tab.",
+          agent_id: $agent_id,
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Keep the current tab running and check status.",
+          suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+          quick_actions: [],
+          channel: {
+            message: "Review is already running in an existing assistant tab.",
+            chunks: ["Review is already running in an existing assistant tab."],
+            chunks_meta: [{index: 1, total: 1, text: "Review is already running in an existing assistant tab."}]
+          }
+        }')"
+      reuse_json="$(review_mark_inflight_timeout "$reuse_json" "$workspace")"
+      context_set_review_inflight "$workspace" "$assistant" "$prompt" "$review_inflight_agent"
+      emit_turn_passthrough "review" "review_turn" "$reuse_json" "$workspace" "$assistant"
+      return
+    fi
+  fi
+
+  if [[ "$allow_new_run_with_active_agent" != "true" && "$review_allow_new_run_with_active_agent" != "true" ]]; then
+    local review_existing_snapshot review_existing_agent review_existing_latest review_existing_summary review_existing_session
+    review_existing_snapshot="$(review_find_inflight_agent_snapshot "$workspace" "$assistant")"
+    if jq -e '.agent_id // "" | length > 0' >/dev/null 2>&1 <<<"$review_existing_snapshot"; then
+      review_existing_agent="$(jq -r '.agent_id // ""' <<<"$review_existing_snapshot")"
+      review_existing_latest="$(jq -r '.latest_line // ""' <<<"$review_existing_snapshot")"
+      review_existing_summary="$(jq -r '.summary // ""' <<<"$review_existing_snapshot")"
+      review_existing_session="$(jq -r '.session_name // ""' <<<"$review_existing_snapshot")"
+      if [[ -z "${review_existing_latest// }" ]]; then
+        review_existing_latest="$review_existing_summary"
+      fi
+      if [[ -z "${review_existing_latest// }" ]]; then
+        review_existing_latest="(no visible output yet)"
+      fi
+      local continue_existing_cmd start_new_cmd status_cmd confirm_json
+      continue_existing_cmd="skills/amux/scripts/assistant-dx.sh continue --agent $(shell_quote "$review_existing_agent") --text \"Provide a one-line status update and next action.\" --enter"
+      start_new_cmd="skills/amux/scripts/assistant-dx.sh review --workspace $(shell_quote "$workspace") --assistant $(shell_quote "$assistant") --prompt $(shell_quote "$prompt") --allow-new-run"
+      status_cmd="skills/amux/scripts/assistant-dx.sh status --workspace $(shell_quote "$workspace")"
+      confirm_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        --arg agent_id "$review_existing_agent" \
+        --arg session_name "$review_existing_session" \
+        --arg latest "$review_existing_latest" \
+        --arg continue_cmd "$continue_existing_cmd" \
+        --arg start_new_cmd "$start_new_cmd" \
+        --arg status_cmd "$status_cmd" \
+        '{
+          ok: true,
+          mode: "run",
+          status: "needs_input",
+          overall_status: "needs_input",
+          summary: "Review was not started automatically because an active assistant tab already exists. Confirm whether to continue that tab or start a new one.",
+          agent_id: $agent_id,
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Confirm: continue existing tab or explicitly start a new review tab.",
+          suggested_command: $continue_cmd,
+          quick_actions: [
+            {
+              id: "continue_existing",
+              label: "Continue Existing",
+              command: $continue_cmd,
+              style: "primary",
+              prompt: "Continue the existing assistant tab and report status"
+            },
+            {
+              id: "start_new_confirmed",
+              label: "Start New Review Tab",
+              command: $start_new_cmd,
+              style: "danger",
+              prompt: "Explicitly start a new review tab"
+            },
+            {
+              id: "status_ws",
+              label: "WS Status",
+              command: $status_cmd,
+              style: "secondary",
+              prompt: "Check workspace status and active sessions"
+            }
+          ],
+          channel: {
+            message: ("Review not started automatically because another tab is active.\nActive agent: " + $agent_id + (if ($session_name | length) > 0 then ("\nSession: " + $session_name) else "" end) + "\nLast agent line: " + $latest + "\nConfirm next action: continue existing tab or start a new review tab."),
+            chunks: [("Review not started automatically because another tab is active.\nActive agent: " + $agent_id + (if ($session_name | length) > 0 then ("\nSession: " + $session_name) else "" end) + "\nLast agent line: " + $latest + "\nConfirm next action: continue existing tab or start a new review tab.")],
+            chunks_meta: [{index: 1, total: 1, text: ("Review not started automatically because another tab is active.\nActive agent: " + $agent_id + (if ($session_name | length) > 0 then ("\nSession: " + $session_name) else "" end) + "\nLast agent line: " + $latest + "\nConfirm next action: continue existing tab or start a new review tab.")}]
+          }
+        }')"
+      emit_turn_passthrough "review" "review_turn" "$confirm_json" "$workspace" "$assistant"
+      return
+    fi
+  fi
+
+  if [[ "$review_start_lock_enabled" != "false" ]]; then
+    if ! review_start_lock_acquire "$review_start_lock_file" "$review_start_lock_ttl"; then
+      if [[ "$review_reuse_inflight" != "false" ]]; then
+        review_inflight_agent="$(context_review_inflight_agent "$workspace" "$assistant" "$prompt")"
+        if [[ -n "${review_inflight_agent// }" ]] && review_agent_inflight_by_id "$review_inflight_agent"; then
+          local reuse_json
+          reuse_json="$(jq -cn \
+            --arg workspace "$workspace" \
+            --arg assistant "$assistant" \
+            --arg agent_id "$review_inflight_agent" \
+            '{
+              ok: true,
+              mode: "send",
+              status: "timed_out",
+              overall_status: "timed_out",
+              summary: "Review is already running in an existing assistant tab.",
+              agent_id: $agent_id,
+              workspace_id: $workspace,
+              assistant: $assistant,
+              next_action: "Keep the current tab running and check status.",
+              suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+              quick_actions: [],
+              channel: {
+                message: "Review is already running in an existing assistant tab.",
+                chunks: ["Review is already running in an existing assistant tab."],
+                chunks_meta: [{index: 1, total: 1, text: "Review is already running in an existing assistant tab."}]
+              }
+            }')"
+          reuse_json="$(review_mark_inflight_timeout "$reuse_json" "$workspace")"
+          context_set_review_inflight "$workspace" "$assistant" "$prompt" "$review_inflight_agent"
+          emit_turn_passthrough "review" "review_turn" "$reuse_json" "$workspace" "$assistant"
+          return
+        fi
+      fi
+      local lock_json
+      lock_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        '{
+          ok: true,
+          mode: "run",
+          status: "attention",
+          overall_status: "in_progress",
+          summary: "Review startup is already in progress for this workspace.",
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Wait for startup to finish, then check workspace status.",
+          suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+          quick_actions: [
+            {
+              id: "status_ws",
+              label: "WS Status",
+              command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+              style: "primary",
+              prompt: "Check workspace status"
+            }
+          ],
+          channel: {
+            message: "Review startup is already in progress for this workspace. Check status shortly.",
+            chunks: ["Review startup is already in progress for this workspace. Check status shortly."],
+            chunks_meta: [{index: 1, total: 1, text: "Review startup is already in progress for this workspace. Check status shortly."}]
+          }
+        }')"
+      emit_turn_passthrough "review" "review_turn" "$lock_json" "$workspace" "$assistant"
+      return
+    fi
+    review_start_lock_acquired=true
+  fi
+
   if [[ ! -x "$TURN_SCRIPT" ]]; then
+    if [[ "$review_start_lock_acquired" == "true" ]]; then
+      review_start_lock_release "$review_start_lock_file"
+    fi
     emit_error "review" "command_error" "turn script is not executable" "$TURN_SCRIPT"
     return
   fi
+
+  local review_run_idempotency_key
+  review_run_idempotency_key="$(review_turn_idempotency_key "$workspace" "$assistant" "$prompt" "run")"
+
+  local review_pre_run_agents_json='[]'
+  review_pre_run_agents_json="$(review_workspace_agent_ids_json "$workspace" "$assistant")"
 
   local turn_json
   turn_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "$TURN_SCRIPT" run \
     --workspace "$workspace" \
     --assistant "$assistant" \
     --prompt "$prompt" \
+    --idempotency-key "$review_run_idempotency_key" \
     --max-steps "$max_steps" \
     --turn-budget "$turn_budget" \
     --wait-timeout "$wait_timeout" \
     --idle-threshold "$idle_threshold" 2>&1 || true)"
 
+  local review_disable_send_recovery="true"
+  if [[ "$review_recovery_send_fallback" == "true" ]]; then
+    review_disable_send_recovery="false"
+  fi
+  if [[ "$review_timeout_recovery" == "true" ]]; then
+    turn_json="$(AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_DISABLE_SEND_FALLBACK="$review_disable_send_recovery" recover_timeout_turn_once "$turn_json" "$recovery_wait_timeout" "$idle_threshold")"
+  fi
+
+  local review_auto_followup review_auto_text
+  review_auto_followup="${AMUX_ASSISTANT_DX_REVIEW_NEEDS_INPUT_AUTO_CONTINUE:-false}"
+  review_auto_text="${AMUX_ASSISTANT_DX_REVIEW_NEEDS_INPUT_TEXT:-No code changes. Return final review findings only (severity, exact file paths, and concrete fixes).}"
+  if [[ "$review_auto_followup" != "false" ]]; then
+    local review_status review_agent
+    review_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+    review_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+    if [[ "$review_status" == "needs_input" && -n "${review_agent// }" && -n "${review_auto_text// }" ]]; then
+      local review_permission_gate review_requires_user_decision review_fix_offer
+      review_permission_gate=false
+      review_requires_user_decision=false
+      review_fix_offer=false
+      if turn_reports_permission_mode_gate "$turn_json"; then
+        review_permission_gate=true
+      fi
+      if turn_requires_user_decision "$turn_json"; then
+        review_requires_user_decision=true
+      fi
+      if turn_reports_fix_offer_prompt "$turn_json"; then
+        review_fix_offer=true
+      fi
+      if [[ "$review_permission_gate" != "true" ]] && ([[ "$review_fix_offer" == "true" ]] || [[ "$review_requires_user_decision" != "true" ]]); then
+        local review_retry_json review_retry_ok review_retry_status
+        local review_followup_idempotency_key
+        review_followup_idempotency_key="$(review_turn_idempotency_key "$workspace" "$assistant" "$review_auto_text" "followup")"
+        review_retry_json="$(AMUX_ASSISTANT_TURN_SKIP_PRESENT=true "$TURN_SCRIPT" send \
+          --agent "$review_agent" \
+          --text "$review_auto_text" \
+          --idempotency-key "$review_followup_idempotency_key" \
+          --max-steps "$max_steps" \
+          --turn-budget "$turn_budget" \
+          --wait-timeout "$wait_timeout" \
+          --idle-threshold "$idle_threshold" \
+          --enter 2>&1 || true)"
+        if [[ "$review_timeout_recovery" == "true" ]]; then
+          review_retry_json="$(AMUX_ASSISTANT_DX_TIMEOUT_RECOVERY_DISABLE_SEND_FALLBACK="$review_disable_send_recovery" recover_timeout_turn_once "$review_retry_json" "$recovery_wait_timeout" "$idle_threshold")"
+        fi
+        if jq -e . >/dev/null 2>&1 <<<"$review_retry_json"; then
+          review_retry_ok="$(jq -r '.ok // false' <<<"$review_retry_json")"
+          review_retry_status="$(jq -r '.overall_status // .status // ""' <<<"$review_retry_json")"
+          if [[ "$review_retry_ok" == "true" && "$review_retry_status" != "command_error" && "$review_retry_status" != "agent_error" ]]; then
+            turn_json="$review_retry_json"
+          fi
+        fi
+      fi
+    fi
+  fi
+
+  turn_json="$(review_mark_inflight_timeout "$turn_json" "$workspace")"
+  local final_status final_agent
+  final_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+  final_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+  if [[ ("$final_status" == "command_error" || "$final_status" == "partial" || "$final_status" == "timed_out") && -z "${final_agent// }" ]]; then
+    local inferred_agent
+    inferred_agent="$(review_infer_new_inflight_agent "$workspace" "$assistant" "$review_pre_run_agents_json")"
+    if [[ -n "${inferred_agent// }" ]]; then
+      turn_json="$(jq -cn \
+        --arg workspace "$workspace" \
+        --arg assistant "$assistant" \
+        --arg agent_id "$inferred_agent" \
+        '{
+          ok: true,
+          mode: "send",
+          status: "timed_out",
+          overall_status: "timed_out",
+          summary: "Review appears to still be running in the assistant tab.",
+          agent_id: $agent_id,
+          workspace_id: $workspace,
+          assistant: $assistant,
+          next_action: "Keep the current tab running and check status.",
+          suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+          quick_actions: [],
+          channel: {
+            message: "Review appears to still be running in the assistant tab.",
+            chunks: ["Review appears to still be running in the assistant tab."],
+            chunks_meta: [{index: 1, total: 1, text: "Review appears to still be running in the assistant tab."}]
+          }
+        }')"
+      turn_json="$(review_mark_inflight_timeout "$turn_json" "$workspace")"
+    fi
+  fi
+
+  if [[ "$review_reuse_inflight" != "false" ]]; then
+    final_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+    final_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+    if [[ ("$final_status" == "command_error" || "$final_status" == "partial" || "$final_status" == "timed_out") && -z "${final_agent// }" ]]; then
+      review_inflight_agent="$(context_review_inflight_agent "$workspace" "$assistant" "$prompt")"
+      if [[ -n "${review_inflight_agent// }" ]] && review_agent_inflight_by_id "$review_inflight_agent"; then
+        turn_json="$(jq -cn \
+          --arg workspace "$workspace" \
+          --arg assistant "$assistant" \
+          --arg agent_id "$review_inflight_agent" \
+          '{
+            ok: true,
+            mode: "send",
+            status: "timed_out",
+            overall_status: "timed_out",
+            summary: "Review appears to already be running in an existing assistant tab.",
+            agent_id: $agent_id,
+            workspace_id: $workspace,
+            assistant: $assistant,
+            next_action: "Keep the current tab running and check status.",
+            suggested_command: ("skills/amux/scripts/assistant-dx.sh status --workspace " + $workspace),
+            quick_actions: [],
+            channel: {
+              message: "Review appears to already be running in an existing assistant tab.",
+              chunks: ["Review appears to already be running in an existing assistant tab."],
+              chunks_meta: [{index: 1, total: 1, text: "Review appears to already be running in an existing assistant tab."}]
+            }
+          }')"
+        turn_json="$(review_mark_inflight_timeout "$turn_json" "$workspace")"
+      fi
+    fi
+
+    final_status="$(jq -r '.overall_status // .status // ""' <<<"$turn_json")"
+    final_agent="$(jq -r '.agent_id // ""' <<<"$turn_json")"
+    if [[ -n "${final_agent// }" ]] && [[ "$final_status" == "in_progress" || "$final_status" == "timed_out" || "$final_status" == "partial" || "$final_status" == "partial_budget" || "$final_status" == "needs_input" ]]; then
+      context_set_review_inflight "$workspace" "$assistant" "$prompt" "$final_agent"
+    elif [[ "$final_status" == "completed" || "$final_status" == "idle" || "$final_status" == "session_exited" || "$final_status" == "command_error" || "$final_status" == "agent_error" ]]; then
+      context_clear_review_inflight "$workspace" "$assistant" "$prompt"
+    fi
+  fi
+  if [[ "$review_start_lock_acquired" == "true" ]]; then
+    review_start_lock_release "$review_start_lock_file"
+  fi
   emit_turn_passthrough "review" "review_turn" "$turn_json" "$workspace" "$assistant"
 }
 
@@ -6975,7 +9121,7 @@ cmd_workflow_dual() {
   local auto_continue_impl_prompt="${AMUX_ASSISTANT_DX_DUAL_AUTO_CONTINUE_PROMPT:-Continue using the safest option and report status plus next action.}"
   local implement_needs_input_retry="${AMUX_ASSISTANT_DX_IMPLEMENT_NEEDS_INPUT_RETRY:-true}"
   local implement_needs_input_fallback_assistant="${AMUX_ASSISTANT_DX_IMPLEMENT_NEEDS_INPUT_FALLBACK_ASSISTANT:-codex}"
-  local review_needs_input_retry="${AMUX_ASSISTANT_DX_REVIEW_NEEDS_INPUT_RETRY:-true}"
+  local review_needs_input_retry="${AMUX_ASSISTANT_DX_REVIEW_NEEDS_INPUT_RETRY:-false}"
   local review_needs_input_fallback_assistant="${AMUX_ASSISTANT_DX_REVIEW_NEEDS_INPUT_FALLBACK_ASSISTANT:-codex}"
   local max_steps="${AMUX_ASSISTANT_DX_MAX_STEPS:-3}"
   local turn_budget="${AMUX_ASSISTANT_DX_TURN_BUDGET:-180}"

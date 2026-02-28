@@ -297,6 +297,7 @@ fi
 	env = withEnv(env, "AMUX_ASSISTANT_DX_TURN_SCRIPT", fakeTurnPath)
 	env = withEnv(env, "TURN_ARGS_LOG", argsLog)
 	env = withEnv(env, "TURN_COUNT_FILE", countFile)
+	env = withEnv(env, "AMUX_ASSISTANT_DX_CONTINUE_NEEDS_INPUT_AUTO_CONTINUE", "true")
 
 	payload := runScriptJSON(t, scriptPath, env,
 		"continue",

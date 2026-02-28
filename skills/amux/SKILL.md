@@ -1,6 +1,6 @@
 ---
 name: amux
-description: Orchestrate AI coding agents via amux with managed workspaces, git worktrees, and async job queues.
+description: Orchestrate AI coding agents via amux with managed workspaces, git worktrees, and async job queues. Use for coding-agent tasks (review, implement, fix, refactor, tests) and when users mention workspace + codex/claude/amux.
 metadata:
   { "assistant": { "emoji": "🔀", "os": ["darwin", "linux"], "requires": { "bins": ["amux", "tmux"] } } }
 ---
@@ -24,6 +24,12 @@ Orchestrate AI coding agents using `amux` — a workspace and agent lifecycle ma
 
 When running `amux` through Assistant `exec`/`process` tools, avoid monitor deadlocks:
 
+0. Hard routing for coding-agent work:
+   - If the request utilizes coding agents (for example: review, implement, fix, refactor, write tests, run coding workflow), route through `skills/amux/scripts/assistant-dx.sh` so activity appears in the amux TUI.
+   - If the user says `use amux` / `using amux`, this is also a strict routing constraint.
+   - Do not run direct `codex exec`, direct repo-local review scripts, or non-amux fallback flows for coding-agent tasks.
+   - If the user did not specify an exact amux command, run `assistant-dx.sh guide --task "<user request>"` first, then execute the returned `suggested_command`.
+   - Only bypass this when the user explicitly says not to use amux, or amux control plane is unavailable; in both cases report the bypass reason explicitly before continuing.
 1. Prefer `scripts/assistant-step.sh` for `run`/`send` steps. It performs exactly one bounded wait and returns normalized JSON with `status`, `summary`, `next_action`, and `suggested_command`.
 2. For multi-step coding turns, prefer `scripts/assistant-turn.sh` to enforce step caps, timeout-streak stops, milestone coalescing, and a guaranteed final summary payload.
 3. For `agent run --wait` and `agent send --wait`, set tool `timeout` to at least `--wait-timeout + 90s` (minimum 180s) to cover startup + wait.

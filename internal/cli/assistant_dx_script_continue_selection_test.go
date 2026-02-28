@@ -96,3 +96,49 @@ esac
 		t.Fatalf("channel.message = %q, want nested workspace context", message)
 	}
 }
+
+func TestAssistantDXContinue_NoTargetWithMixedTabAgentsPrefersAssistantRun(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+	contextPath := filepath.Join(t.TempDir(), "context.json")
+
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "agent list")
+    printf '%s' '{"ok":true,"data":[{"session_name":"sess-tab","agent_id":"ws-a:tab-17","workspace_id":"ws-a","tab_id":"tab-17","type":"agent"},{"session_name":"sess-assistant","agent_id":"ws-b:t_dgq1foo_1_abc12345","workspace_id":"ws-b","tab_id":"t_dgq1foo_1_abc12345","type":"agent"}],"error":null}'
+    ;;
+  "workspace list")
+    printf '%s' '{"ok":true,"data":[{"id":"ws-a","name":"main","repo":"/tmp/demo","assistant":"codex"},{"id":"ws-b","name":"main.review","repo":"/tmp/demo","assistant":"codex"}],"error":null}'
+    ;;
+  *)
+    printf '{"ok":false,"error":{"code":"unexpected","message":"unexpected args: %s"}}' "$*"
+    ;;
+esac
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+	env = withEnv(env, "AMUX_ASSISTANT_DX_CONTEXT_FILE", contextPath)
+
+	payload := runScriptJSON(t, scriptPath, env,
+		"continue",
+		"--text", "Resume now.",
+		"--enter",
+	)
+
+	if got, _ := payload["status"].(string); got != "attention" {
+		t.Fatalf("status = %q, want %q", got, "attention")
+	}
+	suggested, _ := payload["suggested_command"].(string)
+	if !strings.Contains(suggested, "--agent ws-b:t_dgq1foo_1_abc12345") {
+		t.Fatalf("suggested_command = %q, want assistant-run agent preferred over tab-*", suggested)
+	}
+}
