@@ -178,6 +178,12 @@ func (m *Model) StartPTYReaders() tea.Cmd {
 // so the returned layer can be safely used for rendering without locks.
 // Uses snapshot caching to avoid recreating when terminal state unchanged.
 func (m *Model) TerminalLayer() *compositor.VTermLayer {
+	return m.TerminalLayerWithCursorOwner(true)
+}
+
+// TerminalLayerWithCursorOwner returns a VTermLayer for the active terminal while
+// enforcing whether this pane currently owns cursor rendering.
+func (m *Model) TerminalLayerWithCursorOwner(cursorOwner bool) *compositor.VTermLayer {
 	tabs := m.getTabs()
 	activeIdx := m.getActiveTabIdx()
 	if len(tabs) == 0 || activeIdx >= len(tabs) {
@@ -189,10 +195,17 @@ func (m *Model) TerminalLayer() *compositor.VTermLayer {
 	if tab.Terminal == nil {
 		return nil
 	}
+	m.applyTerminalCursorPolicyLocked(tab)
 
-	// Check if we can reuse the cached snapshot
+	// Cache key: (version, showCursor). Chat-tab status is deliberately excluded
+	// because isChatTab is stable for the lifetime of a tab, and
+	// applyTerminalCursorPolicyLocked above ensures IgnoreCursorVisibilityControls
+	// is set before the terminal produces version-bumping output.
 	version := tab.Terminal.Version()
 	showCursor := m.focused
+	if !cursorOwner {
+		showCursor = false
+	}
 	if tab.cachedSnap != nil &&
 		tab.cachedVersion == version &&
 		tab.cachedShowCursor == showCursor {
@@ -205,6 +218,45 @@ func (m *Model) TerminalLayer() *compositor.VTermLayer {
 	snap := compositor.NewVTermSnapshotWithCache(tab.Terminal, showCursor, tab.cachedSnap)
 	if snap == nil {
 		return nil
+	}
+	// Keep the cursor steady in coding-agent tabs. Some assistants emit
+	// frequent DECTCEM hide/show toggles while streaming output, which causes
+	// visible flicker if we honor terminal-driven cursor hiding.
+	// These mutations are applied before caching (lines below). On subsequent
+	// cache hits the already-normalized snapshot is returned directly, so the
+	// transforms are effectively idempotent.
+	if m.isChatTab(tab) {
+		snap.CursorHidden = false
+		// Prevent residual flicker from SGR blink attributes in assistant output.
+		for y := range snap.Screen {
+			row := snap.Screen[y]
+			for x := range row {
+				if !row[x].Style.Blink {
+					continue
+				}
+				cell := row[x]
+				cell.Style.Blink = false
+				row[x] = cell
+			}
+		}
+		// Some assistants also paint a synthetic block cursor glyph in the
+		// buffer itself. Normalize the active cursor cell so our own steady
+		// cursor paint is the only cursor indicator.
+		if snap.ViewOffset == 0 &&
+			snap.CursorY >= 0 && snap.CursorY < len(snap.Screen) {
+			row := snap.Screen[snap.CursorY]
+			if snap.CursorX >= 0 && snap.CursorX < len(row) {
+				cell := row[snap.CursorX]
+				if cell.Rune == '█' {
+					cell.Rune = ' '
+					if cell.Width <= 0 {
+						cell.Width = 1
+					}
+				}
+				cell.Style.Blink = false
+				row[snap.CursorX] = cell
+			}
+		}
 	}
 	perf.Count("vterm_snapshot_cache_miss", 1)
 
