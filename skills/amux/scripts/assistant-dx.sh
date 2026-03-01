@@ -165,20 +165,25 @@ amux_get_ok_json() {
   local command_name="$2"
   shift 2
 
-  local raw
-  if ! raw="$("$AMUX_BIN" --json "$@" 2>&1)"; then
+  local raw rc=0
+  raw="$("$AMUX_BIN" --json "$@" 2>&1)" || rc=$?
+
+  # In --json mode, treat parseable JSON as authoritative even if exit code is non-zero.
+  if jq -e '.' >/dev/null 2>&1 <<<"$raw"; then
+    if [[ "$(jq -r '.ok // false' <<<"$raw")" != "true" ]]; then
+      emit_error "$command_name" "$(jq -r '.error.message // "amux command failed"' <<<"$raw")" "$(jq -r '.error.code // "amux_error"' <<<"$raw")"
+      return 1
+    fi
+    printf -v "$out_ref" '%s' "$raw"
+    return 0
+  fi
+
+  if (( rc != 0 )); then
     emit_error "$command_name" "amux command failed: $*" "$raw"
-    return 1
-  fi
-  if ! jq -e '.' >/dev/null 2>&1 <<<"$raw"; then
+  else
     emit_error "$command_name" "amux returned invalid JSON" "$raw"
-    return 1
   fi
-  if [[ "$(jq -r '.ok // false' <<<"$raw")" != "true" ]]; then
-    emit_error "$command_name" "$(jq -r '.error.message // "amux command failed"' <<<"$raw")" "$(jq -r '.error.code // "amux_error"' <<<"$raw")"
-    return 1
-  fi
-  printf -v "$out_ref" '%s' "$raw"
+  return 1
 }
 
 map_task_status() {
@@ -252,7 +257,7 @@ wait_for_task_terminal() {
   local assistant="$4"
   local monitor_timeout="$5"
   local poll_interval="$6"
-  local current_data="${!data_ref}"
+  local current_data="${!data_ref-}"
 
   local timeout_s poll_s started elapsed
   timeout_s="$(parse_duration_seconds "$monitor_timeout" || true)"
