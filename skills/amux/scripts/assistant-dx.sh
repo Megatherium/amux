@@ -872,8 +872,11 @@ cmd_status() {
     return 0
   fi
 
+  local ws_args=(workspace list)
+  [[ "$include_stale" == "true" ]] && ws_args+=(--all)
+
   local ws_out sess_out ws_rows sess_rows total agent_sessions first_ws first_agent_ws suggested actions summary next_action
-  if ! amux_get_ok_json ws_out "status" workspace list --all; then
+  if ! amux_get_ok_json ws_out "status" "${ws_args[@]}"; then
     return 0
   fi
   if ! amux_get_ok_json sess_out "status" session list; then
