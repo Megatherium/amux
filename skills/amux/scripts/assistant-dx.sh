@@ -165,20 +165,28 @@ amux_get_ok_json() {
   local command_name="$2"
   shift 2
 
-  local stdout_file stderr_file stdout_raw stderr_raw details rc=0
-  stdout_file="$(mktemp)"
-  stderr_file="$(mktemp)"
+  local stdout_file stderr_file stdout_raw stderr_raw stdout_trim details rc=0
+  stdout_file="$(mktemp "${TMPDIR:-/tmp}/amux_stdout.XXXXXX")" || {
+    emit_error "$command_name" "amux wrapper failed to allocate temp file" "mktemp stdout failed"
+    return 1
+  }
+  stderr_file="$(mktemp "${TMPDIR:-/tmp}/amux_stderr.XXXXXX")" || {
+    rm -f "$stdout_file"
+    emit_error "$command_name" "amux wrapper failed to allocate temp file" "mktemp stderr failed"
+    return 1
+  }
   if "$AMUX_BIN" --json "$@" >"$stdout_file" 2>"$stderr_file"; then
     rc=0
   else
     rc=$?
   fi
-  stdout_raw="$(cat "$stdout_file")"
-  stderr_raw="$(cat "$stderr_file")"
+  stdout_raw="$(<"$stdout_file")"
+  stderr_raw="$(<"$stderr_file")"
   rm -f "$stdout_file" "$stderr_file"
 
-  # In --json mode, treat parseable stdout JSON as authoritative even if exit code is non-zero.
-  if jq -e '.' >/dev/null 2>&1 <<<"$stdout_raw"; then
+  # In --json mode, treat a non-empty valid envelope as authoritative even if exit code is non-zero.
+  stdout_trim="${stdout_raw//[[:space:]]/}"
+  if [[ -n "$stdout_trim" ]] && jq -e 'type == "object" and has("ok")' >/dev/null 2>&1 <<<"$stdout_raw"; then
     if [[ "$(jq -r '.ok // false' <<<"$stdout_raw")" != "true" ]]; then
       emit_error "$command_name" "$(jq -r '.error.message // "amux command failed"' <<<"$stdout_raw")" "$(jq -r '.error.code // "amux_error"' <<<"$stdout_raw")"
       return 1

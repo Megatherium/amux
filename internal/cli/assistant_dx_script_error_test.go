@@ -195,6 +195,51 @@ esac
 	}
 }
 
+func TestAssistantDXProjectList_InvalidJSONEnvelopeClassifiedAsInvalidJSON(t *testing.T) {
+	requireBinary(t, "jq")
+	requireBinary(t, "bash")
+
+	scriptPath := filepath.Join("..", "..", "skills", "amux", "scripts", "assistant-dx.sh")
+	fakeBinDir := t.TempDir()
+	fakeAmuxPath := filepath.Join(fakeBinDir, "amux")
+	writeExecutable(t, fakeAmuxPath, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--json" ]]; then
+  shift
+fi
+case "${1:-} ${2:-}" in
+  "project list")
+    printf '%s' '[]'
+    ;;
+  *)
+    printf '%s' '{"ok":false,"error":{"code":"unexpected","message":"unexpected args"}}'
+    ;;
+esac
+`)
+
+	env := os.Environ()
+	env = withEnv(env, "PATH", fakeBinDir+":"+os.Getenv("PATH"))
+
+	payload := runScriptJSON(t, scriptPath, env, "project", "list")
+	if got, _ := payload["ok"].(bool); got {
+		t.Fatalf("ok = true, want false")
+	}
+	if got, _ := payload["status"].(string); got != "command_error" {
+		t.Fatalf("status = %q, want command_error", got)
+	}
+	summary, _ := payload["summary"].(string)
+	if !strings.Contains(summary, "amux returned invalid JSON") {
+		t.Fatalf("summary = %q, want invalid JSON classification", summary)
+	}
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data missing or wrong type: %T", payload["data"])
+	}
+	if got, _ := data["details"].(string); got != "[]" {
+		t.Fatalf("data.details = %q, want []", got)
+	}
+}
+
 func TestAssistantDXStatusWorkspace_CompletedSuggestsContinue(t *testing.T) {
 	requireBinary(t, "jq")
 	requireBinary(t, "bash")
