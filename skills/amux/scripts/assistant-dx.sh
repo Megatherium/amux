@@ -165,23 +165,34 @@ amux_get_ok_json() {
   local command_name="$2"
   shift 2
 
-  local raw rc=0
-  raw="$("$AMUX_BIN" --json "$@" 2>&1)" || rc=$?
+  local stdout_file stderr_file stdout_raw stderr_raw details rc=0
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+  if "$AMUX_BIN" --json "$@" >"$stdout_file" 2>"$stderr_file"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  stdout_raw="$(cat "$stdout_file")"
+  stderr_raw="$(cat "$stderr_file")"
+  rm -f "$stdout_file" "$stderr_file"
 
-  # In --json mode, treat parseable JSON as authoritative even if exit code is non-zero.
-  if jq -e '.' >/dev/null 2>&1 <<<"$raw"; then
-    if [[ "$(jq -r '.ok // false' <<<"$raw")" != "true" ]]; then
-      emit_error "$command_name" "$(jq -r '.error.message // "amux command failed"' <<<"$raw")" "$(jq -r '.error.code // "amux_error"' <<<"$raw")"
+  # In --json mode, treat parseable stdout JSON as authoritative even if exit code is non-zero.
+  if jq -e '.' >/dev/null 2>&1 <<<"$stdout_raw"; then
+    if [[ "$(jq -r '.ok // false' <<<"$stdout_raw")" != "true" ]]; then
+      emit_error "$command_name" "$(jq -r '.error.message // "amux command failed"' <<<"$stdout_raw")" "$(jq -r '.error.code // "amux_error"' <<<"$stdout_raw")"
       return 1
     fi
-    printf -v "$out_ref" '%s' "$raw"
+    printf -v "$out_ref" '%s' "$stdout_raw"
     return 0
   fi
 
+  details="$stderr_raw"
+  [[ -z "${details// }" ]] && details="$stdout_raw"
   if (( rc != 0 )); then
-    emit_error "$command_name" "amux command failed: $*" "$raw"
+    emit_error "$command_name" "amux command failed: $*" "$details"
   else
-    emit_error "$command_name" "amux returned invalid JSON" "$raw"
+    emit_error "$command_name" "amux returned invalid JSON" "$details"
   fi
   return 1
 }
@@ -213,6 +224,61 @@ build_task_status_cmd() {
   local assistant="$2"
   printf '%s task status --workspace %s --assistant %s' \
     "$SELF_SCRIPT" "$(quote_cmd "$workspace")" "$(quote_cmd "$assistant")"
+}
+
+build_task_continue_cmd() {
+  local workspace="$1"
+  local assistant="$2"
+  local text="${3:-}"
+  local cmd
+  cmd="$(printf '%s continue --workspace %s --assistant %s' \
+    "$SELF_SCRIPT" "$(quote_cmd "$workspace")" "$(quote_cmd "$assistant")")"
+  if [[ -n "${text// }" ]]; then
+    cmd+=" --text $(quote_cmd "$text")"
+  fi
+  cmd+=" --enter"
+  printf '%s' "$cmd"
+}
+
+build_task_followups() {
+  local workspace="$1"
+  local assistant="$2"
+  local task_status="$3"
+  local overall="$4"
+  local prompt="$5"
+  local input_hint="$6"
+  local agent_id="$7"
+
+  local status_cmd continue_cmd start_cmd suggested quick_actions followup_text start_prompt
+  status_cmd="$(build_task_status_cmd "$workspace" "$assistant")"
+  suggested="$status_cmd"
+  quick_actions='[]'
+  quick_actions="$(append_action "$quick_actions" "status" "Status" "$status_cmd" "primary" "Check task status")"
+  start_prompt="$prompt"
+  [[ -z "${start_prompt// }" ]] && start_prompt="Continue from current state and report status plus next action."
+
+  if [[ "$task_status" == "needs_input" || "$overall" == "needs_input" ]]; then
+    followup_text="$input_hint"
+    [[ -z "${followup_text//[[:space:]]/}" ]] && followup_text="Reply with the exact option needed, then continue and report status plus blockers."
+    continue_cmd="$(build_task_continue_cmd "$workspace" "$assistant" "$followup_text")"
+    suggested="$continue_cmd"
+    quick_actions="$(append_action "$quick_actions" "continue" "Continue" "$continue_cmd" "primary" "Send response and continue")"
+  elif [[ "$overall" == "in_progress" ]]; then
+    :
+  elif [[ "$overall" == "session_exited" || -z "${agent_id// }" ]]; then
+    start_cmd="$(build_task_start_cmd "$workspace" "$assistant" "$start_prompt")"
+    suggested="$start_cmd"
+    quick_actions="$(append_action "$quick_actions" "start" "Start" "$start_cmd" "primary" "Start another bounded run")"
+  else
+    continue_cmd="$(build_task_continue_cmd "$workspace" "$assistant" "Continue from current state and provide status plus next action.")"
+    suggested="$continue_cmd"
+    quick_actions="$(append_action "$quick_actions" "continue" "Continue" "$continue_cmd" "primary" "Send a follow-up instruction")"
+    start_cmd="$(build_task_start_cmd "$workspace" "$assistant" "$start_prompt")"
+    quick_actions="$(append_action "$quick_actions" "start" "Start" "$start_cmd" "secondary" "Start another bounded run")"
+  fi
+
+  jq -cn --arg suggested "$suggested" --argjson actions "$quick_actions" \
+    '{suggested_command:$suggested,quick_actions:$actions}'
 }
 
 parse_duration_seconds() {
@@ -294,19 +360,15 @@ emit_task_result() {
   local prompt="$4"
   local data_json="$5"
 
-  local task_status overall status summary next_action suggested quick_actions message
+  local task_status overall status summary next_action followups_json suggested quick_actions message
   task_status="$(jq -r '.status // ""' <<<"$data_json")"
   overall="$(jq -r '.overall_status // ""' <<<"$data_json")"
   status="$(map_task_status "$task_status" "$overall")"
   summary="$(jq -r '.summary // "Task completed."' <<<"$data_json")"
   next_action="$(jq -r '.next_action // "Check status and continue if needed."' <<<"$data_json")"
-  suggested="$(jq -r '.suggested_command // ""' <<<"$data_json")"
-  [[ -z "${suggested// }" ]] && suggested="$(build_task_status_cmd "$workspace" "$assistant")"
-  quick_actions="$(jq -c '.quick_actions // []' <<<"$data_json")"
-  if [[ "$(jq -r 'length' <<<"$quick_actions")" == "0" ]]; then
-    quick_actions='[]'
-    quick_actions="$(append_action "$quick_actions" "status" "Status" "$(build_task_status_cmd "$workspace" "$assistant")" "primary" "Check task status")"
-  fi
+  followups_json="$(build_task_followups "$workspace" "$assistant" "$task_status" "$overall" "$prompt" "$(jq -r '.input_hint // ""' <<<"$data_json")" "$(jq -r '.agent_id // ""' <<<"$data_json")")"
+  suggested="$(jq -r '.suggested_command // ""' <<<"$followups_json")"
+  quick_actions="$(jq -c '.quick_actions // []' <<<"$followups_json")"
   message="$summary"
   [[ -n "${next_action// }" ]] && message+=$'\n'"Next: $next_action"
 
@@ -779,7 +841,7 @@ cmd_status() {
   done
 
   if [[ -n "${workspace// }" ]]; then
-    local out data_json task_status overall status summary next_action suggested actions msg
+    local out data_json task_status overall status summary next_action followups_json suggested actions msg
     if ! amux_get_ok_json out "status" task status --workspace "$workspace" --assistant "$assistant"; then
       return 0
     fi
@@ -789,13 +851,9 @@ cmd_status() {
     status="$(map_task_status "$task_status" "$overall")"
     summary="$(jq -r '.summary // "Workspace status captured."' <<<"$data_json")"
     next_action="$(jq -r '.next_action // "Continue with the next focused step."' <<<"$data_json")"
-    suggested="$(jq -r '.suggested_command // ""' <<<"$data_json")"
-    [[ -z "${suggested// }" ]] && suggested="$(build_task_start_cmd "$workspace" "$assistant" "Continue from current state and report status plus next action.")"
-    actions="$(jq -c '.quick_actions // []' <<<"$data_json")"
-    if [[ "$(jq -r 'length' <<<"$actions")" == "0" ]]; then
-      actions='[]'
-      actions="$(append_action "$actions" "start" "Start" "$(build_task_start_cmd "$workspace" "$assistant" "Continue from current state and report status plus next action.")" "primary" "Start bounded task")"
-    fi
+    followups_json="$(build_task_followups "$workspace" "$assistant" "$task_status" "$overall" "" "$(jq -r '.input_hint // ""' <<<"$data_json")" "$(jq -r '.agent_id // ""' <<<"$data_json")")"
+    suggested="$(jq -r '.suggested_command // ""' <<<"$followups_json")"
+    actions="$(jq -c '.quick_actions // []' <<<"$followups_json")"
     msg="$summary"
     msg+=$'\n'"Workspace: $workspace"
     msg+=$'\n'"Next: $next_action"

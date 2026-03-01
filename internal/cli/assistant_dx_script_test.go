@@ -102,6 +102,24 @@ esac
 	if got, _ := payload["status"].(string); got != "attention" {
 		t.Fatalf("status = %q, want attention", got)
 	}
+	suggested, _ := payload["suggested_command"].(string)
+	if strings.Contains(suggested, "amux --json") || !strings.Contains(suggested, "assistant-dx.sh task status --workspace ws-1 --assistant droid") {
+		t.Fatalf("suggested_command = %q, want wrapper task status command", suggested)
+	}
+	quickActions, ok := payload["quick_actions"].([]any)
+	if !ok || len(quickActions) == 0 {
+		t.Fatalf("quick_actions missing or empty: %#v", payload["quick_actions"])
+	}
+	for i, raw := range quickActions {
+		action, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("quick_actions[%d] wrong type: %T", i, raw)
+		}
+		cmd, _ := action["command"].(string)
+		if strings.Contains(cmd, "amux --json") || !strings.Contains(cmd, "assistant-dx.sh") {
+			t.Fatalf("quick_actions[%d].command = %q, want wrapper command", i, cmd)
+		}
+	}
 
 	raw, err := os.ReadFile(callLog)
 	if err != nil {
