@@ -720,7 +720,7 @@ cmd_project_add() {
   [[ -z "${path// }" ]] && { emit_error "project.add" "missing required flag: --path (or --cwd)"; return 0; }
 
   local out data_json
-  if ! amux_get_ok_json out "project.add" project add --path "$path"; then
+  if ! amux_get_ok_json out "project.add" project add "$path"; then
     return 0
   fi
   data_json="$(jq -c '.data // {}' <<<"$out")"

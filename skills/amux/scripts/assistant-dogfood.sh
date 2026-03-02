@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" >/dev/null 2>&1 && pwd -P)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd -P)"
-DX_SCRIPT="$SCRIPT_DIR/assistant-dx.sh"
+DX_SCRIPT="${AMUX_ASSISTANT_DOGFOOD_DX_SCRIPT:-$SCRIPT_DIR/assistant-dx.sh}"
 
 usage() {
   cat <<'EOF'
@@ -412,22 +412,23 @@ run_assistant_channel_command() {
 echo "dogfood_start repo=$(shell_quote "$REPO_PATH") report_dir=$(shell_quote "$REPORT_DIR")"
 assistant health --json >"$REPORT_DIR/assistant-health.raw" 2>&1 || true
 
-run_dx project_add project add --path "$REPO_PATH" --workspace "$PRIMARY_WORKSPACE" --assistant "$ASSISTANT"
-WS1_ID="$(jq -r '.data.workspace.id // .data.workspace_id // .data.context.workspace.id // ""' <"$REPORT_DIR/project_add.json")"
+run_dx project_add project add --path "$REPO_PATH"
+run_dx workspace1_create workspace create "$PRIMARY_WORKSPACE" --project "$REPO_PATH" --assistant "$ASSISTANT"
+WS1_ID="$(jq -r '.data.id // .data.workspace.id // .data.workspace_id // .data.context.workspace.id // ""' <"$REPORT_DIR/workspace1_create.json")"
 if [[ -z "${WS1_ID// }" ]]; then
-  echo "failed to resolve ws1 id from project_add" >&2
+  echo "failed to resolve ws1 id from workspace1_create" >&2
   exit 1
 fi
 run_assistant_local_ping assistant_local_ping "$WS1_ID"
 CHANNEL_STATUS_TOKEN="ch-status-${RUN_TAG}-${WS1_ID}"
-CHANNEL_STATUS_CMD="cd $(shell_quote "$REPO_ROOT") && $(shell_quote "$DX_SCRIPT") status --workspace $(shell_quote "$WS1_ID") | jq -c --arg token $(shell_quote "$CHANNEL_STATUS_TOKEN") --arg ws $(shell_quote "$WS1_ID") '{status:(.status // \"\"),summary:(.summary // \"\"),workspace:(.data.workspaces[0].id // .data.context.workspace.id // \"\"),dogfood_channel_status_token:\$token,dogfood_expected_workspace:\$ws}'"
+CHANNEL_STATUS_CMD="cd $(shell_quote "$REPO_ROOT") && $(shell_quote "$DX_SCRIPT") status --workspace $(shell_quote "$WS1_ID") | jq -c --arg token $(shell_quote "$CHANNEL_STATUS_TOKEN") --arg ws $(shell_quote "$WS1_ID") '{status:(.status // \"\"),summary:(.summary // \"\"),workspace:(.data.workspace // .data.workspaces[0].id // .data.context.workspace.id // \"\"),dogfood_channel_status_token:\$token,dogfood_expected_workspace:\$ws}'"
 run_assistant_channel_command assistant_channel_status "dogfood-channel-${WS1_ID}-$RUN_TAG" "${AMUX_ASSISTANT_DOGFOOD_CHANNEL:-telegram}" "$CHANNEL_STATUS_CMD" "$CHANNEL_STATUS_TOKEN"
 
 run_dx start_ws1 start --workspace "$WS1_ID" --assistant "$ASSISTANT" --prompt "Update README with run instructions and add NOTES.md with one mobile DX tip." --max-steps 2 --turn-budget 120 --wait-timeout 80s --idle-threshold 10s
 run_dx continue_ws1 continue --workspace "$WS1_ID" --auto-start --text "Add one concise status line to NOTES.md and finish." --enter --max-steps 1 --turn-budget 90 --wait-timeout 70s --idle-threshold 10s
 
-run_dx workspace2_create workspace create --name "$SECONDARY_WORKSPACE" --project "$REPO_PATH" --assistant "$ASSISTANT"
-WS2_ID="$(jq -r '.data.workspace.id // .data.workspace_id // ""' <"$REPORT_DIR/workspace2_create.json")"
+run_dx workspace2_create workspace create "$SECONDARY_WORKSPACE" --project "$REPO_PATH" --assistant "$ASSISTANT"
+WS2_ID="$(jq -r '.data.id // .data.workspace.id // .data.workspace_id // ""' <"$REPORT_DIR/workspace2_create.json")"
 if [[ -n "${WS2_ID// }" ]]; then
   CHANNEL_WS2_CMD="cd $(shell_quote "$REPO_ROOT") && $(shell_quote "$DX_SCRIPT") terminal run --workspace $(shell_quote "$WS2_ID") --text \"echo channel-smoke > CHANNEL_SMOKE.txt\" --enter"
   run_assistant_channel_command assistant_channel_terminal_ws2 "dogfood-channel-ws2-${WS2_ID}-$RUN_TAG" "${AMUX_ASSISTANT_DOGFOOD_CHANNEL:-telegram}" "$CHANNEL_WS2_CMD" "" false
