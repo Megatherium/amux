@@ -235,6 +235,87 @@ func TestRegistry_RemoveProjectMatchesSymlinkAliasWhenLeafMissing(t *testing.T) 
 	}
 }
 
+func TestRegistry_RemoveProjectMatchesDirectSymlinkAliasAfterTargetDeletion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink permissions are unstable on windows test environments")
+	}
+
+	tmpDir := t.TempDir()
+	registryPath := filepath.Join(tmpDir, "projects.json")
+	repoReal := filepath.Join(tmpDir, "repo-real")
+	if err := os.MkdirAll(repoReal, 0o755); err != nil {
+		t.Fatalf("MkdirAll(repoReal) error = %v", err)
+	}
+	repoLink := filepath.Join(tmpDir, "repo-link")
+	if err := os.Symlink(repoReal, repoLink); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	r := NewRegistry(registryPath)
+	if err := r.AddProject(repoLink); err != nil {
+		t.Fatalf("AddProject(repoLink) error = %v", err)
+	}
+
+	if err := os.RemoveAll(repoReal); err != nil {
+		t.Fatalf("RemoveAll(repoReal) error = %v", err)
+	}
+	if err := r.RemoveProject(repoLink); err != nil {
+		t.Fatalf("RemoveProject(repoLink) error = %v", err)
+	}
+
+	paths, err := r.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(paths) != 0 {
+		t.Fatalf("expected registry to be empty after removing broken symlink alias, got %v", paths)
+	}
+}
+
+func TestRegistry_AddProjectDedupesRelativeSymlinkViaSymlinkedParentAlias(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink permissions are unstable on windows test environments")
+	}
+
+	tmpDir := t.TempDir()
+	registryPath := filepath.Join(tmpDir, "projects.json")
+	realRoot := filepath.Join(tmpDir, "real")
+	realSub := filepath.Join(realRoot, "sub")
+	repoReal := filepath.Join(realRoot, "repo-real")
+	if err := os.MkdirAll(realSub, 0o755); err != nil {
+		t.Fatalf("MkdirAll(realSub) error = %v", err)
+	}
+	if err := os.MkdirAll(repoReal, 0o755); err != nil {
+		t.Fatalf("MkdirAll(repoReal) error = %v", err)
+	}
+
+	repoLink := filepath.Join(realSub, "repo-link")
+	if err := os.Symlink("../repo-real", repoLink); err != nil {
+		t.Fatalf("Symlink(repo-link) error = %v", err)
+	}
+	aliasDir := filepath.Join(tmpDir, "alias")
+	if err := os.Symlink(realSub, aliasDir); err != nil {
+		t.Fatalf("Symlink(alias) error = %v", err)
+	}
+	aliasLink := filepath.Join(aliasDir, "repo-link")
+
+	r := NewRegistry(registryPath)
+	if err := r.AddProject(aliasLink); err != nil {
+		t.Fatalf("AddProject(aliasLink) error = %v", err)
+	}
+	if err := r.AddProject(repoReal); err != nil {
+		t.Fatalf("AddProject(repoReal) error = %v", err)
+	}
+
+	paths, err := r.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("expected 1 canonical project after relative symlink alias add, got %d (%v)", len(paths), paths)
+	}
+}
+
 func TestRegistry_AddProjectRejectsEmptyPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	registryPath := filepath.Join(tmpDir, "projects.json")
