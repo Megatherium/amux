@@ -76,6 +76,50 @@ func (m *SandboxManager) storeSession(session *sandboxSession) {
 	m.sessions[session.worktreeID] = session
 }
 
+func (m *SandboxManager) rollbackFailedSessionInit(session *sandboxSession, workspaceRoot string, cause error) {
+	if session == nil || session.sandbox == nil || session.provider == nil {
+		return
+	}
+
+	m.mu.Lock()
+	activeSession := m.sessions[session.worktreeID]
+	m.mu.Unlock()
+	if activeSession != nil && activeSession != session {
+		logging.Warn("Sandbox init rollback: skipping teardown for worktree %q after %v because another session is active", session.worktreeID, cause)
+		return
+	}
+
+	sandboxID := strings.TrimSpace(session.sandbox.ID())
+	if err := session.sandbox.Stop(context.Background()); err != nil {
+		logging.Warn("Sandbox init rollback: failed to stop sandbox %q after %v: %v", sandboxID, cause, err)
+	}
+	if sandboxID != "" {
+		metaSafeToRemove := false
+		if err := session.provider.DeleteSandbox(context.Background(), sandboxID); err != nil {
+			logging.Warn("Sandbox init rollback: failed to delete sandbox %q after %v: %v", sandboxID, cause, err)
+			metaSafeToRemove = sandbox.IsNotFoundError(err)
+		} else {
+			metaSafeToRemove = true
+		}
+		if metaSafeToRemove {
+			if err := sandbox.RemoveSandboxMetaByID(sandboxID); err != nil {
+				logging.Warn("Sandbox init rollback: failed to remove metadata for sandbox %q after %v: %v", sandboxID, cause, err)
+			}
+		}
+	}
+	if sandboxID == "" {
+		if err := sandbox.RemoveSandboxMeta(workspaceRoot, session.providerName); err != nil {
+			logging.Warn("Sandbox init rollback: failed to remove metadata for workspace %q after %v: %v", workspaceRoot, cause, err)
+		}
+	}
+
+	m.mu.Lock()
+	if active := m.sessions[session.worktreeID]; active == session {
+		delete(m.sessions, session.worktreeID)
+	}
+	m.mu.Unlock()
+}
+
 func (m *SandboxManager) attachSession(wt *data.Workspace) (*sandboxSession, error) {
 	if wt == nil {
 		return nil, errors.New("workspace is required")
@@ -188,6 +232,7 @@ func (m *SandboxManager) ensureSession(wt *data.Workspace, agent sandbox.Agent) 
 		Cwd:        wt.Root,
 		WorktreeID: worktreeID,
 	}, false); err != nil {
+		m.rollbackFailedSessionInit(session, wt.Root, err)
 		return nil, err
 	}
 	session.synced = true
@@ -196,6 +241,7 @@ func (m *SandboxManager) ensureSession(wt *data.Workspace, agent sandbox.Agent) 
 		Mode:             "auto",
 		SettingsSyncMode: "auto",
 	}, false); err != nil {
+		m.rollbackFailedSessionInit(session, wt.Root, err)
 		return nil, err
 	}
 	session.credentialsReady = true

@@ -62,3 +62,85 @@ func TestCreateTerminalTabFactoryError(t *testing.T) {
 		t.Fatalf("error = %v, want %v", failed.Err, wantErr)
 	}
 }
+
+func TestReattachActiveTabUsesFactoryForCloudRuntime(t *testing.T) {
+	m := NewTerminalModel()
+	ws := data.NewWorkspace("ws", "main", "main", "/repo/ws", "/repo/ws")
+	ws.Runtime = data.RuntimeCloudSandbox
+	wsID := string(ws.ID())
+	tabID := generateTerminalTabID()
+
+	m.workspace = ws
+	m.tabsByWorkspace[wsID] = []*TerminalTab{
+		{
+			ID: tabID,
+			State: &TerminalState{
+				Running:  false,
+				Detached: true,
+			},
+		},
+	}
+	m.activeTabByWorkspace[wsID] = 0
+
+	called := false
+	m.SetTerminalFactory(func(got *data.Workspace) (*pty.Terminal, error) {
+		called = true
+		if got != ws {
+			t.Fatalf("factory workspace = %p, want %p", got, ws)
+		}
+		return nil, nil
+	})
+
+	cmd := m.ReattachActiveTab()
+	if cmd == nil {
+		t.Fatal("expected reattach command")
+	}
+	msg := cmd()
+	if !called {
+		t.Fatal("expected terminal factory to be called")
+	}
+	if _, ok := msg.(SidebarTerminalReattachResult); !ok {
+		t.Fatalf("expected SidebarTerminalReattachResult, got %T", msg)
+	}
+}
+
+func TestRestartActiveTabUsesFactoryForCloudRuntime(t *testing.T) {
+	m := NewTerminalModel()
+	ws := data.NewWorkspace("ws", "main", "main", "/repo/ws", "/repo/ws")
+	ws.Runtime = data.RuntimeCloudSandbox
+	wsID := string(ws.ID())
+	tabID := generateTerminalTabID()
+
+	m.workspace = ws
+	m.tabsByWorkspace[wsID] = []*TerminalTab{
+		{
+			ID: tabID,
+			State: &TerminalState{
+				Running:  false,
+				Detached: true,
+			},
+		},
+	}
+	m.activeTabByWorkspace[wsID] = 0
+
+	called := false
+	m.SetTerminalFactory(func(got *data.Workspace) (*pty.Terminal, error) {
+		called = true
+		if got != ws {
+			t.Fatalf("factory workspace = %p, want %p", got, ws)
+		}
+		return nil, nil
+	})
+
+	cmd := m.RestartActiveTab()
+	if cmd == nil {
+		t.Fatal("expected restart command")
+	}
+	msg := cmd()
+	if !called {
+		t.Fatal("expected terminal factory to be called")
+	}
+	if _, ok := msg.(SidebarTerminalReattachResult); !ok {
+		t.Fatalf("expected SidebarTerminalReattachResult, got %T", msg)
+	}
+}
