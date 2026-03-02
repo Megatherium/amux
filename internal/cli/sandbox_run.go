@@ -268,8 +268,13 @@ func runAgent(p runAgentParams) error {
 		_ = provider.DeleteSandbox(ctx, sb.ID())
 		_ = sandbox.RemoveSandboxMetaByID(sb.ID())
 	}
-	if !p.keepSandbox {
-		defer cleanup()
+	cleanupOnReturn := !p.keepSandbox
+	if cleanupOnReturn {
+		defer func() {
+			if cleanupOnReturn {
+				cleanup()
+			}
+		}()
 	}
 
 	worktreeID := sandbox.ComputeWorktreeID(p.cwd)
@@ -377,7 +382,12 @@ func runAgent(p runAgentParams) error {
 			return err
 		}
 		if exitCode != 0 {
-			return handleAgentExit(sb, p.agent, exitCode, p.syncEnabled, p.cwd)
+			err = handleAgentExit(sb, p.agent, exitCode, p.syncEnabled, p.cwd)
+			if shouldPreserveSandboxOnExitError(err) {
+				cleanupOnReturn = false
+				fmt.Fprintf(os.Stderr, "Sync-down failed; preserving sandbox %s to avoid data loss.\n", sb.ID())
+			}
+			return err
 		}
 	}
 
@@ -395,5 +405,15 @@ func runAgent(p runAgentParams) error {
 	}
 
 	// Handle agent exit
-	return handleAgentExit(sb, p.agent, exitCode, p.syncEnabled, p.cwd)
+	err = handleAgentExit(sb, p.agent, exitCode, p.syncEnabled, p.cwd)
+	if shouldPreserveSandboxOnExitError(err) {
+		cleanupOnReturn = false
+		fmt.Fprintf(os.Stderr, "Sync-down failed; preserving sandbox %s to avoid data loss.\n", sb.ID())
+	}
+	return err
+}
+
+func shouldPreserveSandboxOnExitError(err error) bool {
+	var syncErr *workspaceSyncError
+	return errors.As(err, &syncErr)
 }

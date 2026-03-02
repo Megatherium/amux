@@ -14,6 +14,8 @@ import (
 )
 
 func buildAuthCommand() *cobra.Command {
+	var showAll bool
+
 	cmd := &cobra.Command{
 		Use:   "auth <action> [provider]",
 		Short: "Authentication commands",
@@ -60,7 +62,6 @@ func buildAuthCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				showAll := len(args) > 1 && args[1] == "--all"
 
 				fmt.Fprintln(cliStdout, "amux auth status")
 				fmt.Fprintln(cliStdout, strings.Repeat("─", 50))
@@ -100,6 +101,7 @@ func buildAuthCommand() *cobra.Command {
 			}
 		},
 	}
+	cmd.Flags().BoolVar(&showAll, "all", false, "Show extended authentication details")
 	return cmd
 }
 

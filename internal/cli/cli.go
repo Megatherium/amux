@@ -9,6 +9,18 @@ import (
 
 // RunCobra executes the sandbox-oriented Cobra CLI. It returns a process exit code.
 func RunCobra(args []string) int {
+	return runCobra(args)
+}
+
+// RunCobraWithGlobals executes the Cobra CLI while honoring legacy global
+// options that are pre-parsed by cmd/amux dispatch compatibility logic.
+func RunCobraWithGlobals(args []string, gf GlobalFlags) int {
+	prevTimeout := setCLITmuxTimeoutOverride(gf.Timeout)
+	defer setCLITmuxTimeoutOverride(prevTimeout)
+	return runCobra(args)
+}
+
+func runCobra(args []string) int {
 	root := buildRootCommand()
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {

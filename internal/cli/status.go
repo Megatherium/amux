@@ -31,6 +31,7 @@ func buildStatusCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show current project sandbox status",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -266,9 +267,7 @@ func buildExecCommand() *cobra.Command {
 				execPath = sandbox.GetWorktreeRepoPath(sb, sandbox.SyncOptions{Cwd: cwd, WorktreeID: worktreeID})
 			}
 
-			// Build command string
-			cmdStr := strings.Join(args, " ")
-			fullCmd := fmt.Sprintf("cd %s && %s", quoteShell(execPath), cmdStr)
+			fullCmd := buildExecShellCommand(execPath, args)
 
 			resp, err := sb.Exec(context.Background(), fullCmd, nil)
 			if err != nil {
@@ -294,4 +293,12 @@ func buildExecCommand() *cobra.Command {
 
 func quoteShell(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+func buildExecShellCommand(workdir string, args []string) string {
+	quotedArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		quotedArgs = append(quotedArgs, quoteShell(arg))
+	}
+	return fmt.Sprintf("cd %s && %s", quoteShell(workdir), strings.Join(quotedArgs, " "))
 }

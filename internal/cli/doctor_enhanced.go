@@ -25,6 +25,7 @@ func buildEnhancedDoctorCommand() *cobra.Command {
 		Long: `Run diagnostic checks to identify and fix common issues.
 
 By default, runs quick local checks. Use --deep for comprehensive sandbox checks.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()

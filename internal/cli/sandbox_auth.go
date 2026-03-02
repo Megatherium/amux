@@ -6,6 +6,18 @@ import (
 	"github.com/andyrewlee/amux/internal/sandbox"
 )
 
+type workspaceSyncError struct {
+	err error
+}
+
+func (e *workspaceSyncError) Error() string {
+	return e.err.Error()
+}
+
+func (e *workspaceSyncError) Unwrap() error {
+	return e.err
+}
+
 // checkNeedsLogin determines if an agent needs login based on stored credentials
 func checkNeedsLogin(sb sandbox.RemoteSandbox, agent sandbox.Agent, envMap map[string]string) bool {
 	// Check if credentials already exist on the sandbox
@@ -105,7 +117,7 @@ func handleAgentExit(sb sandbox.RemoteSandbox, agent sandbox.Agent, exitCode int
 		if Verbose {
 			fmt.Fprintln(cliStdout, "\nSyncing changes...")
 			if err := sandbox.DownloadWorkspace(sb, sandbox.SyncOptions{Cwd: cwd, WorktreeID: worktreeID}, Verbose); err != nil {
-				return err
+				return &workspaceSyncError{err: err}
 			}
 			fmt.Fprintln(cliStdout, "Done")
 		} else {
@@ -113,7 +125,7 @@ func handleAgentExit(sb sandbox.RemoteSandbox, agent sandbox.Agent, exitCode int
 			spinner.Start()
 			if err := sandbox.DownloadWorkspace(sb, sandbox.SyncOptions{Cwd: cwd, WorktreeID: worktreeID}, false); err != nil {
 				spinner.StopWithMessage("✗ Sync failed")
-				return err
+				return &workspaceSyncError{err: err}
 			}
 			spinner.StopWithMessage("✓ Changes synced")
 		}

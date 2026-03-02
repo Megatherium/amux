@@ -146,13 +146,17 @@ func isArchiveError(err error) bool {
 }
 
 func getIgnorePatterns(opts SyncOptions) ([]string, error) {
+	return getIgnorePatternsForRoot(opts.Cwd, opts)
+}
+
+func getIgnorePatternsForRoot(root string, opts SyncOptions) ([]string, error) {
 	patterns := append([]string{}, defaultIgnorePatterns...)
 	if len(opts.IgnorePatterns) > 0 {
 		patterns = append(patterns, opts.IgnorePatterns...)
 	}
 	ignoreFiles := []string{".amuxignore"}
 	for _, name := range ignoreFiles {
-		ignorePath := filepath.Join(opts.Cwd, name)
+		ignorePath := filepath.Join(root, name)
 		if data, err := os.ReadFile(ignorePath); err == nil {
 			for _, line := range strings.Split(string(data), "\n") {
 				line = strings.TrimSpace(line)
@@ -413,16 +417,37 @@ func DownloadWorkspace(computer RemoteSandbox, opts SyncOptions, verbose bool) e
 	if verbose {
 		fmt.Fprintln(sandboxStdout, "Extracting tarball locally...")
 	}
-	if err := extractTarball(localPath, opts.Cwd); err != nil {
+	extractDir, err := os.MkdirTemp("", "amux-download-extract-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(extractDir)
+
+	if err := extractTarball(localPath, extractDir); err != nil {
 		if !isArchiveError(err) {
 			return err
 		}
 		if err := retryWithBuffer(err); err != nil {
 			return err
 		}
-		if err := extractTarball(localPath, opts.Cwd); err != nil {
+		if err := os.RemoveAll(extractDir); err != nil {
 			return err
 		}
+		if err := os.MkdirAll(extractDir, 0o755); err != nil {
+			return err
+		}
+		if err := extractTarball(localPath, extractDir); err != nil {
+			return err
+		}
+	}
+	// Resolve ignore patterns from the downloaded snapshot so edits to
+	// .amuxignore inside sandbox converge in a single sync-down.
+	ignorePatterns, err := getIgnorePatternsForRoot(extractDir, opts)
+	if err != nil {
+		return err
+	}
+	if err := applyDownloadedWorkspace(extractDir, opts.Cwd, ignorePatterns); err != nil {
+		return err
 	}
 
 	_, _ = execCommand(computer, SafeCommands.RmF(downloadTarPath), nil)
