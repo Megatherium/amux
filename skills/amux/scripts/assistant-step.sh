@@ -757,7 +757,7 @@ if [[ $CMD_EXIT -ne 0 ]]; then
   if jq -e . >/dev/null 2>&1 <<<"$RAW_OUTPUT"; then
     ERR_CODE="$(jq -r '.error.code // "unknown_error"' <<<"$RAW_OUTPUT")"
     ERR_MSG="$(jq -r '.error.message // "agent step failed"' <<<"$RAW_OUTPUT")"
-    print_json_error "$MODE" "agent_error" "$ERR_CODE" "$ERR_MSG"
+    print_json_error "$MODE" "agent_error" "$ERR_MSG" "$ERR_CODE"
     exit "$CMD_EXIT"
   fi
   print_json_error "$MODE" "command_error" "amux command failed" "$RAW_OUTPUT"
@@ -773,7 +773,7 @@ OK="$(jq -r '.ok // false' <<<"$RAW_OUTPUT")"
 if [[ "$OK" != "true" ]]; then
   ERR_CODE="$(jq -r '.error.code // "unknown_error"' <<<"$RAW_OUTPUT")"
   ERR_MSG="$(jq -r '.error.message // "agent step failed"' <<<"$RAW_OUTPUT")"
-  print_json_error "$MODE" "agent_error" "$ERR_CODE" "$ERR_MSG"
+  print_json_error "$MODE" "agent_error" "$ERR_MSG" "$ERR_CODE"
   exit 1
 fi
 

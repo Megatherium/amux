@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/andyrewlee/amux/internal/data"
@@ -37,7 +38,10 @@ type taskAgentSnapshot struct {
 }
 
 type taskStartLock struct {
-	path string
+	path          string
+	stopHeartbeat chan struct{}
+	heartbeatDone chan struct{}
+	releaseOnce   sync.Once
 }
 
 var taskRunAgent = taskRunAgentViaCmdAgentRun
@@ -405,29 +409,77 @@ func acquireTaskStartLock(home, workspaceID, assistant string, ttl time.Duration
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, false, err
 	}
-	if info, err := os.Stat(path); err == nil {
+	for {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err == nil {
+			_, _ = f.WriteString(fmt.Sprintf("pid=%d ts=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339)))
+			_ = f.Close()
+			lock := &taskStartLock{path: path}
+			lock.startHeartbeat(ttl)
+			return lock, true, nil
+		}
+		if !os.IsExist(err) {
+			return nil, false, err
+		}
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				continue
+			}
+			return nil, false, statErr
+		}
 		if ttl <= 0 || time.Since(info.ModTime()) < ttl {
 			return nil, false, nil
 		}
-		_ = os.Remove(path)
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		if os.IsExist(err) {
-			return nil, false, nil
+		if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+			return nil, false, rmErr
 		}
-		return nil, false, err
 	}
-	_, _ = f.WriteString(fmt.Sprintf("pid=%d ts=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339)))
-	_ = f.Close()
-	return &taskStartLock{path: path}, true, nil
+}
+
+func (l *taskStartLock) startHeartbeat(ttl time.Duration) {
+	if l == nil || strings.TrimSpace(l.path) == "" || ttl <= 0 {
+		return
+	}
+	interval := ttl / 3
+	if interval < 100*time.Millisecond {
+		interval = 100 * time.Millisecond
+	}
+	if interval > 5*time.Second {
+		interval = 5 * time.Second
+	}
+	l.stopHeartbeat = make(chan struct{})
+	l.heartbeatDone = make(chan struct{})
+	path := l.path
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		defer close(l.heartbeatDone)
+		for {
+			select {
+			case <-ticker.C:
+				now := time.Now()
+				_ = os.Chtimes(path, now, now)
+			case <-l.stopHeartbeat:
+				return
+			}
+		}
+	}()
 }
 
 func (l *taskStartLock) release() {
 	if l == nil || strings.TrimSpace(l.path) == "" {
 		return
 	}
-	_ = os.Remove(l.path)
+	l.releaseOnce.Do(func() {
+		if l.stopHeartbeat != nil {
+			close(l.stopHeartbeat)
+			if l.heartbeatDone != nil {
+				<-l.heartbeatDone
+			}
+		}
+		_ = os.Remove(l.path)
+	})
 }
 
 func taskStartLockPath(home, workspaceID, assistant string) string {
