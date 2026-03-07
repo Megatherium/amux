@@ -97,7 +97,7 @@ func cmdTaskStart(w, wErr io.Writer, gf GlobalFlags, args []string, version stri
 	}
 
 	if !*allowNewRun {
-		candidate, snap, err := findLatestTaskAgentSnapshot(svc.TmuxOpts, string(wsID), assistantName)
+		candidate, snap, err := findLatestTaskAgentSnapshot(svc.TmuxOpts, string(wsID), assistantName, taskAgentLookupForStart)
 		if err != nil {
 			return taskReturnError(w, wErr, gf, version, ExitInternalError, "agent_lookup_failed", err.Error(), nil)
 		}
@@ -173,7 +173,7 @@ func cmdTaskStatus(w, wErr io.Writer, gf GlobalFlags, args []string, version str
 		return taskReturnError(w, wErr, gf, version, ExitUsage, "unknown_assistant", "unknown assistant: "+assistantName, nil)
 	}
 
-	candidate, snap, err := findLatestTaskAgentSnapshot(svc.TmuxOpts, string(wsID), assistantName)
+	candidate, snap, err := findLatestTaskAgentSnapshot(svc.TmuxOpts, string(wsID), assistantName, taskAgentLookupForStatus)
 	if err != nil {
 		return taskReturnError(w, wErr, gf, version, ExitInternalError, "agent_lookup_failed", err.Error(), nil)
 	}

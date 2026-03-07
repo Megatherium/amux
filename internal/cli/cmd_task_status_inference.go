@@ -24,6 +24,9 @@ func taskStatusLooksComplete(candidate taskAgentCandidate, snap taskAgentSnapsho
 	if snap.NeedsInput {
 		return false
 	}
+	if snap.SessionExited {
+		return false
+	}
 	return !taskSnapshotLooksProgressOnly(snap)
 }
 

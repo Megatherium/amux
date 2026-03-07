@@ -22,9 +22,11 @@ func TestCmdTaskStart_ActiveAgentRequiresConfirmationByDefault(t *testing.T) {
 
 	origSessionsWithTags := tmuxSessionsWithTags
 	origCapture := tmuxCapturePaneTail
+	origStateFor := tmuxSessionStateFor
 	t.Cleanup(func() {
 		tmuxSessionsWithTags = origSessionsWithTags
 		tmuxCapturePaneTail = origCapture
+		tmuxSessionStateFor = origStateFor
 	})
 
 	tmuxSessionsWithTags = func(_ map[string]string, _ []string, _ tmux.Options) ([]tmux.SessionTagValues, error) {
@@ -38,6 +40,9 @@ func TestCmdTaskStart_ActiveAgentRequiresConfirmationByDefault(t *testing.T) {
 	}
 	tmuxCapturePaneTail = func(_ string, _ int, _ tmux.Options) (string, bool) {
 		return "Running task now", true
+	}
+	tmuxSessionStateFor = func(_ string, _ tmux.Options) (tmux.SessionState, error) {
+		return tmux.SessionState{Exists: true, HasLivePane: true}, nil
 	}
 
 	var out, errOut bytes.Buffer
@@ -232,10 +237,12 @@ func TestCmdTaskStart_CompletedStaleAgentDoesNotRequireConfirmation(t *testing.T
 	origSessionsWithTags := tmuxSessionsWithTags
 	origCapture := tmuxCapturePaneTail
 	origTaskRunAgent := taskRunAgent
+	origStateFor := tmuxSessionStateFor
 	t.Cleanup(func() {
 		tmuxSessionsWithTags = origSessionsWithTags
 		tmuxCapturePaneTail = origCapture
 		taskRunAgent = origTaskRunAgent
+		tmuxSessionStateFor = origStateFor
 	})
 
 	oldOutputTS := strconv.FormatInt(time.Now().Add(-2*time.Minute).Unix(), 10)
@@ -252,6 +259,9 @@ func TestCmdTaskStart_CompletedStaleAgentDoesNotRequireConfirmation(t *testing.T
 	}
 	tmuxCapturePaneTail = func(_ string, _ int, _ tmux.Options) (string, bool) {
 		return "Review completed with findings.", true
+	}
+	tmuxSessionStateFor = func(_ string, _ tmux.Options) (tmux.SessionState, error) {
+		return tmux.SessionState{Exists: true, HasLivePane: true}, nil
 	}
 	taskRunAgent = func(_ *Services, wsID data.WorkspaceID, assistant, prompt string, waitTimeout, idleThreshold time.Duration, idempotencyKey, version string) (agentRunResult, error) {
 		_ = waitTimeout
@@ -296,9 +306,11 @@ func TestCmdTaskStatus_ReportsNeedsInputFromActiveAgent(t *testing.T) {
 
 	origSessionsWithTags := tmuxSessionsWithTags
 	origCapture := tmuxCapturePaneTail
+	origStateFor := tmuxSessionStateFor
 	t.Cleanup(func() {
 		tmuxSessionsWithTags = origSessionsWithTags
 		tmuxCapturePaneTail = origCapture
+		tmuxSessionStateFor = origStateFor
 	})
 
 	tmuxSessionsWithTags = func(_ map[string]string, _ []string, _ tmux.Options) ([]tmux.SessionTagValues, error) {
@@ -312,6 +324,9 @@ func TestCmdTaskStatus_ReportsNeedsInputFromActiveAgent(t *testing.T) {
 	}
 	tmuxCapturePaneTail = func(_ string, _ int, _ tmux.Options) (string, bool) {
 		return "Would you like me to proceed with option 1?", true
+	}
+	tmuxSessionStateFor = func(_ string, _ tmux.Options) (tmux.SessionState, error) {
+		return tmux.SessionState{Exists: true, HasLivePane: true}, nil
 	}
 
 	var out, errOut bytes.Buffer
@@ -341,9 +356,11 @@ func TestCmdTaskStatus_ReportsCompletedWhenOutputIsStable(t *testing.T) {
 
 	origSessionsWithTags := tmuxSessionsWithTags
 	origCapture := tmuxCapturePaneTail
+	origStateFor := tmuxSessionStateFor
 	t.Cleanup(func() {
 		tmuxSessionsWithTags = origSessionsWithTags
 		tmuxCapturePaneTail = origCapture
+		tmuxSessionStateFor = origStateFor
 	})
 
 	oldOutputTS := strconv.FormatInt(time.Now().Add(-2*time.Minute).Unix(), 10)
@@ -359,6 +376,9 @@ func TestCmdTaskStatus_ReportsCompletedWhenOutputIsStable(t *testing.T) {
 	}
 	tmuxCapturePaneTail = func(_ string, _ int, _ tmux.Options) (string, bool) {
 		return "Code review completed with findings and residual risks.", true
+	}
+	tmuxSessionStateFor = func(_ string, _ tmux.Options) (tmux.SessionState, error) {
+		return tmux.SessionState{Exists: true, HasLivePane: true}, nil
 	}
 
 	var out, errOut bytes.Buffer

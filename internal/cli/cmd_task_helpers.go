@@ -9,32 +9,31 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/andyrewlee/amux/internal/data"
-	"github.com/andyrewlee/amux/internal/tmux"
 )
 
 const taskCaptureLines = 120
 
 type taskAgentCandidate struct {
-	SessionName   string
-	AgentID       string
-	Assistant     string
-	CreatedAt     int64
-	LastOutputAt  time.Time
-	HasLastOutput bool
+	SessionName     string
+	AgentID         string
+	Assistant       string
+	HasAssistantTag bool
+	CreatedAt       int64
+	LastOutputAt    time.Time
+	HasLastOutput   bool
 }
 
 type taskAgentSnapshot struct {
-	Summary    string
-	LatestLine string
-	NeedsInput bool
-	InputHint  string
+	Summary       string
+	LatestLine    string
+	NeedsInput    bool
+	InputHint     string
+	SessionExited bool
 }
 
 type taskStartLock struct {
@@ -258,6 +257,25 @@ func buildTaskStatusResult(workspaceID, assistant string, candidate taskAgentCan
 		LatestLine:       latest,
 		SuggestedCommand: statusCmd,
 	}
+	if snap.SessionExited {
+		result.Status = "attention"
+		result.OverallStatus = "session_exited"
+		summary := strings.TrimSpace(snap.Summary)
+		if summary == "" || isTaskProgressOnlyLine(summary) {
+			summary = "Task session exited."
+		}
+		result.Summary = summary
+		result.NextAction = "Start a fresh task run."
+		startCmd := fmt.Sprintf(
+			"amux --json task start --workspace %s --assistant %s --prompt %s",
+			quoteCommandValue(workspaceID),
+			quoteCommandValue(assistant),
+			quoteCommandValue("Continue from current state and report status plus next action."),
+		)
+		result.SuggestedCommand = startCmd
+		result.QuickActions = []taskQuickAction{{ID: "start", Label: "Start", Command: startCmd, Prompt: "Start a fresh task"}}
+		return result
+	}
 	if snap.NeedsInput {
 		result.Status = "needs_input"
 		result.OverallStatus = "needs_input"
@@ -297,111 +315,6 @@ func buildTaskStatusResult(workspaceID, assistant string, candidate taskAgentCan
 	result.NextAction = "Keep running and re-check status."
 	result.QuickActions = []taskQuickAction{{ID: "status", Label: "Status", Command: statusCmd, Prompt: "Check task status"}}
 	return result
-}
-
-func findLatestTaskAgentSnapshot(opts tmux.Options, workspaceID, assistant string) (*taskAgentCandidate, taskAgentSnapshot, error) {
-	candidates, err := listTaskAgentCandidates(opts, workspaceID, assistant)
-	if err != nil {
-		return nil, taskAgentSnapshot{}, err
-	}
-	if len(candidates) == 0 {
-		return nil, taskAgentSnapshot{}, nil
-	}
-	snap := captureTaskAgentSnapshot(candidates[0].SessionName, opts)
-	return &candidates[0], snap, nil
-}
-
-func listTaskAgentCandidates(opts tmux.Options, workspaceID, assistant string) ([]taskAgentCandidate, error) {
-	rows, err := tmuxSessionsWithTags(
-		map[string]string{
-			"@amux":           "1",
-			"@amux_workspace": workspaceID,
-			"@amux_type":      "agent",
-		},
-		[]string{"@amux_tab", "@amux_assistant", "@amux_created_at", tmux.TagLastOutputAt},
-		opts,
-	)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]taskAgentCandidate, 0, len(rows))
-	assistant = strings.ToLower(strings.TrimSpace(assistant))
-	for _, row := range rows {
-		tagAssistant := strings.ToLower(strings.TrimSpace(row.Tags["@amux_assistant"]))
-		if assistant != "" && tagAssistant != "" && tagAssistant != assistant {
-			continue
-		}
-		tabID := strings.TrimSpace(row.Tags["@amux_tab"])
-		if tabID == "" {
-			tabID = inferTabIDFromSessionName(row.Name, workspaceID)
-		}
-		agentID := formatAgentID(workspaceID, tabID)
-		if strings.TrimSpace(agentID) == "" {
-			agentID = workspaceID + ":" + row.Name
-		}
-		createdAt := int64(0)
-		if raw := strings.TrimSpace(row.Tags["@amux_created_at"]); raw != "" {
-			if ts, parseErr := strconv.ParseInt(raw, 10, 64); parseErr == nil {
-				createdAt = ts
-			}
-		}
-		lastOutputAt, hasLastOutput := parseSessionTagTime(row.Tags[tmux.TagLastOutputAt])
-		out = append(out, taskAgentCandidate{
-			SessionName:   row.Name,
-			AgentID:       agentID,
-			Assistant:     nonEmpty(tagAssistant, assistant),
-			CreatedAt:     createdAt,
-			LastOutputAt:  lastOutputAt,
-			HasLastOutput: hasLastOutput,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].CreatedAt != out[j].CreatedAt {
-			return out[i].CreatedAt > out[j].CreatedAt
-		}
-		return out[i].SessionName > out[j].SessionName
-	})
-	return out, nil
-}
-
-func captureTaskAgentSnapshot(sessionName string, opts tmux.Options) taskAgentSnapshot {
-	content, ok := captureAgentPaneWithRetry(sessionName, taskCaptureLines, opts)
-	if !ok {
-		return taskAgentSnapshot{
-			Summary:    "(no visible output yet)",
-			LatestLine: "(no visible output yet)",
-		}
-	}
-	compact := strings.TrimSpace(compactAgentOutput(content))
-	if compact == "" {
-		compact = strings.TrimSpace(content)
-	}
-	latest := strings.TrimSpace(lastNonEmptyLine(compact))
-	if latest == "" {
-		latest = "(no visible output yet)"
-	}
-	needsInput, inputHint := detectNeedsInput(compact)
-	if !needsInput {
-		needsInput, inputHint = detectNeedsInput(content)
-	}
-	summary := summarizeWaitResponse("idle", latest, needsInput, inputHint)
-	if strings.TrimSpace(summary) == "" {
-		summary = latest
-	}
-	return taskAgentSnapshot{
-		Summary:    summary,
-		LatestLine: latest,
-		NeedsInput: needsInput,
-		InputHint:  strings.TrimSpace(inputHint),
-	}
-}
-
-func inferTabIDFromSessionName(sessionName, workspaceID string) string {
-	prefix := tmux.SessionName("amux", workspaceID) + "-"
-	if strings.HasPrefix(sessionName, prefix) {
-		return strings.TrimPrefix(sessionName, prefix)
-	}
-	return ""
 }
 
 func acquireTaskStartLock(home, workspaceID, assistant string, ttl time.Duration) (*taskStartLock, bool, error) {
