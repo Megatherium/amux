@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -84,15 +82,35 @@ func TestViewHidesTerminalCursorWhenToastCoversIt(t *testing.T) {
 	}
 
 	_ = h.app.toast.ShowInfo("copy complete")
-	toastView := h.app.toast.View()
-	if toastView == "" {
-		t.Fatal("expected visible toast")
+	covered := false
+	for width := 48; width <= 96 && !covered; width++ {
+		for height := 8; height <= 18 && !covered; height++ {
+			h.app.width = width
+			h.app.height = height
+			h.app.layout.Resize(width, height)
+			h.app.updateLayout()
+
+			termOffsetX, termOffsetY, termW, termH := h.app.center.TerminalViewport()
+			centerX := h.app.layout.LeftGutter() + h.app.layout.DashboardWidth() + h.app.layout.GapX()
+			termX := centerX + termOffsetX
+			termY := h.app.layout.TopGutter() + termOffsetY
+
+			for y := 0; y < termH && !covered; y++ {
+				for x := 0; x < termW; x++ {
+					if !h.app.toastCoversPoint(termX+x, termY+y) {
+						continue
+					}
+					h.tabs[0].Terminal.CursorX = x
+					h.tabs[0].Terminal.CursorY = y
+					covered = true
+					break
+				}
+			}
+		}
 	}
-	toastWidth := lipgloss.Width(toastView)
-	toastX := (h.app.width - toastWidth) / 2
-	toastY := h.app.height - 2
-	h.tabs[0].Terminal.CursorX = toastX
-	h.tabs[0].Terminal.CursorY = toastY
+	if !covered {
+		t.Fatal("expected a toast-covered point within the terminal viewport in test setup")
+	}
 
 	view := h.Render()
 	if view.Cursor != nil {
