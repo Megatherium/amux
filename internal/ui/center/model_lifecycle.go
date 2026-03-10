@@ -52,6 +52,7 @@ func (m *Model) Focused() bool {
 // SetWorkspace sets the active workspace.
 func (m *Model) SetWorkspace(ws *data.Workspace) {
 	m.setWorkspace(ws)
+	m.syncPostWriteVisibility()
 	if ws == nil {
 		return
 	}
@@ -79,11 +80,14 @@ func (m *Model) SetStyles(styles common.Styles) {
 	// Propagate to all viewers in tabs
 	for _, tabs := range m.tabsByWorkspace {
 		for _, tab := range tabs {
-			if tab != nil {
-				if tab.DiffViewer != nil {
-					tab.DiffViewer.SetStyles(styles)
-				}
+			if tab == nil {
+				continue
 			}
+			tab.mu.Lock()
+			if tab.DiffViewer != nil {
+				tab.DiffViewer.SetStyles(styles)
+			}
+			tab.mu.Unlock()
 		}
 	}
 }
@@ -149,6 +153,9 @@ func (m *Model) setActiveTerminalCursorVisibility(visible bool) {
 	// cursor-painted frames.
 	tab.cachedSnap = nil
 	tab.cachedVersion = 0
+	tab.cachedShowCursor = false
+	tab.cachedRecentLocalInput = false
+	tab.cachedRestrictCursor = false
 }
 
 // Close cleans up all resources.
