@@ -100,15 +100,9 @@ Setup:
 
 // buildLsAlias creates an alias for `amux sandbox ls`
 func buildLsAlias() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List all amux sandboxes (alias for `sandbox ls`)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Delegate to sandbox ls
-			sandboxCmd := buildSandboxLsCommand()
-			return sandboxCmd.RunE(sandboxCmd, args)
-		},
-	}
+	cmd := buildSandboxLsCommand()
+	cmd.Use = "ls"
+	cmd.Short = "List all amux sandboxes (alias for `sandbox ls`)"
 	return cmd
 }
 

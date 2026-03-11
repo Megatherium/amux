@@ -33,6 +33,27 @@ type agentCommandSpec struct {
 	DebugEnabled  bool
 }
 
+func buildSSHInvocationArgs(target, remoteCommand string, omitRemoteCommand bool) []string {
+	sshArgs := []string{
+		"-tt",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "LogLevel=ERROR",
+		target,
+	}
+	if !omitRemoteCommand {
+		sshArgs = append(sshArgs, remoteCommand)
+	}
+	return sshArgs
+}
+
+func buildSSHDebugSummary(target, remoteCommand string, omitRemoteCommand bool) string {
+	if omitRemoteCommand {
+		return "ssh " + target
+	}
+	return redactExports(remoteCommand)
+}
+
 func buildAgentCommandSpec(s RemoteSandbox, cfg AgentConfig) (agentCommandSpec, error) {
 	command := "bash"
 	switch cfg.Agent {
@@ -252,16 +273,8 @@ func (s *daytonaSandbox) RunAgentInteractive(cfg AgentConfig) (int, error) {
 
 	remoteCommand := spec.RemoteCommand
 
-	sshArgs := []string{
-		"-tt",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "LogLevel=ERROR",
-		target,
-	}
-	if !rawShell && !useShellBootstrap {
-		sshArgs = append(sshArgs, remoteCommand)
-	}
+	omitRemoteCommand := rawShell || useShellBootstrap
+	sshArgs := buildSSHInvocationArgs(target, remoteCommand, omitRemoteCommand)
 
 	if spec.DebugEnabled {
 		sshArgs = append([]string{"-vvv"}, sshArgs...)
@@ -274,11 +287,7 @@ func (s *daytonaSandbox) RunAgentInteractive(cfg AgentConfig) (int, error) {
 			sortStrings(keys)
 			fmt.Fprintf(sandboxStdout, "SSH env keys: %s\n", strings.Join(keys, ", "))
 		}
-		if rawShell || useShellBootstrap {
-			fmt.Fprintf(sandboxStdout, "SSH command: ssh %s\n", target)
-		} else {
-			fmt.Fprintf(sandboxStdout, "SSH command: %s\n", redactExports(remoteCommand))
-		}
+		fmt.Fprintf(sandboxStdout, "SSH command: %s\n", buildSSHDebugSummary(target, remoteCommand, omitRemoteCommand))
 	}
 
 	cmd := exec.Command("ssh", sshArgs...)

@@ -231,21 +231,19 @@ func SetupCredentials(sb RemoteSandbox, cfg CredentialsConfig, verbose bool) err
 
 	// Sync local settings based on mode and global config
 	amuxCfg, _ := LoadConfig()
-	shouldSync := false
+	syncCfg := amuxCfg.SettingsSync
 	switch cfg.SettingsSyncMode {
 	case "force":
-		shouldSync = true
+		syncCfg.Enabled = true
 	case "skip":
-		shouldSync = false
-	default: // "auto" or empty - use global config
-		shouldSync = amuxCfg.SettingsSync.Enabled
+		syncCfg.Enabled = false
 	}
 
-	if shouldSync {
+	if syncCfg.Enabled {
 		if verbose {
 			fmt.Fprintln(sandboxStdout, "Syncing local settings...")
 		}
-		if err := SyncSettingsToVolume(sb, amuxCfg.SettingsSync, verbose); err != nil {
+		if err := SyncSettingsToVolume(sb, syncCfg, verbose); err != nil {
 			if verbose {
 				fmt.Fprintf(sandboxStdout, "Warning: settings sync failed: %v\n", err)
 			}

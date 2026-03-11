@@ -13,6 +13,12 @@ import (
 	"github.com/andyrewlee/amux/internal/sandbox"
 )
 
+var (
+	resolveProviderForGhAuth            = sandbox.ResolveProvider
+	loadSandboxMetaForGhAuth            = sandbox.LoadSandboxMeta
+	createSandboxSessionNoMetaForGhAuth = sandbox.CreateSandboxSessionNoMeta
+)
+
 func buildAuthCommand() *cobra.Command {
 	var showAll bool
 
@@ -41,7 +47,7 @@ func buildAuthCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				apiKey, err := promptInput("Daytona API key: ")
+				apiKey, err := promptSecret("Daytona API key: ")
 				if err != nil {
 					return err
 				}
@@ -111,27 +117,12 @@ func runGhAuthLogin() error {
 		return err
 	}
 
-	cfg, err := sandbox.LoadConfig()
+	sb, cleanup, err := acquireSandboxForGhAuth(cwd)
 	if err != nil {
 		return err
 	}
-	providerInstance, _, err := sandbox.ResolveProvider(cfg, cwd, "")
-	if err != nil {
-		return err
-	}
-
-	// Load existing sandbox metadata - require sandbox to exist
-	meta, err := sandbox.LoadSandboxMeta(cwd, providerInstance.Name())
-	if err != nil {
-		return err
-	}
-	if meta == nil {
-		return errors.New("no sandbox exists - run `amux sandbox run <agent>` first to create one")
-	}
-
-	sb, err := providerInstance.GetSandbox(context.Background(), meta.SandboxID)
-	if err != nil {
-		return errors.New("sandbox not found - run `amux sandbox run <agent>` to create one")
+	if cleanup != nil {
+		defer cleanup()
 	}
 
 	// Ensure sandbox is started
@@ -209,6 +200,55 @@ func runGhAuthLogin() error {
 		return fmt.Errorf("github auth session exited with code %d", exitCode)
 	}
 	return nil
+}
+
+func acquireSandboxForGhAuth(cwd string) (sandbox.RemoteSandbox, func(), error) {
+	cfg, err := sandbox.LoadConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+	providerInstance, _, err := resolveProviderForGhAuth(cfg, cwd, "")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	meta, err := loadSandboxMetaForGhAuth(cwd, providerInstance.Name())
+	if err != nil {
+		return nil, nil, err
+	}
+	if meta != nil {
+		sb, err := providerInstance.GetSandbox(context.Background(), meta.SandboxID)
+		if err == nil {
+			return sb, nil, nil
+		}
+		var sandboxErr *sandbox.SandboxError
+		if !errors.As(err, &sandboxErr) || sandboxErr.Code != sandbox.ErrCodeSandboxMissing {
+			return nil, nil, err
+		}
+		fmt.Fprintln(cliStdout, "Existing sandbox not found; creating a temporary sandbox for GitHub login...")
+	} else {
+		fmt.Fprintln(cliStdout, "No sandbox found for this project; creating a temporary sandbox for GitHub login...")
+	}
+
+	sb, _, err := createSandboxSessionNoMetaForGhAuth(providerInstance, cwd, sandbox.SandboxConfig{
+		Agent:                 sandbox.AgentShell,
+		CredentialsMode:       "sandbox",
+		AutoStopInterval:      30,
+		Snapshot:              sandbox.ResolveSnapshotID(cfg),
+		Ephemeral:             true,
+		PersistenceVolumeName: sandbox.ResolvePersistenceVolumeName(cfg),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = sb.Stop(ctx)
+		_ = providerInstance.DeleteSandbox(ctx, sb.ID())
+	}
+	return sb, cleanup, nil
 }
 
 func ensureGhCli(sb sandbox.RemoteSandbox) bool {

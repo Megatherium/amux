@@ -1,6 +1,9 @@
 package sandbox
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -153,4 +156,51 @@ func TestHasGitHubCredentials(t *testing.T) {
 			t.Error("HasGitHubCredentials() should return true when gh auth succeeds")
 		}
 	})
+}
+
+func TestSetupCredentials_ForceSettingsSyncOverridesDisabledGlobalConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{"theme":"dark"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := SaveConfig(Config{
+		SettingsSync: SettingsSyncConfig{
+			Enabled: false,
+			Files:   []string{"~/.claude/settings.json"},
+		},
+	}); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	mock := NewMockRemoteSandbox("test-123")
+	mock.SetExecResult("sh -lc", "/home/testuser", 0)
+
+	prevStdout := sandboxStdout
+	sandboxStdout = &bytes.Buffer{}
+	defer func() {
+		sandboxStdout = prevStdout
+	}()
+
+	err := SetupCredentials(mock, CredentialsConfig{
+		Mode:             "sandbox",
+		Agent:            AgentClaude,
+		SettingsSyncMode: "force",
+	}, false)
+	if err != nil {
+		t.Fatalf("SetupCredentials() error = %v", err)
+	}
+
+	uploads := mock.GetUploadHistory()
+	if len(uploads) == 0 {
+		t.Fatal("SetupCredentials() did not upload any synced settings")
+	}
+	if got, want := uploads[0].Dest, "/home/testuser/.claude/settings.json"; got != want {
+		t.Fatalf("synced destination = %q, want %q", got, want)
+	}
 }

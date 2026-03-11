@@ -13,10 +13,17 @@ import (
 	"github.com/andyrewlee/amux/internal/sandbox"
 )
 
-func promptInput(label string) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
+func promptSecret(label string) (string, error) {
 	fmt.Fprint(cliStdout, label)
-	text, err := reader.ReadString('\n')
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		text, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Fprintln(cliStdout)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(text)), nil
+	}
+	text, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +41,7 @@ func ensureDaytonaAPIKey() error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return errors.New("daytona API key not found; set AMUX_DAYTONA_API_KEY or run `amux auth login`")
 	}
-	apiKey, err := promptInput("Daytona API key: ")
+	apiKey, err := promptSecret("Daytona API key: ")
 	if err != nil {
 		return err
 	}
