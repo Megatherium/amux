@@ -59,7 +59,7 @@ func cmdTerminalRun(w, wErr io.Writer, gf GlobalFlags, args []string, version st
 	if !found {
 		if !*create {
 			return returnOperationError(w, wErr, gf, version,
-				ExitNotFound, "not_found", fmt.Errorf("no terminal session found for workspace"),
+				ExitNotFound, "not_found", errors.New("no terminal session found for workspace"),
 				map[string]any{"workspace_id": string(wsID)},
 				"no terminal session found for workspace %s", wsID)
 		}

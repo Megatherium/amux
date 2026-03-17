@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,7 +32,7 @@ func cmdLogs(w, wErr io.Writer, gf GlobalFlags, args []string, version string) i
 	}
 	if *lines < 0 {
 		return returnOperationError(w, wErr, gf, version,
-			ExitUsage, "invalid_lines", fmt.Errorf("--lines must be >= 0"),
+			ExitUsage, "invalid_lines", errors.New("--lines must be >= 0"),
 			map[string]any{"lines": *lines},
 			"--lines must be >= 0")
 	}

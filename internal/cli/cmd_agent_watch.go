@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"os/signal"
@@ -66,22 +66,22 @@ func cmdAgentWatch(w, wErr io.Writer, gf GlobalFlags, args []string, version str
 	}
 	if *lines <= 0 {
 		return returnOperationError(w, wErr, gf, version,
-			ExitUsage, "invalid_lines", fmt.Errorf("--lines must be > 0"),
+			ExitUsage, "invalid_lines", errors.New("--lines must be > 0"),
 			map[string]any{"lines": *lines}, "--lines must be > 0")
 	}
 	if *interval <= 0 {
 		return returnOperationError(w, wErr, gf, version,
-			ExitUsage, "invalid_interval", fmt.Errorf("--interval must be > 0"), nil,
+			ExitUsage, "invalid_interval", errors.New("--interval must be > 0"), nil,
 			"--interval must be > 0")
 	}
 	if *idleThreshold <= 0 {
 		return returnOperationError(w, wErr, gf, version,
-			ExitUsage, "invalid_idle_threshold", fmt.Errorf("--idle-threshold must be > 0"), nil,
+			ExitUsage, "invalid_idle_threshold", errors.New("--idle-threshold must be > 0"), nil,
 			"--idle-threshold must be > 0")
 	}
 	if *heartbeat < 0 {
 		return returnOperationError(w, wErr, gf, version,
-			ExitUsage, "invalid_heartbeat", fmt.Errorf("--heartbeat must be >= 0"), nil,
+			ExitUsage, "invalid_heartbeat", errors.New("--heartbeat must be >= 0"), nil,
 			"--heartbeat must be >= 0")
 	}
 

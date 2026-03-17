@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -105,7 +106,7 @@ func cmdAgentCapture(w, wErr io.Writer, gf GlobalFlags, args []string, version s
 
 	if *lines <= 0 {
 		return returnOperationError(w, wErr, gf, version,
-			ExitUsage, "invalid_lines", fmt.Errorf("--lines must be > 0"),
+			ExitUsage, "invalid_lines", errors.New("--lines must be > 0"),
 			map[string]any{"lines": *lines},
 			"--lines must be > 0")
 	}
@@ -135,7 +136,7 @@ func cmdAgentCapture(w, wErr io.Writer, gf GlobalFlags, args []string, version s
 			return ExitNotFound
 		}
 		return returnOperationError(w, wErr, gf, version,
-			ExitNotFound, "capture_failed", fmt.Errorf("could not capture pane output"), nil,
+			ExitNotFound, "capture_failed", errors.New("could not capture pane output"), nil,
 			"could not capture pane output for session %s", sessionName)
 	}
 

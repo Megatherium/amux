@@ -54,7 +54,7 @@ func cmdTerminalLogs(w, wErr io.Writer, gf GlobalFlags, args []string, version s
 	}
 	if !found {
 		return returnOperationError(w, wErr, gf, version,
-			ExitNotFound, "not_found", fmt.Errorf("no terminal session found for workspace"),
+			ExitNotFound, "not_found", errors.New("no terminal session found for workspace"),
 			map[string]any{"workspace_id": string(wsID)},
 			"no terminal session found for workspace %s", wsID)
 	}
@@ -74,7 +74,7 @@ func cmdTerminalLogs(w, wErr io.Writer, gf GlobalFlags, args []string, version s
 	content, ok := tmux.CapturePaneTail(sessionName, *lines, svc.TmuxOpts)
 	if !ok {
 		return returnOperationError(w, wErr, gf, version,
-			ExitNotFound, "capture_failed", fmt.Errorf("could not capture pane output"),
+			ExitNotFound, "capture_failed", errors.New("could not capture pane output"),
 			map[string]any{"session_name": sessionName},
 			"could not capture pane output for session %s", sessionName)
 	}
