@@ -24,7 +24,12 @@ func NewClientCommand(sessionName string, p ClientCommandParams) string {
 	return clientCommand(sessionName, p.WorkDir, p.Command, p.Options, p.Tags, p.DetachExisting)
 }
 
-func clientCommand(sessionName, workDir, command string, opts Options, tags SessionTags, detachExisting bool) string {
+func clientCommand(
+	sessionName, workDir, command string,
+	opts Options,
+	tags SessionTags,
+	detachExisting bool,
+) string {
 	base := tmuxBase(opts)
 	session := shellQuote(sessionName)
 	optionTgt := shellQuote(exactSessionOptionTarget(sessionName))
@@ -45,19 +50,30 @@ func clientCommand(sessionName, workDir, command string, opts Options, tags Sess
 
 	var settings strings.Builder
 	// Disable tmux prefix for this session only (not global) to make it transparent
-	settings.WriteString(fmt.Sprintf("%s set-option -t %s prefix None 2>/dev/null; ", base, optionTgt))
-	settings.WriteString(fmt.Sprintf("%s set-option -t %s prefix2 None 2>/dev/null; ", base, optionTgt))
+	fmt.Fprintf(&settings, "%s set-option -t %s prefix None 2>/dev/null; ", base, optionTgt)
+	fmt.Fprintf(&settings, "%s set-option -t %s prefix2 None 2>/dev/null; ", base, optionTgt)
 	if opts.HideStatus {
-		settings.WriteString(fmt.Sprintf("%s set-option -t %s status off 2>/dev/null; ", base, optionTgt))
+		fmt.Fprintf(&settings, "%s set-option -t %s status off 2>/dev/null; ", base, optionTgt)
 	}
 	if opts.DisableMouse {
-		settings.WriteString(fmt.Sprintf("%s set-option -t %s mouse off 2>/dev/null; ", base, optionTgt))
+		fmt.Fprintf(&settings, "%s set-option -t %s mouse off 2>/dev/null; ", base, optionTgt)
 	}
 	if opts.DefaultTerminal != "" {
-		settings.WriteString(fmt.Sprintf("%s set-option -t %s default-terminal %s 2>/dev/null; ", base, optionTgt, shellQuote(opts.DefaultTerminal)))
+		fmt.Fprintf(
+			&settings,
+			"%s set-option -t %s default-terminal %s 2>/dev/null; ",
+			base,
+			optionTgt,
+			shellQuote(opts.DefaultTerminal),
+		)
 	}
 	// Ensure activity timestamps update for window_activity-based tracking.
-	settings.WriteString(fmt.Sprintf("%s set-option -t %s -w monitor-activity on 2>/dev/null; ", base, optionTgt))
+	fmt.Fprintf(
+		&settings,
+		"%s set-option -t %s -w monitor-activity on 2>/dev/null; ",
+		base,
+		optionTgt,
+	)
 	appendSessionTags(&settings, base, optionTgt, tags)
 
 	// Attach to the session, optionally detaching other clients.
@@ -71,10 +87,14 @@ func clientCommand(sessionName, workDir, command string, opts Options, tags Sess
 }
 
 func appendSessionTags(settings *strings.Builder, base, session string, tags SessionTags) {
-	if tags.WorkspaceID == "" && tags.TabID == "" && tags.Type == "" && tags.Assistant == "" && tags.CreatedAt == 0 && tags.InstanceID == "" && tags.SessionOwner == "" && tags.LeaseAtMS == 0 {
+	if tags.WorkspaceID == "" && tags.TabID == "" && tags.Type == "" && tags.Assistant == "" &&
+		tags.CreatedAt == 0 &&
+		tags.InstanceID == "" &&
+		tags.SessionOwner == "" &&
+		tags.LeaseAtMS == 0 {
 		return
 	}
-	settings.WriteString(fmt.Sprintf("%s set-option -t %s @amux 1 2>/dev/null; ", base, session))
+	fmt.Fprintf(settings, "%s set-option -t %s @amux 1 2>/dev/null; ", base, session)
 	entries := []struct{ key, value string }{
 		{"@amux_workspace", tags.WorkspaceID},
 		{"@amux_tab", tags.TabID},
@@ -87,7 +107,14 @@ func appendSessionTags(settings *strings.Builder, base, session string, tags Ses
 	}
 	for _, e := range entries {
 		if e.value != "" {
-			settings.WriteString(fmt.Sprintf("%s set-option -t %s %s %s 2>/dev/null; ", base, session, e.key, shellQuote(e.value)))
+			fmt.Fprintf(
+				settings,
+				"%s set-option -t %s %s %s 2>/dev/null; ",
+				base,
+				session,
+				e.key,
+				shellQuote(e.value),
+			)
 		}
 	}
 }

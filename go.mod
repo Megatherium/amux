@@ -17,11 +17,11 @@ require (
 	github.com/mattn/go-runewidth v0.0.20
 	golang.org/x/sys v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/DATA-DOG/go-sqlmock v1.5.2 // indirect
 	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect

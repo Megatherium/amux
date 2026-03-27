@@ -66,7 +66,7 @@ func (fp *FilePicker) renderLines() []string {
 		lines = append(lines, strings.Split(s, "\n")...)
 	}
 	appendBlank := func(count int) {
-		for i := 0; i < count; i++ {
+		for range count {
 			lines = append(lines, "")
 		}
 	}

@@ -59,8 +59,8 @@ func (p *Parser) pushParam() {
 		s := p.paramBuf.String()
 		// Handle sub-parameters (colon-separated values like "38:2:255:128:0")
 		if strings.Contains(s, ":") {
-			parts := strings.Split(s, ":")
-			for _, part := range parts {
+			parts := strings.SplitSeq(s, ":")
+			for part := range parts {
 				if part == "" {
 					p.params = append(p.params, 0)
 				} else {
@@ -162,10 +162,11 @@ func (p *Parser) executeCSI(final byte) {
 			p.vt.restoreCursor()
 		}
 	case 'c': // DA - device attributes
-		if p.intermediate == '>' {
+		switch p.intermediate {
+		case '>':
 			// Secondary DA - report VT220
 			p.vt.respond([]byte("\x1b[>1;10;0c"))
-		} else if p.intermediate == 0 {
+		case 0:
 			// Primary DA - report VT220 with ANSI color
 			p.vt.respond([]byte("\x1b[?62;22c"))
 		}

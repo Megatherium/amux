@@ -13,7 +13,11 @@ const (
 	bootstrapQuietGap            = tabActiveWindow
 )
 
-func (m *Model) noteVisibleActivityLocked(tab *Tab, hasMoreBuffered bool, visibleSeq uint64) (string, int64, bool) {
+func (m *Model) noteVisibleActivityLocked(
+	tab *Tab,
+	hasMoreBuffered bool,
+	visibleSeq uint64,
+) (string, int64, bool) {
 	return m.noteVisibleActivityLockedWithOutput(tab, hasMoreBuffered, visibleSeq, nil)
 }
 
@@ -96,9 +100,10 @@ func normalizeSubmittedPasteEchoOutput(output []byte) string {
 			}
 
 		case ansiActivityOSC:
-			if ch == 0x07 {
+			switch ch {
+			case 0x07:
 				state = ansiActivityText
-			} else if ch == 0x1b {
+			case 0x1b:
 				state = ansiActivityOSCEsc
 			}
 
@@ -168,7 +173,8 @@ func (m *Model) noteVisibleActivityLockedWithOutput(
 		tab.pendingVisibleOutput = nextPending
 		return "", 0, false
 	}
-	if !tab.lastUserInputAt.IsZero() && now.Sub(tab.lastUserInputAt) <= localInputEchoSuppressWindow {
+	if !tab.lastUserInputAt.IsZero() &&
+		now.Sub(tab.lastUserInputAt) <= localInputEchoSuppressWindow {
 		// Suppress local-echo candidates and keep pending so the next flush
 		// cycle can re-evaluate once the echo window has passed.
 		tab.pendingVisibleOutput = true

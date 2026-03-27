@@ -31,7 +31,7 @@ func ptyTraceAllowed(assistant string) bool {
 		return false
 	}
 
-	for _, part := range strings.Split(value, ",") {
+	for part := range strings.SplitSeq(value, ",") {
 		if strings.ToLower(strings.TrimSpace(part)) == target {
 			return true
 		}
@@ -62,7 +62,11 @@ func (m *Model) tracePTYOutput(tab *Tab, data []byte) {
 
 	if tab.ptyTraceFile == nil {
 		dir := ptyTraceDir()
-		name := fmt.Sprintf("amux-pty-claude-%s-%s.log", tab.ID, time.Now().Format("20060102-150405"))
+		name := fmt.Sprintf(
+			"amux-pty-claude-%s-%s.log",
+			tab.ID,
+			time.Now().Format("20060102-150405"),
+		)
 		path := filepath.Join(dir, name)
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 		if err != nil {
@@ -75,13 +79,12 @@ func (m *Model) tracePTYOutput(tab *Tab, data []byte) {
 		if tab.Workspace != nil {
 			workspaceName = tab.Workspace.Name
 		}
-		_, _ = file.Write([]byte(fmt.Sprintf(
+		_, _ = fmt.Fprintf(file,
 			"TRACE %s assistant=%s workspace=%s tab=%s\n",
 			time.Now().Format(time.RFC3339Nano),
 			tab.Assistant,
 			workspaceName,
-			tab.ID,
-		)))
+			tab.ID)
 		logging.Info("PTY trace enabled: %s", path)
 	}
 
@@ -96,7 +99,7 @@ func (m *Model) tracePTYOutput(tab *Tab, data []byte) {
 		data = data[:remaining]
 	}
 
-	_, _ = tab.ptyTraceFile.Write([]byte(fmt.Sprintf("chunk offset=%d bytes=%d\n", tab.ptyTraceBytes, len(data))))
+	_, _ = fmt.Fprintf(tab.ptyTraceFile, "chunk offset=%d bytes=%d\n", tab.ptyTraceBytes, len(data))
 	_, _ = tab.ptyTraceFile.Write([]byte(hex.Dump(data)))
 	tab.ptyTraceBytes += len(data)
 

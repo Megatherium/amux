@@ -345,9 +345,10 @@ func (a *App) prefixSelectTab(index int) tea.Cmd {
 
 // sendPrefixToTerminal sends a literal Ctrl-Space (NUL) to the focused terminal
 func (a *App) sendPrefixToTerminal() {
-	if a.focusedPane == messages.PaneCenter {
+	switch a.focusedPane {
+	case messages.PaneCenter:
 		a.center.SendToTerminal("\x00")
-	} else if a.focusedPane == messages.PaneSidebarTerminal {
+	case messages.PaneSidebarTerminal:
 		a.sidebarTerminal.SendToTerminal("\x00")
 	}
 }
@@ -364,7 +365,9 @@ func (a *App) updateLayout() {
 	if a.layout.ShowCenter() {
 		gapX = a.layout.GapX()
 	}
-	a.center.SetOffset(leftGutter + a.layout.DashboardWidth() + gapX) // Set X offset for mouse coordinate conversion
+	a.center.SetOffset(
+		leftGutter + a.layout.DashboardWidth() + gapX,
+	) // Set X offset for mouse coordinate conversion
 	a.center.SetCanFocusRight(a.layout.ShowSidebar())
 	a.dashboard.SetCanFocusRight(a.layout.ShowCenter())
 
@@ -377,18 +380,13 @@ func (a *App) updateLayout() {
 
 	// Content dimensions inside each pane (subtract border + padding)
 	// Border: 2 (top + bottom), Padding: 2 (left + right from Pane style)
-	contentWidth := sidebarWidth - 2 - 2 // border + padding
-	if contentWidth < 1 {
-		contentWidth = 1
-	}
-	topContentHeight := topPaneHeight - 2 // border only (no vertical padding in Pane style)
-	if topContentHeight < 1 {
-		topContentHeight = 1
-	}
-	bottomContentHeight := bottomPaneHeight - 2
-	if bottomContentHeight < 1 {
-		bottomContentHeight = 1
-	}
+	contentWidth := max(
+		// border + padding
+		sidebarWidth-2-2, 1)
+	topContentHeight := max(
+		// border only (no vertical padding in Pane style)
+		topPaneHeight-2, 1)
+	bottomContentHeight := max(bottomPaneHeight-2, 1)
 
 	a.sidebar.SetSize(contentWidth, topContentHeight)
 	a.sidebarTerminal.SetSize(contentWidth, bottomContentHeight)
@@ -458,10 +456,7 @@ func sidebarPaneHeights(total int) (int, int) {
 	// In tight spaces, keep the terminal visible by shrinking the top pane first.
 	if total >= 3 && bottom < 3 {
 		bottom = 3
-		top = total - bottom
-		if top < 0 {
-			top = 0
-		}
+		top = max(total-bottom, 0)
 		return top, bottom
 	}
 

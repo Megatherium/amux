@@ -18,7 +18,11 @@ const (
 // when the cut lands inside an ANSI/control sequence or UTF-8 rune, advances to
 // the next parser-safe boundary. This avoids rendering the tail of a truncated
 // control sequence as visible text after overflow backpressure.
-func TrimPTYOverflowPrefix(data []byte, drop int, seed vterm.ParserCarryState) ([]byte, vterm.ParserCarryState) {
+func TrimPTYOverflowPrefix(
+	data []byte,
+	drop int,
+	seed vterm.ParserCarryState,
+) ([]byte, vterm.ParserCarryState) {
 	if len(data) == 0 {
 		return data, seed
 	}
@@ -61,7 +65,11 @@ func isSafePTYOverflowBoundary(state ptyOverflowTrimState, utf8Remaining int, b 
 		return false
 	}
 	switch state {
-	case ptyOverflowTrimEsc, ptyOverflowTrimCSI, ptyOverflowTrimCSIParam, ptyOverflowTrimOSC, ptyOverflowTrimDCS:
+	case ptyOverflowTrimEsc,
+		ptyOverflowTrimCSI,
+		ptyOverflowTrimCSIParam,
+		ptyOverflowTrimOSC,
+		ptyOverflowTrimDCS:
 		return true
 	default:
 		return false
@@ -87,7 +95,10 @@ func parserCarryToOverflowTrimState(mode vterm.ParserCarryMode) ptyOverflowTrimS
 	}
 }
 
-func overflowTrimStateToParserCarry(state ptyOverflowTrimState, utf8Remaining int) vterm.ParserCarryState {
+func overflowTrimStateToParserCarry(
+	state ptyOverflowTrimState,
+	utf8Remaining int,
+) vterm.ParserCarryState {
 	mode := vterm.ParserCarryText
 	switch state {
 	case ptyOverflowTrimEsc:
@@ -109,7 +120,11 @@ func overflowTrimStateToParserCarry(state ptyOverflowTrimState, utf8Remaining in
 	}
 }
 
-func advancePTYOverflowTrimState(state ptyOverflowTrimState, utf8Remaining int, b byte) (ptyOverflowTrimState, int) {
+func advancePTYOverflowTrimState(
+	state ptyOverflowTrimState,
+	utf8Remaining int,
+	b byte,
+) (ptyOverflowTrimState, int) {
 	if utf8Remaining > 0 {
 		if b >= 0x80 && b <= 0xBF {
 			utf8Remaining--
@@ -176,9 +191,10 @@ func advancePTYOverflowTrimState(state ptyOverflowTrimState, utf8Remaining int, 
 		}
 
 	case ptyOverflowTrimOSC:
-		if b == 0x07 {
+		switch b {
+		case 0x07:
 			state = ptyOverflowTrimText
-		} else if b == 0x1b {
+		case 0x1b:
 			state = ptyOverflowTrimEsc
 		}
 

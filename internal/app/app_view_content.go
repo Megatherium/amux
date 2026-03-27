@@ -118,9 +118,10 @@ func (a *App) welcomeContent() string {
 	addProjectStyle := inactiveStyle
 	settingsStyle := inactiveStyle
 	if a.centerBtnFocused {
-		if a.centerBtnIndex == 0 {
+		switch a.centerBtnIndex {
+		case 0:
 			addProjectStyle = activeStyle
-		} else if a.centerBtnIndex == 1 {
+		case 1:
 			settingsStyle = activeStyle
 		}
 	}

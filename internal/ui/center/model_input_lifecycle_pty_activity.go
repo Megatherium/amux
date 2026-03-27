@@ -64,9 +64,10 @@ func hasVisiblePTYOutput(data []byte, state ansiActivityState) (bool, ansiActivi
 			}
 
 		case ansiActivityOSC:
-			if b == 0x07 {
+			switch b {
+			case 0x07:
 				state = ansiActivityText
-			} else if b == 0x1b {
+			case 0x1b:
 				state = ansiActivityOSCEsc
 			}
 

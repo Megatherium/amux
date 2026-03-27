@@ -68,9 +68,10 @@ func cmdDoctor(w, wErr io.Writer, gf GlobalFlags, args []string, version string)
 	PrintHuman(w, func(w io.Writer) {
 		for _, c := range result.Checks {
 			icon := "+"
-			if c.Status == "warn" {
+			switch c.Status {
+			case "warn":
 				icon = "!"
-			} else if c.Status == "fail" {
+			case "fail":
 				icon = "x"
 			}
 			fmt.Fprintf(w, "  [%s] %-25s %s\n", icon, c.Name, c.Message)
@@ -83,13 +84,21 @@ func checkTmuxInstalled() checkResult {
 	if tmux.EnsureAvailable() == nil {
 		return checkResult{Name: "tmux_installed", Status: "ok", Message: "tmux found on PATH"}
 	}
-	return checkResult{Name: "tmux_installed", Status: "fail", Message: "tmux not found; " + tmux.InstallHint()}
+	return checkResult{
+		Name:    "tmux_installed",
+		Status:  "fail",
+		Message: "tmux not found; " + tmux.InstallHint(),
+	}
 }
 
 func checkTmuxVersion() checkResult {
 	out, err := exec.Command("tmux", "-V").Output()
 	if err != nil {
-		return checkResult{Name: "tmux_version", Status: "fail", Message: "could not determine tmux version"}
+		return checkResult{
+			Name:    "tmux_version",
+			Status:  "fail",
+			Message: "could not determine tmux version",
+		}
 	}
 	ver := strings.TrimSpace(string(out))
 	return checkResult{Name: "tmux_version", Status: "ok", Message: ver}
@@ -118,7 +127,11 @@ func checkMetadata(svc *Services) checkResult {
 	if err != nil {
 		return checkResult{Name: "metadata", Status: "fail", Message: err.Error()}
 	}
-	return checkResult{Name: "metadata", Status: "ok", Message: fmt.Sprintf("%d workspace(s)", len(ids))}
+	return checkResult{
+		Name:    "metadata",
+		Status:  "ok",
+		Message: fmt.Sprintf("%d workspace(s)", len(ids)),
+	}
 }
 
 func checkRegistry(svc *Services) checkResult {
@@ -126,13 +139,25 @@ func checkRegistry(svc *Services) checkResult {
 	if err != nil {
 		return checkResult{Name: "registry", Status: "fail", Message: err.Error()}
 	}
-	return checkResult{Name: "registry", Status: "ok", Message: fmt.Sprintf("%d project(s)", len(projects))}
+	return checkResult{
+		Name:    "registry",
+		Status:  "ok",
+		Message: fmt.Sprintf("%d project(s)", len(projects)),
+	}
 }
 
 func checkTmuxServer(opts tmux.Options) checkResult {
 	sessions, err := tmux.ListSessions(opts)
 	if err != nil {
-		return checkResult{Name: "tmux_server", Status: "warn", Message: "server not reachable (no sessions)"}
+		return checkResult{
+			Name:    "tmux_server",
+			Status:  "warn",
+			Message: "server not reachable (no sessions)",
+		}
 	}
-	return checkResult{Name: "tmux_server", Status: "ok", Message: fmt.Sprintf("%d session(s)", len(sessions))}
+	return checkResult{
+		Name:    "tmux_server",
+		Status:  "ok",
+		Message: fmt.Sprintf("%d session(s)", len(sessions)),
+	}
 }

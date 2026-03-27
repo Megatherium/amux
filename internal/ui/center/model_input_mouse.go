@@ -150,9 +150,12 @@ func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) (*Model, tea.Cmd) {
 		if needTick, gen := tab.selectionScroll.NeedsTick(); needTick {
 			wsID := m.workspaceID()
 			tabID := tab.ID
-			cmds = append(cmds, common.SafeTick(common.SelectionScrollTickInterval, func(time.Time) tea.Msg {
-				return selectionScrollTick{WorkspaceID: wsID, TabID: tabID, Gen: gen}
-			}))
+			cmds = append(
+				cmds,
+				common.SafeTick(common.SelectionScrollTickInterval, func(time.Time) tea.Msg {
+					return selectionScrollTick{WorkspaceID: wsID, TabID: tabID, Gen: gen}
+				}),
+			)
 		}
 	}
 	tab.mu.Unlock()
@@ -239,7 +242,8 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) (*Model, tea.Cmd) {
 	if delta > 0 {
 		if m.isTabActorReady() {
 			sent := false
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				sent = m.sendTabEvent(tabEvent{
 					tab:         tab,
 					workspaceID: m.workspaceID(),
@@ -247,7 +251,7 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) (*Model, tea.Cmd) {
 					kind:        tabEventScrollBy,
 					delta:       delta,
 				})
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				sent = m.sendTabEvent(tabEvent{
 					tab:         tab,
 					workspaceID: m.workspaceID(),
@@ -262,9 +266,10 @@ func (m *Model) updateMouseWheel(msg tea.MouseWheelMsg) (*Model, tea.Cmd) {
 		}
 		tab.mu.Lock()
 		if tab.Terminal != nil {
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				tab.Terminal.ScrollView(delta)
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				tab.Terminal.ScrollView(-delta)
 			}
 		}

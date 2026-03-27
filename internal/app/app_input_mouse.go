@@ -284,9 +284,6 @@ func (a *App) prefixPaletteContainsPoint(x, y int) bool {
 	if paletteHeight <= 0 {
 		return false
 	}
-	paletteY := a.height - paletteHeight
-	if paletteY < 0 {
-		paletteY = 0
-	}
+	paletteY := max(a.height-paletteHeight, 0)
 	return x >= 0 && x < a.width && y >= paletteY && y < a.height
 }

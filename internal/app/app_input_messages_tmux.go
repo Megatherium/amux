@@ -41,7 +41,7 @@ func (a *App) syncWorkspaceTabsFromTmux(ws *data.Workspace) tea.Cmd {
 			}
 			state := allStates[tab.SessionName]
 			if strings.EqualFold(tab.Status, "detached") {
-				if !(state.Exists && state.HasLivePane) {
+				if !state.Exists && !state.HasLivePane {
 					updates = append(updates, tmuxTabStatusUpdate{
 						SessionName:   tab.SessionName,
 						Status:        "stopped",

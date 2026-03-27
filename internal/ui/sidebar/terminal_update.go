@@ -56,9 +56,10 @@ func (m *TerminalModel) Update(msg tea.Msg) (*TerminalModel, tea.Cmd) {
 		}
 		ts.mu.Lock()
 		delta := common.ScrollDeltaForHeight(ts.VTerm.Height, 8) // ~12.5% of viewport
-		if msg.Button == tea.MouseWheelUp {
+		switch msg.Button {
+		case tea.MouseWheelUp:
 			ts.VTerm.ScrollView(delta)
-		} else if msg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			ts.VTerm.ScrollView(-delta)
 		}
 		ts.mu.Unlock()

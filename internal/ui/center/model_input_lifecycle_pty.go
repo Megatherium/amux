@@ -21,7 +21,11 @@ func (m *Model) updatePTYOutput(msg PTYOutput) tea.Cmd {
 		data := msg.Data
 		tab.mu.Lock()
 		if tab.overflowTrimCarry != (vterm.ParserCarryState{}) {
-			data, tab.overflowTrimCarry = common.TrimPTYOverflowPrefix(data, 0, tab.overflowTrimCarry)
+			data, tab.overflowTrimCarry = common.TrimPTYOverflowPrefix(
+				data,
+				0,
+				tab.overflowTrimCarry,
+			)
 			tab.activityANSIState = ansiActivityText
 		}
 		tab.mu.Unlock()
@@ -79,7 +83,11 @@ func (m *Model) updatePTYOutput(msg PTYOutput) tea.Cmd {
 				}
 				tab.mu.Unlock()
 			}
-			retained, overflowCarry := common.TrimPTYOverflowPrefix(tab.pendingOutput, overflow, seed)
+			retained, overflowCarry := common.TrimPTYOverflowPrefix(
+				tab.pendingOutput,
+				overflow,
+				seed,
+			)
 			retainedStart := combinedLen - len(retained)
 			chunkStart := prevPendingLen
 			if retainedStart > chunkStart {
@@ -91,10 +99,7 @@ func (m *Model) updatePTYOutput(msg PTYOutput) tea.Cmd {
 				}
 			}
 			tab.pendingOutput = append([]byte(nil), retained...)
-			activityPrefixLen := len(retained) - len(activityData)
-			if activityPrefixLen < 0 {
-				activityPrefixLen = 0
-			}
+			activityPrefixLen := max(len(retained)-len(activityData), 0)
 			_, activityState = hasVisiblePTYOutput(retained[:activityPrefixLen], ansiActivityText)
 			activityStateSet = true
 			tab.mu.Lock()
@@ -165,10 +170,7 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 		}
 		quiet, maxInterval := m.flushTiming(tab, isActive)
 		if quietFor < quiet && pendingFor < maxInterval {
-			delay := quiet - quietFor
-			if delay < time.Millisecond {
-				delay = time.Millisecond
-			}
+			delay := max(quiet-quietFor, time.Millisecond)
 			tabID := msg.TabID
 			tab.flushScheduled = true
 			cmds = append(cmds, common.SafeTick(delay, func(t time.Time) tea.Msg {
@@ -226,7 +228,11 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 					}
 					tabID := msg.TabID
 					cmds = append(cmds, common.SafeTick(delay, func(t time.Time) tea.Msg {
-						return PTYFlush{WorkspaceID: msg.WorkspaceID, TabID: tabID, CatchUp: catchUp}
+						return PTYFlush{
+							WorkspaceID: msg.WorkspaceID,
+							TabID:       tabID,
+							CatchUp:     catchUp,
+						}
 					}))
 					return common.SafeBatch(cmds...)
 				}
@@ -260,14 +266,18 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 						prevPending = tab.actorWritesPending
 						prevEpoch = tab.actorWriteEpoch
 						prevCarry = tab.actorQueuedCarry
-						prevNoiseTrailing = append(prevNoiseTrailing, tab.actorQueuedNoiseTrailing...)
+						prevNoiseTrailing = append(
+							prevNoiseTrailing,
+							tab.actorQueuedNoiseTrailing...)
 						seedCarry := tab.Terminal.ParserCarryState()
 						if prevPending > 0 {
 							seedCarry = prevCarry
 						}
 						previewTrailing := append([]byte(nil), tab.ptyNoiseTrailing...)
 						if prevPending > 0 {
-							previewTrailing = append(previewTrailing[:0], tab.actorQueuedNoiseTrailing...)
+							previewTrailing = append(
+								previewTrailing[:0],
+								tab.actorQueuedNoiseTrailing...)
 						}
 						filteredPreview := common.FilterKnownPTYNoiseStream(chunk, &previewTrailing)
 						nextCarry = vterm.AdvanceParserCarryState(seedCarry, filteredPreview)
@@ -275,7 +285,9 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 						tab.actorWritesPending = prevPending + 1
 						tab.actorQueuedBytes += len(chunk)
 						tab.actorQueuedCarry = nextCarry
-						tab.actorQueuedNoiseTrailing = append(tab.actorQueuedNoiseTrailing[:0], nextNoiseTrailing...)
+						tab.actorQueuedNoiseTrailing = append(
+							tab.actorQueuedNoiseTrailing[:0],
+							nextNoiseTrailing...)
 					}
 					tab.mu.Unlock()
 					if !m.sendTabEvent(tabEvent{
@@ -305,7 +317,9 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 							} else if tab.actorWritesPending > 0 {
 								rebuffered = true
 								tab.actorQueuedCarry = prevCarry
-								tab.actorQueuedNoiseTrailing = append(tab.actorQueuedNoiseTrailing[:0], prevNoiseTrailing...)
+								tab.actorQueuedNoiseTrailing = append(
+									tab.actorQueuedNoiseTrailing[:0],
+									prevNoiseTrailing...)
 								restored := make([]byte, 0, len(chunk)+len(tab.pendingOutput))
 								restored = append(restored, chunk...)
 								restored = append(restored, tab.pendingOutput...)
@@ -314,8 +328,14 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 							} else if catchUp && len(chunk) > ptyFlushChunkSizeActive {
 								syncFallbackChunkSize = ptyFlushChunkSizeActive
 								tab.actorQueuedCarry = prevCarry
-								tab.actorQueuedNoiseTrailing = append(tab.actorQueuedNoiseTrailing[:0], prevNoiseTrailing...)
-								restored := make([]byte, 0, len(chunk)-syncFallbackChunkSize+len(tab.pendingOutput))
+								tab.actorQueuedNoiseTrailing = append(
+									tab.actorQueuedNoiseTrailing[:0],
+									prevNoiseTrailing...)
+								restored := make(
+									[]byte,
+									0,
+									len(chunk)-syncFallbackChunkSize+len(tab.pendingOutput),
+								)
 								restored = append(restored, chunk[syncFallbackChunkSize:]...)
 								restored = append(restored, tab.pendingOutput...)
 								tab.pendingOutput = restored
@@ -336,7 +356,10 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 							suppressRedraw := false
 							tab.mu.Lock()
 							if tab.Terminal != nil {
-								filtered := common.FilterKnownPTYNoiseStream(chunk, &tab.ptyNoiseTrailing)
+								filtered := common.FilterKnownPTYNoiseStream(
+									chunk,
+									&tab.ptyNoiseTrailing,
+								)
 								filteredLen = len(filtered)
 								filterApplied = true
 								if len(filtered) > 0 {
@@ -348,15 +371,27 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 								// Activity state intentionally tracks visible terminal mutations only.
 								// Noise-only chunks are filtered above and must not update activity tags.
 								// We still run this to clear pending visible state when no mutation occurred.
-								tagSessionName, tagTimestamp, _ = m.noteVisibleActivityLockedWithOutput(tab, hasMoreBuffered, visibleSeq, filtered)
-								catchUpBefore, catchUpAfter := tab.settlePTYBytesLocked(processedBytes)
+								tagSessionName, tagTimestamp, _ = m.noteVisibleActivityLockedWithOutput(
+									tab,
+									hasMoreBuffered,
+									visibleSeq,
+									filtered,
+								)
+								catchUpBefore, catchUpAfter := tab.settlePTYBytesLocked(
+									processedBytes,
+								)
 								suppressRedraw = catchUpBefore && catchUpAfter
 								tab.actorQueuedCarry = tab.Terminal.ParserCarryState()
-								tab.actorQueuedNoiseTrailing = append(tab.actorQueuedNoiseTrailing[:0], tab.ptyNoiseTrailing...)
+								tab.actorQueuedNoiseTrailing = append(
+									tab.actorQueuedNoiseTrailing[:0],
+									tab.ptyNoiseTrailing...)
 							}
 							tab.mu.Unlock()
 							if !suppressRedraw {
-								cmds = append(cmds, m.scheduleChatCursorRefresh(tab, msg.WorkspaceID, time.Now()))
+								cmds = append(
+									cmds,
+									m.scheduleChatCursorRefresh(tab, msg.WorkspaceID, time.Now()),
+								)
 							}
 							perf.Count("pty_flush_bytes_processed", int64(processedBytes))
 							if filterApplied {
@@ -386,13 +421,21 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 						// Activity state intentionally tracks visible terminal mutations only.
 						// Noise-only chunks are filtered above and must not update activity tags.
 						// We still run this to clear pending visible state when no mutation occurred.
-						tagSessionName, tagTimestamp, _ = m.noteVisibleActivityLockedWithOutput(tab, hasMoreBuffered, visibleSeq, filtered)
+						tagSessionName, tagTimestamp, _ = m.noteVisibleActivityLockedWithOutput(
+							tab,
+							hasMoreBuffered,
+							visibleSeq,
+							filtered,
+						)
 						catchUpBefore, catchUpAfter := tab.settlePTYBytesLocked(processedBytes)
 						suppressRedraw = catchUpBefore && catchUpAfter
 					}
 					tab.mu.Unlock()
 					if !suppressRedraw {
-						cmds = append(cmds, m.scheduleChatCursorRefresh(tab, msg.WorkspaceID, time.Now()))
+						cmds = append(
+							cmds,
+							m.scheduleChatCursorRefresh(tab, msg.WorkspaceID, time.Now()),
+						)
 					}
 					perf.Count("pty_flush_bytes_processed", int64(processedBytes))
 					if filterApplied {
@@ -407,7 +450,12 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 					sessionName := tagSessionName
 					timestamp := strconv.FormatInt(tagTimestamp, 10)
 					cmds = append(cmds, func() tea.Msg {
-						_ = tmux.SetSessionTagValue(sessionName, tmux.TagLastOutputAt, timestamp, opts)
+						_ = tmux.SetSessionTagValue(
+							sessionName,
+							tmux.TagLastOutputAt,
+							timestamp,
+							opts,
+						)
 						return nil
 					})
 				}
@@ -425,12 +473,13 @@ func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 				tab.flushPendingSince = time.Now()
 				tabID := msg.TabID
 				quietNext, _ := m.flushTiming(tab, isActive)
-				delay := quietNext
-				if delay < time.Millisecond {
-					delay = time.Millisecond
-				}
+				delay := max(quietNext, time.Millisecond)
 				cmds = append(cmds, common.SafeTick(delay, func(t time.Time) tea.Msg {
-					return PTYFlush{WorkspaceID: msg.WorkspaceID, TabID: tabID, CatchUp: catchUpStillActive}
+					return PTYFlush{
+						WorkspaceID: msg.WorkspaceID,
+						TabID:       tabID,
+						CatchUp:     catchUpStillActive,
+					}
 				}))
 			}
 		}
