@@ -183,7 +183,7 @@ func TestReadServerPort_FileNotFound(t *testing.T) {
 }
 
 func TestServerStore_Close(t *testing.T) {
-	store := &Store{
+	store := &ServerStore{
 		closed: false,
 	}
 
@@ -201,24 +201,24 @@ func TestServerStore_Close(t *testing.T) {
 }
 
 func TestServerStore_CanRetryConnection(t *testing.T) {
-	store := &Store{mode: ServerMode}
+	store := &ServerStore{mode: ServerMode}
 	if !store.CanRetryConnection() {
 		t.Error("Expected CanRetryConnection to return true for ServerMode")
 	}
 
-	store = &Store{}
+	store = &ServerStore{}
 	if store.CanRetryConnection() {
 		t.Error("Expected CanRetryConnection to return false for zero value mode")
 	}
 }
 
 func TestServerStore_AutostartEnabled(t *testing.T) {
-	store := &Store{autostart: true}
+	store := &ServerStore{autostart: true}
 	if !store.AutostartEnabled() {
 		t.Error("Expected AutostartEnabled to return true")
 	}
 
-	store = &Store{autostart: false}
+	store = &ServerStore{autostart: false}
 	if store.AutostartEnabled() {
 		t.Error("Expected AutostartEnabled to return false")
 	}
@@ -334,7 +334,7 @@ func TestWaitForServerReady_FileNotFound(t *testing.T) {
 }
 
 func TestServerStore_EnsureRunningAgentsTable_NoOp(t *testing.T) {
-	store := &Store{}
+	store := &ServerStore{}
 	ctx := context.Background()
 
 	if err := store.EnsureRunningAgentsTable(ctx); err != nil {

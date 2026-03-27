@@ -12,13 +12,13 @@ import (
 	"github.com/andyrewlee/amux/internal/tickets"
 )
 
-func newMockStore(t *testing.T) (*Store, sqlmock.Sqlmock, *sql.DB) {
+func newMockStore(t *testing.T) (*ServerStore, sqlmock.Sqlmock, *sql.DB) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock: %v", err)
 	}
 
-	store := &Store{
+	store := &ServerStore{
 		db:     db,
 		mode:   ServerMode,
 		closed: false,
@@ -28,7 +28,7 @@ func newMockStore(t *testing.T) (*Store, sqlmock.Sqlmock, *sql.DB) {
 }
 
 func TestStore_ImplementsTicketStore(t *testing.T) {
-	var _ tickets.TicketStore = (*Store)(nil)
+	var _ tickets.TicketStore = (*ServerStore)(nil)
 }
 
 func TestStore_ListTickets_NoFilter(t *testing.T) {
@@ -267,7 +267,7 @@ func TestStore_ListTickets_StoreClosed(t *testing.T) {
 	}
 	defer db.Close()
 
-	store := &Store{
+	store := &ServerStore{
 		db:     db,
 		mode:   ServerMode,
 		closed: true,
@@ -286,7 +286,7 @@ func TestStore_ListTickets_StoreClosed(t *testing.T) {
 }
 
 func TestStore_ListTickets_NoDBConnection(t *testing.T) {
-	store := &Store{
+	store := &ServerStore{
 		db:     nil,
 		mode:   ServerMode,
 		closed: false,
@@ -356,7 +356,7 @@ func TestStore_LatestUpdate_StoreClosed(t *testing.T) {
 	}
 	defer db.Close()
 
-	store := &Store{
+	store := &ServerStore{
 		db:     db,
 		mode:   ServerMode,
 		closed: true,
@@ -374,7 +374,7 @@ func TestStore_LatestUpdate_StoreClosed(t *testing.T) {
 }
 
 func TestStore_LatestUpdate_NoDBConnection(t *testing.T) {
-	store := &Store{
+	store := &ServerStore{
 		db:     nil,
 		mode:   ServerMode,
 		closed: false,
@@ -638,7 +638,7 @@ func TestStore_Close_Idempotent(t *testing.T) {
 		t.Fatalf("failed to create mock: %v", err)
 	}
 
-	store := &Store{
+	store := &ServerStore{
 		db:     db,
 		mode:   ServerMode,
 		closed: false,
@@ -670,7 +670,7 @@ func TestStore_Close_ReturnsError(t *testing.T) {
 		t.Fatalf("failed to create mock: %v", err)
 	}
 
-	store := &Store{
+	store := &ServerStore{
 		db:     db,
 		mode:   ServerMode,
 		closed: false,
@@ -695,21 +695,21 @@ func TestStore_Close_ReturnsError(t *testing.T) {
 }
 
 func TestStore_CanRetryConnection(t *testing.T) {
-	store := &Store{mode: ServerMode}
+	store := &ServerStore{mode: ServerMode}
 	if !store.CanRetryConnection() {
 		t.Error("Expected CanRetryConnection to return true for ServerMode")
 	}
 }
 
 func TestStore_AutostartEnabled(t *testing.T) {
-	store := &Store{
+	store := &ServerStore{
 		autostart: true,
 	}
 	if !store.AutostartEnabled() {
 		t.Error("Expected AutostartEnabled to return true")
 	}
 
-	store = &Store{
+	store = &ServerStore{
 		autostart: false,
 	}
 	if store.AutostartEnabled() {
@@ -718,7 +718,7 @@ func TestStore_AutostartEnabled(t *testing.T) {
 }
 
 func TestStore_AutostartEnabled_DefaultsToFalse(t *testing.T) {
-	store := &Store{}
+	store := &ServerStore{}
 	if store.AutostartEnabled() {
 		t.Error("Expected AutostartEnabled to return false for zero value Store")
 	}
@@ -731,7 +731,7 @@ func TestStore_DB(t *testing.T) {
 	}
 	defer db.Close()
 
-	store := &Store{
+	store := &ServerStore{
 		db: db,
 	}
 
@@ -741,7 +741,7 @@ func TestStore_DB(t *testing.T) {
 }
 
 func TestStore_DB_NilDB(t *testing.T) {
-	store := &Store{
+	store := &ServerStore{
 		db: nil,
 	}
 

@@ -27,7 +27,7 @@ type Mode string
 
 const ServerMode Mode = "server"
 
-type Store struct {
+type ServerStore struct {
 	db        *sql.DB
 	closed    bool
 	beadsDir  string
@@ -36,9 +36,9 @@ type Store struct {
 	mode      Mode
 }
 
-var _ tickets.TicketStore = (*Store)(nil)
+var _ tickets.TicketStore = (*ServerStore)(nil)
 
-func (s *Store) Close() error {
+func (s *ServerStore) Close() error {
 	if s.closed {
 		return nil
 	}
@@ -49,19 +49,19 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *Store) DB() *sql.DB {
+func (s *ServerStore) DB() *sql.DB {
 	return s.db
 }
 
-func (s *Store) CanRetryConnection() bool {
+func (s *ServerStore) CanRetryConnection() bool {
 	return s.mode == ServerMode
 }
 
-func (s *Store) AutostartEnabled() bool {
+func (s *ServerStore) AutostartEnabled() bool {
 	return s.autostart
 }
 
-func (s *Store) EnsureRunningAgentsTable(ctx context.Context) error {
+func (s *ServerStore) EnsureRunningAgentsTable(ctx context.Context) error {
 	return nil
 }
 
@@ -89,7 +89,7 @@ func IsConnectionError(err error) bool {
 		strings.Contains(errStr, "dial tcp")
 }
 
-func handleServerMode(ctx context.Context, beadsDir string, metadata *Metadata, autostart bool) (*Store, error) {
+func handleServerMode(ctx context.Context, beadsDir string, metadata *Metadata, autostart bool) (*ServerStore, error) {
 	store, err := newStore(ctx, beadsDir, metadata, autostart)
 	if err != nil {
 		if !IsConnectionError(err) {
@@ -112,7 +112,7 @@ func handleServerMode(ctx context.Context, beadsDir string, metadata *Metadata, 
 	return store, nil
 }
 
-func newServerStoreWithMode(ctx context.Context, beadsDir string, metadata *Metadata, autostart bool) (*Store, error) {
+func newServerStoreWithMode(ctx context.Context, beadsDir string, metadata *Metadata, autostart bool) (*ServerStore, error) {
 	store, err := newStore(ctx, beadsDir, metadata, autostart)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func newServerStoreWithMode(ctx context.Context, beadsDir string, metadata *Meta
 	return store, nil
 }
 
-func NewStore(ctx context.Context, beadsDir string, autostart bool) (*Store, error) {
+func NewStore(ctx context.Context, beadsDir string, autostart bool) (*ServerStore, error) {
 	if beadsDir == "" {
 		beadsDir = ".beads"
 	}
@@ -133,7 +133,7 @@ func NewStore(ctx context.Context, beadsDir string, autostart bool) (*Store, err
 	return handleServerMode(ctx, beadsDir, metadata, autostart)
 }
 
-func (s *Store) TryStartServer(ctx context.Context) (*Store, error) {
+func (s *ServerStore) TryStartServer(ctx context.Context) (*ServerStore, error) {
 	if s.mode != ServerMode {
 		return nil, errors.New("server restart not supported for this store mode")
 	}
@@ -145,7 +145,7 @@ func (s *Store) TryStartServer(ctx context.Context) (*Store, error) {
 	return newServerStoreWithMode(ctx, s.beadsDir, s.metadata, s.autostart)
 }
 
-func (s *Store) ListTickets(ctx context.Context, filter tickets.TicketFilter) ([]tickets.Ticket, error) {
+func (s *ServerStore) ListTickets(ctx context.Context, filter tickets.TicketFilter) ([]tickets.Ticket, error) {
 	if s.closed {
 		return nil, errors.New("store is closed")
 	}
@@ -175,7 +175,7 @@ func (s *Store) ListTickets(ctx context.Context, filter tickets.TicketFilter) ([
 	return scanTickets(rows)
 }
 
-func (s *Store) LatestUpdate(ctx context.Context) (time.Time, error) {
+func (s *ServerStore) LatestUpdate(ctx context.Context) (time.Time, error) {
 	if s.closed {
 		return time.Time{}, errors.New("store is closed")
 	}
@@ -273,7 +273,7 @@ func scanTickets(rows *sql.Rows) ([]tickets.Ticket, error) {
 	return result, nil
 }
 
-func newStore(ctx context.Context, beadsDir string, metadata *Metadata, autostart bool) (*Store, error) {
+func newStore(ctx context.Context, beadsDir string, metadata *Metadata, autostart bool) (*ServerStore, error) {
 	resolvedPort, err := metadata.ResolveServerPort(beadsDir)
 	if err != nil && autostart {
 		resolvedPort = 0
@@ -317,7 +317,7 @@ func newStore(ctx context.Context, beadsDir string, metadata *Metadata, autostar
 		return nil, err
 	}
 
-	store := &Store{
+	store := &ServerStore{
 		db:        db,
 		beadsDir:  beadsDir,
 		metadata:  metadata,
@@ -457,7 +457,7 @@ func testServerConnection(ctx context.Context, beadsDir string, port int) error 
 	return db.PingContext(pingCtx)
 }
 
-func TryStartServer(ctx context.Context, beadsDir string, metadata *Metadata) (*Store, error) {
+func TryStartServer(ctx context.Context, beadsDir string, metadata *Metadata) (*ServerStore, error) {
 	if err := StartServer(ctx, beadsDir, metadata); err != nil {
 		return nil, fmt.Errorf("failed to start dolt server: %w", err)
 	}
