@@ -16,19 +16,37 @@ type Config struct {
 	PortRangeSize int
 	Assistants    map[string]AssistantConfig
 	UI            UISettings
+	Defaults      *Defaults
+}
+
+// Defaults holds optional default selections.
+type Defaults struct {
+	Harness string
+	Model   string
+	Agent   string
 }
 
 // AssistantConfig defines how to launch an AI assistant
 type AssistantConfig struct {
-	Command          string // Shell command to launch the assistant
-	InterruptCount   int    // Number of Ctrl-C signals to send (default 1, claude needs 2)
-	InterruptDelayMs int    // Delay between interrupts in milliseconds
+	Command          string            // Shell command to launch the assistant
+	CommandTemplate  string            // Go text/template for command rendering
+	PromptTemplate   string            // Go text/template for prompt rendering
+	SupportedModels  []string          // List of supported model identifiers
+	SupportedAgents  []string          // List of supported agent types
+	Env              map[string]string // Environment variables to set
+	InterruptCount   int               // Number of Ctrl-C signals to send (default 1, claude needs 2)
+	InterruptDelayMs int               // Delay between interrupts in milliseconds
 }
 
 type assistantConfigRaw struct {
-	Command          string `json:"command"`
-	InterruptCount   *int   `json:"interrupt_count"`
-	InterruptDelayMs *int   `json:"interrupt_delay_ms"`
+	Command          string            `json:"command"`
+	CommandTemplate  string            `json:"command_template,omitempty"`
+	PromptTemplate   string            `json:"prompt_template,omitempty"`
+	SupportedModels  []string          `json:"supported_models,omitempty"`
+	SupportedAgents  []string          `json:"supported_agents,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	InterruptCount   *int              `json:"interrupt_count,omitempty"`
+	InterruptDelayMs *int              `json:"interrupt_delay_ms,omitempty"`
 }
 
 const fallbackDefaultAssistant = "claude"
@@ -168,6 +186,21 @@ func loadAssistantOverrides(path string, assistants map[string]AssistantConfig) 
 		cfg := assistants[normalized]
 		if cmd := strings.TrimSpace(override.Command); cmd != "" {
 			cfg.Command = cmd
+		}
+		if cmdTemplate := strings.TrimSpace(override.CommandTemplate); cmdTemplate != "" {
+			cfg.CommandTemplate = cmdTemplate
+		}
+		if promptTemplate := strings.TrimSpace(override.PromptTemplate); promptTemplate != "" {
+			cfg.PromptTemplate = promptTemplate
+		}
+		if override.SupportedModels != nil {
+			cfg.SupportedModels = override.SupportedModels
+		}
+		if override.SupportedAgents != nil {
+			cfg.SupportedAgents = override.SupportedAgents
+		}
+		if override.Env != nil {
+			cfg.Env = override.Env
 		}
 		if override.InterruptCount != nil {
 			cfg.InterruptCount = *override.InterruptCount
