@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -36,6 +37,13 @@ type Metadata struct {
 
 func (m *Metadata) IsValid() bool {
 	return m.DoltDatabase != ""
+}
+
+func (m *Metadata) ServerReadyTimeout() time.Duration {
+	if m.ServerReadyTimeoutSeconds > 0 {
+		return time.Duration(m.ServerReadyTimeoutSeconds) * time.Second
+	}
+	return 10 * time.Second
 }
 
 func LoadMetadata(beadsDir string) (*Metadata, error) {
