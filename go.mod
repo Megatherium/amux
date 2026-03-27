@@ -15,6 +15,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/mattn/go-runewidth v0.0.20
 	golang.org/x/sys v0.41.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
