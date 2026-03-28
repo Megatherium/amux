@@ -70,10 +70,8 @@ func DefaultConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// loadAssistantOverrides and loadUISettings each read the config file
-	// independently. This is intentional: each loader fails independently and
-	// returns safe defaults, keeping the two subsystems decoupled.
 	assistants := defaultAssistants()
+	loadYAMLConfig(paths.ConfigYAMLPath, assistants)
 	loadAssistantOverrides(paths.ConfigPath, assistants)
 
 	cfg := &Config{
@@ -217,6 +215,43 @@ func loadAssistantOverrides(path string, assistants map[string]AssistantConfig) 
 		}
 		if cfg.InterruptDelayMs < 0 {
 			cfg.InterruptDelayMs = 0
+		}
+
+		assistants[normalized] = cfg
+	}
+}
+
+func loadYAMLConfig(path string, assistants map[string]AssistantConfig) {
+	loader := NewYAMLLoader()
+	yamlCfg, err := loader.Load(path)
+	if err != nil {
+		return
+	}
+
+	for name, override := range yamlCfg.Assistants {
+		normalized := normalizeAssistantName(name)
+		if normalized == "" {
+			continue
+		}
+		if err := validation.ValidateAssistant(normalized); err != nil {
+			continue
+		}
+
+		cfg := assistants[normalized]
+		if cmdTemplate := strings.TrimSpace(override.CommandTemplate); cmdTemplate != "" {
+			cfg.CommandTemplate = cmdTemplate
+		}
+		if promptTemplate := strings.TrimSpace(override.PromptTemplate); promptTemplate != "" {
+			cfg.PromptTemplate = promptTemplate
+		}
+		if override.SupportedModels != nil {
+			cfg.SupportedModels = override.SupportedModels
+		}
+		if override.SupportedAgents != nil {
+			cfg.SupportedAgents = override.SupportedAgents
+		}
+		if override.Env != nil {
+			cfg.Env = override.Env
 		}
 
 		assistants[normalized] = cfg
