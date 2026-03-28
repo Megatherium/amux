@@ -21,6 +21,7 @@ import (
 const (
 	envDoltServerPort  = "BEADS_DOLT_SERVER_PORT"
 	doltServerPortFile = "dolt-server.port"
+	doltServerPIDFile  = "dolt-server.pid"
 	configFileName     = "config.yaml"
 	metadataFileName   = "metadata.json"
 )
