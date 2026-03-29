@@ -4,18 +4,16 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Package renderer provides template rendering for ticket-aware assistant launches.
+// Package tickets provides template rendering for ticket-aware assistant launches.
 // It uses Go's text/template to render command and prompt templates with rich
-// context from a Selection (ticket, assistant, model, agent) and configuration
-// (AssistantConfig with CommandTemplate/PromptTemplate fields).
+// context from a fully-hydrated TemplateContext.
 //
 // The rendering pipeline:
-//   - BuildTemplateContext converts a Selection into a TemplateContext with
-//     flattened ticket fields and structured model access
-//   - RenderPrompt renders the optional prompt template first
+//   - Caller hydrates TemplateContext (including CommandTemplate/PromptTemplate from config)
+//   - RenderPrompt renders the optional prompt template
 //   - RenderCommand renders the command template with Prompt available as {{.Prompt}}
 //
-// Templates have access to all TemplateContext fields including:
+// Templates receive TemplateContext and can access any field directly:
 //   - Ticket fields: TicketID, TicketTitle, TicketDescription, TicketStatus, etc.
 //   - Selection fields: Assistant, Model (structured), Agent, WorkDir
 //   - Model helpers: {{.Model.Provider}}, {{.Model.Org}}, {{.Model.Name}}, {{.Model.ModelID}}
@@ -33,8 +31,6 @@ import (
 	"bytes"
 	"fmt"
 	"text/template"
-
-	"github.com/andyrewlee/amux/internal/config"
 )
 
 type Renderer struct{}
@@ -43,28 +39,18 @@ func NewRenderer() *Renderer {
 	return &Renderer{}
 }
 
-func (r *Renderer) RenderCommand(cfg config.AssistantConfig, ctx TemplateContext) (string, error) {
-	return r.renderTemplate(
-		ctx.Assistant,
-		"command_template",
-		cfg.CommandTemplate,
-		ctx,
-	)
+func (r *Renderer) RenderCommand(ctx TemplateContext) (string, error) {
+	return r.renderTemplate("command_template", ctx.CommandTemplate, ctx)
 }
 
-func (r *Renderer) RenderPrompt(cfg config.AssistantConfig, ctx TemplateContext) (string, error) {
-	if cfg.PromptTemplate == "" {
+func (r *Renderer) RenderPrompt(ctx TemplateContext) (string, error) {
+	if ctx.PromptTemplate == "" {
 		return "", nil
 	}
-	return r.renderTemplate(
-		ctx.Assistant,
-		"prompt_template",
-		cfg.PromptTemplate,
-		ctx,
-	)
+	return r.renderTemplate("prompt_template", ctx.PromptTemplate, ctx)
 }
 
-func (r *Renderer) renderTemplate(assistantName, templateName, templateStr string, ctx TemplateContext) (string, error) {
+func (r *Renderer) renderTemplate(templateName, templateStr string, ctx TemplateContext) (string, error) {
 	if templateStr == "" {
 		return "", nil
 	}
@@ -74,7 +60,7 @@ func (r *Renderer) renderTemplate(assistantName, templateName, templateStr strin
 		return "", fmt.Errorf(
 			"failed to parse %s for assistant %q: %w",
 			templateName,
-			assistantName,
+			ctx.Assistant,
 			err,
 		)
 	}
@@ -84,7 +70,7 @@ func (r *Renderer) renderTemplate(assistantName, templateName, templateStr strin
 		return "", fmt.Errorf(
 			"failed to execute %s for assistant %q: %w",
 			templateName,
-			assistantName,
+			ctx.Assistant,
 			err,
 		)
 	}
@@ -92,27 +78,28 @@ func (r *Renderer) renderTemplate(assistantName, templateName, templateStr strin
 	return buf.String(), nil
 }
 
-func (r *Renderer) RenderSelection(sel Selection, cfg config.AssistantConfig, workDir string) (*LaunchSpec, error) {
-	ctx := BuildTemplateContext(sel, workDir)
-
-	renderedPrompt, err := r.RenderPrompt(cfg, ctx)
+func (r *Renderer) RenderSelection(ctx TemplateContext) (*LaunchSpec, error) {
+	renderedPrompt, err := r.RenderPrompt(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render prompt: %w", err)
 	}
 
 	ctx.Prompt = renderedPrompt
 
-	renderedCmd, err := r.RenderCommand(cfg, ctx)
+	renderedCmd, err := r.RenderCommand(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render command: %w", err)
 	}
+	if renderedCmd == "" {
+		return nil, fmt.Errorf("command_template produced empty result for assistant %q", ctx.Assistant)
+	}
 
 	return &LaunchSpec{
-		Selection:       sel,
+		Selection:       ctx.Selection,
 		RenderedCommand: renderedCmd,
 		RenderedPrompt:  renderedPrompt,
-		LauncherID:      sel.Ticket.ID,
-		WorkDir:         workDir,
+		LauncherID:      ctx.Ticket.ID,
+		WorkDir:         ctx.WorkDir,
 	}, nil
 }
 
@@ -129,8 +116,6 @@ func BuildTemplateContext(sel Selection, workDir string) TemplateContext {
 		TicketAssignee:    sel.Ticket.Assignee,
 		TicketCreatedAt:   sel.Ticket.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		TicketUpdatedAt:   sel.Ticket.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-
-		HarnessName: sel.Assistant,
 
 		Model: NewModelContext(sel.Model),
 

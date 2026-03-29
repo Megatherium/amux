@@ -192,8 +192,6 @@ type TemplateContext struct {
 	TicketCreatedAt   string `json:"ticket_created_at"`
 	TicketUpdatedAt   string `json:"ticket_updated_at"`
 
-	HarnessName string `json:"harness_name"`
-
 	// Model is exposed as ModelContext for structured template accessors.
 	Model ModelContext `json:"model"`
 
@@ -208,6 +206,12 @@ type TemplateContext struct {
 	DryRun    bool  `json:"dry_run"`
 	Debug     bool  `json:"debug"`
 	Timestamp int64 `json:"timestamp"`
+
+	// Templates resolved from config, used by the renderer.
+	// The caller is responsible for hydrating these from AssistantConfig
+	// before passing TemplateContext to any Render method.
+	CommandTemplate string `json:"command_template"`
+	PromptTemplate  string `json:"prompt_template"`
 
 	// Prompt is the rendered prompt text, available in command_template
 	// via {{.Prompt}} for composable template designs.

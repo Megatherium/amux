@@ -10,295 +10,367 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/andyrewlee/amux/internal/config"
 )
 
-func TestRenderer_RenderCommand_Simple(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo {{.Model}}",
-	}
-	ctx := TemplateContext{
-		Model: NewModelContext("claude-sonnet"),
-	}
-
-	result, err := renderer.RenderCommand(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := "echo claude-sonnet"
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
-	}
-}
-
-func TestRenderer_RenderCommand_Complex(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "opencode --model {{.Model}} --agent {{.Agent}} --ticket {{.TicketID}}",
-	}
-	ctx := TemplateContext{
-		Selection: Selection{
-			Agent: "coder",
+func TestRenderer_RenderCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		ctx     TemplateContext
+		want    string
+		wantErr bool
+		errHas  []string
+	}{
+		{
+			name: "simple",
+			ctx: TemplateContext{
+				CommandTemplate: "echo {{.Model}}",
+				Model:           NewModelContext("claude-sonnet"),
+			},
+			want: "echo claude-sonnet",
 		},
-		TicketID: "bb-abc",
-		Model:    NewModelContext("claude-sonnet-4-20250514"),
-	}
-
-	result, err := renderer.RenderCommand(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := "opencode --model claude-sonnet-4-20250514 --agent coder --ticket bb-abc"
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
-	}
-}
-
-func TestRenderer_RenderCommand_InvalidTemplate(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo {{.BadField", // Invalid template syntax
-	}
-	ctx := TemplateContext{
-		Selection: Selection{
-			Assistant: "bad",
+		{
+			name: "complex",
+			ctx: TemplateContext{
+				CommandTemplate: "opencode --model {{.Model}} --agent {{.Agent}} --ticket {{.TicketID}}",
+				Selection:       Selection{Agent: "coder"},
+				TicketID:        "bb-abc",
+				Model:           NewModelContext("claude-sonnet-4-20250514"),
+			},
+			want: "opencode --model claude-sonnet-4-20250514 --agent coder --ticket bb-abc",
+		},
+		{
+			name:    "invalid template syntax",
+			ctx:     TemplateContext{CommandTemplate: "echo {{.BadField", Selection: Selection{Assistant: "bad"}},
+			wantErr: true,
+			errHas:  []string{"bad", "command_template"},
+		},
+		{
+			name:    "missing field execution",
+			ctx:     TemplateContext{CommandTemplate: "echo {{.NonExistent}}"},
+			wantErr: true,
+			errHas:  []string{"command_template"},
+		},
+		{
+			name: "empty template",
+			ctx:  TemplateContext{CommandTemplate: ""},
+			want: "",
+		},
+		{
+			name: "escaping",
+			ctx: TemplateContext{
+				CommandTemplate: "echo '{{.TicketTitle}}'",
+				TicketTitle:     `It is a "test"`,
+			},
+			want: `echo 'It is a "test"'`,
+		},
+		{
+			name: "model structured fields",
+			ctx: TemplateContext{
+				CommandTemplate: "echo {{.Model.Provider}}/{{.Model.Org}}/{{.Model.Name}} {{.Model.ModelID}}",
+				Model:           NewModelContext("openrouter/google/gemini-3-pro"),
+			},
+			want: "echo openrouter/google/gemini-3-pro openrouter/google/gemini-3-pro",
+		},
+		{
+			name: "model backward compatible",
+			ctx: TemplateContext{
+				CommandTemplate: "echo {{.Model}}",
+				Model:           NewModelContext("openrouter/google/gemini-3-pro"),
+			},
+			want: "echo openrouter/google/gemini-3-pro",
 		},
 	}
 
-	_, err := renderer.RenderCommand(cfg, ctx)
-	if err == nil {
-		t.Fatal("Expected error for invalid template")
-	}
-
-	if !strings.Contains(err.Error(), "bad") {
-		t.Errorf("Error should mention assistant name, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "command_template") {
-		t.Errorf("Error should mention template type, got: %v", err)
-	}
-}
-
-func TestRenderer_RenderCommand_MissingField(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo {{.NonExistent}}",
-	}
-	ctx := TemplateContext{}
-
-	_, err := renderer.RenderCommand(cfg, ctx)
-	if err == nil {
-		t.Fatal("Expected error for missing field in template execution")
-	}
-
-	if !strings.Contains(err.Error(), "command_template") {
-		t.Errorf("Error should mention template type, got: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewRenderer().RenderCommand(tt.ctx)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("Expected error")
+				}
+				for _, substr := range tt.errHas {
+					if !strings.Contains(err.Error(), substr) {
+						t.Errorf("Error should contain %q, got: %v", substr, err)
+					}
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("Expected %q, got %q", tt.want, got)
+			}
+		})
 	}
 }
 
-func TestRenderer_RenderPrompt_WithTemplate(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		PromptTemplate: "Work on {{.TicketID}}: {{.TicketTitle}}",
-	}
-	ctx := TemplateContext{
-		TicketID:    "bb-123",
-		TicketTitle: "Fix Bug",
+func TestRenderer_RenderPrompt(t *testing.T) {
+	tests := []struct {
+		name    string
+		ctx     TemplateContext
+		want    string
+		wantErr bool
+		errHas  string
+	}{
+		{
+			name: "with template",
+			ctx: TemplateContext{
+				PromptTemplate: "Work on {{.TicketID}}: {{.TicketTitle}}",
+				TicketID:       "bb-123",
+				TicketTitle:    "Fix Bug",
+			},
+			want: "Work on bb-123: Fix Bug",
+		},
+		{
+			name: "empty template",
+			ctx: TemplateContext{
+				PromptTemplate: "",
+				TicketID:       "bb-123",
+			},
+			want: "",
+		},
+		{
+			name:    "invalid template",
+			ctx:     TemplateContext{PromptTemplate: "{{.Bad"},
+			wantErr: true,
+			errHas:  "prompt_template",
+		},
+		{
+			name: "multiline",
+			ctx: TemplateContext{
+				PromptTemplate: "Ticket: {{.TicketID}}\nTitle: {{.TicketTitle}}\nPriority: {{.TicketPriority}}",
+				TicketID:       "bb-456",
+				TicketTitle:    "Multiline Test",
+				TicketPriority: 1,
+			},
+			want: "Ticket: bb-456\nTitle: Multiline Test\nPriority: 1",
+		},
 	}
 
-	result, err := renderer.RenderPrompt(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := "Work on bb-123: Fix Bug"
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewRenderer().RenderPrompt(tt.ctx)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("Expected error")
+				}
+				if !strings.Contains(err.Error(), tt.errHas) {
+					t.Errorf("Error should contain %q, got: %v", tt.errHas, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("Expected %q, got %q", tt.want, got)
+			}
+		})
 	}
 }
 
-func TestRenderer_RenderPrompt_EmptyTemplate(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		PromptTemplate: "", // Empty template
-	}
-	ctx := TemplateContext{
-		TicketID: "bb-123",
-	}
-
-	result, err := renderer.RenderPrompt(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if result != "" {
-		t.Errorf("Expected empty string for empty template, got %q", result)
-	}
-}
-
-func TestRenderer_RenderPrompt_NoTemplateField(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		PromptTemplate: "", // Empty string (zero value)
-	}
-	ctx := TemplateContext{
-		TicketID: "bb-123",
-	}
-
-	result, err := renderer.RenderPrompt(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if result != "" {
-		t.Errorf("Expected empty string when no prompt_template, got %q", result)
-	}
-}
-
-func TestRenderer_RenderPrompt_InvalidTemplate(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		PromptTemplate: "{{.Bad", // Invalid syntax
-	}
-	ctx := TemplateContext{}
-
-	_, err := renderer.RenderPrompt(cfg, ctx)
-	if err == nil {
-		t.Fatal("Expected error for invalid prompt template")
-	}
-
-	if !strings.Contains(err.Error(), "prompt_template") {
-		t.Errorf("Error should mention template type, got: %v", err)
-	}
-}
-
-func TestRenderer_RenderSelection_Complete(t *testing.T) {
-	renderer := NewRenderer()
+func TestRenderer_RenderSelection(t *testing.T) {
 	now := time.Now()
+	baseSel := Selection{
+		Ticket: Ticket{
+			ID: "bb-base", Title: "Base", Description: "Desc",
+			Status: "open", Priority: 2, IssueType: "task", Assignee: "user",
+			CreatedAt: now, UpdatedAt: now,
+		},
+		Assistant: "test", Model: "gpt-4", Agent: "coder",
+	}
 
+	tests := []struct {
+		name       string
+		ctx        TemplateContext
+		wantCmd    string
+		wantPrompt string
+		wantErr    bool
+		errHas     string
+	}{
+		{
+			name: "complete with prompt",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-test"
+				sel.Ticket.Title = "Test Ticket"
+				sel.Ticket.Description = "A test description"
+				sel.Assistant = "opencode"
+				sel.Model = "claude-sonnet"
+				sel.Agent = "coder"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = "opencode --model {{.Model}} --agent {{.Agent}}"
+				c.PromptTemplate = "{{.TicketID}}: {{.TicketTitle}}\n{{.TicketDescription}}"
+				return c
+			}(),
+			wantCmd:    "opencode --model claude-sonnet --agent coder",
+			wantPrompt: "bb-test: Test Ticket\nA test description",
+		},
+		{
+			name: "no prompt",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-123"
+				sel.Ticket.Title = "No Prompt Test"
+				sel.Assistant = "minimal"
+				sel.Model = "test-model"
+				sel.Agent = "test-agent"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = "minimal"
+				return c
+			}(),
+			wantCmd:    "minimal",
+			wantPrompt: "",
+		},
+		{
+			name: "command error",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-123"
+				sel.Assistant = "bad-cmd"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = "{{.UndefinedVar}}"
+				return c
+			}(),
+			wantErr: true,
+			errHas:  "failed to render command",
+		},
+		{
+			name: "prompt error",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-123"
+				sel.Assistant = "bad-prompt"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = "echo ok"
+				c.PromptTemplate = "{{.UndefinedVar}}"
+				return c
+			}(),
+			wantErr: true,
+			errHas:  "failed to render prompt",
+		},
+		{
+			name: "prompt variable in command",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-xyz"
+				sel.Ticket.Title = "Test Ticket"
+				sel.Assistant = "test"
+				sel.Model = "gpt-4"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = `ai-agent --prompt "{{.Prompt}}"`
+				c.PromptTemplate = "Fix issue {{.TicketID}}: {{.TicketTitle}}"
+				return c
+			}(),
+			wantCmd:    `ai-agent --prompt "Fix issue bb-xyz: Test Ticket"`,
+			wantPrompt: "Fix issue bb-xyz: Test Ticket",
+		},
+		{
+			name: "empty prompt variable in command",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-empty"
+				sel.Ticket.Title = "Test"
+				sel.Assistant = "test"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = "echo '{{.Prompt}}'"
+				return c
+			}(),
+			wantCmd:    "echo ''",
+			wantPrompt: "",
+		},
+		{
+			name: "multiline prompt variable in command",
+			ctx: func() TemplateContext {
+				sel := baseSel
+				sel.Ticket.ID = "bb-multi"
+				sel.Ticket.Title = "Multiline Test"
+				sel.Assistant = "test"
+				c := BuildTemplateContext(sel, "")
+				c.CommandTemplate = "script.sh << 'EOF'\n{{.Prompt}}\nEOF"
+				c.PromptTemplate = "Line 1: {{.TicketID}}\nLine 2: {{.TicketTitle}}\nLine 3: Done"
+				return c
+			}(),
+			wantCmd:    "script.sh << 'EOF'\nLine 1: bb-multi\nLine 2: Multiline Test\nLine 3: Done\nEOF",
+			wantPrompt: "Line 1: bb-multi\nLine 2: Multiline Test\nLine 3: Done",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec, err := NewRenderer().RenderSelection(tt.ctx)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("Expected error")
+				}
+				if !strings.Contains(err.Error(), tt.errHas) {
+					t.Errorf("Error should contain %q, got: %v", tt.errHas, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if spec.RenderedCommand != tt.wantCmd {
+				t.Errorf("command: expected %q, got %q", tt.wantCmd, spec.RenderedCommand)
+			}
+			if spec.RenderedPrompt != tt.wantPrompt {
+				t.Errorf("prompt: expected %q, got %q", tt.wantPrompt, spec.RenderedPrompt)
+			}
+		})
+	}
+}
+
+func TestRenderer_RenderSelection_PreservesMetadata(t *testing.T) {
+	now := time.Now()
 	sel := Selection{
 		Ticket: Ticket{
-			ID:          "bb-test",
-			Title:       "Test Ticket",
-			Description: "A test description",
-			Status:      "open",
-			Priority:    1,
-			IssueType:   "task",
-			Assignee:    "testuser",
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID: "bb-test", Title: "Test Ticket", Description: "A test",
+			Status: "open", Priority: 1, IssueType: "task", Assignee: "testuser",
+			CreatedAt: now, UpdatedAt: now,
 		},
-		Assistant: "opencode",
-		Model:     "claude-sonnet",
-		Agent:     "coder",
+		Assistant: "opencode", Model: "claude-sonnet", Agent: "coder",
 	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "opencode --model {{.Model}} --agent {{.Agent}}",
-		PromptTemplate:  "{{.TicketID}}: {{.TicketTitle}}\n{{.TicketDescription}}",
-	}
+	ctx := BuildTemplateContext(sel, "/work")
+	ctx.CommandTemplate = "echo ok"
 
-	spec, err := renderer.RenderSelection(sel, cfg, "")
+	spec, err := NewRenderer().RenderSelection(ctx)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-
-	expectedCmd := "opencode --model claude-sonnet --agent coder"
-	if spec.RenderedCommand != expectedCmd {
-		t.Errorf("Expected command %q, got %q", expectedCmd, spec.RenderedCommand)
-	}
-
-	expectedPrompt := "bb-test: Test Ticket\nA test description"
-	if spec.RenderedPrompt != expectedPrompt {
-		t.Errorf("Expected prompt %q, got %q", expectedPrompt, spec.RenderedPrompt)
-	}
-
 	if spec.LauncherID != "bb-test" {
-		t.Errorf("Expected launcher ID 'bb-test', got %q", spec.LauncherID)
+		t.Errorf("Expected LauncherID 'bb-test', got %q", spec.LauncherID)
 	}
-
 	if spec.Selection.Ticket.ID != "bb-test" {
 		t.Errorf("Expected ticket ID preserved")
 	}
-}
-
-func TestRenderer_RenderSelection_NoPrompt(t *testing.T) {
-	renderer := NewRenderer()
-
-	sel := Selection{
-		Ticket: Ticket{
-			ID:    "bb-123",
-			Title: "No Prompt Test",
-		},
-		Assistant: "minimal",
-		Model:     "test-model",
-		Agent:     "test-agent",
-	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "minimal",
-		PromptTemplate:  "", // No prompt
-	}
-
-	spec, err := renderer.RenderSelection(sel, cfg, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if spec.RenderedPrompt != "" {
-		t.Errorf("Expected empty prompt, got %q", spec.RenderedPrompt)
-	}
-
-	if spec.RenderedCommand != "minimal" {
-		t.Errorf("Expected command 'minimal', got %q", spec.RenderedCommand)
+	if spec.WorkDir != "/work" {
+		t.Errorf("Expected WorkDir '/work', got %q", spec.WorkDir)
 	}
 }
 
-func TestRenderer_RenderSelection_CommandError(t *testing.T) {
-	renderer := NewRenderer()
-
+func TestRenderer_RenderSelection_EmptyCommandGuard(t *testing.T) {
+	now := time.Now()
 	sel := Selection{
 		Ticket: Ticket{
-			ID: "bb-123",
+			ID: "bb-test", Title: "Test", Description: "Desc",
+			Status: "open", Priority: 1, IssueType: "task", Assignee: "user",
+			CreatedAt: now, UpdatedAt: now,
 		},
-		Assistant: "bad-cmd",
+		Assistant: "test", Model: "gpt-4", Agent: "coder",
 	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "{{.UndefinedVar}}", // Will fail on execution
-	}
+	ctx := BuildTemplateContext(sel, "")
 
-	_, err := renderer.RenderSelection(sel, cfg, "")
+	_, err := NewRenderer().RenderSelection(ctx)
 	if err == nil {
-		t.Fatal("Expected error for invalid command template")
+		t.Fatal("Expected error for empty command_template result")
 	}
-
-	if !strings.Contains(err.Error(), "failed to render command") {
-		t.Errorf("Error should mention command rendering, got: %v", err)
+	if !strings.Contains(err.Error(), "command_template produced empty result") {
+		t.Errorf("Error should mention empty result, got: %v", err)
 	}
-}
-
-func TestRenderer_RenderSelection_PromptError(t *testing.T) {
-	renderer := NewRenderer()
-
-	sel := Selection{
-		Ticket: Ticket{
-			ID: "bb-123",
-		},
-		Assistant: "bad-prompt",
-	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo ok",
-		PromptTemplate:  "{{.UndefinedVar}}", // Will fail on execution
-	}
-
-	_, err := renderer.RenderSelection(sel, cfg, "")
-	if err == nil {
-		t.Fatal("Expected error for invalid prompt template")
-	}
-
-	if !strings.Contains(err.Error(), "failed to render prompt") {
-		t.Errorf("Error should mention prompt rendering, got: %v", err)
+	if !strings.Contains(err.Error(), "test") {
+		t.Errorf("Error should contain assistant name, got: %v", err)
 	}
 }
 
@@ -306,19 +378,11 @@ func TestBuildTemplateContext_Complete(t *testing.T) {
 	now := time.Now()
 	sel := Selection{
 		Ticket: Ticket{
-			ID:          "bb-abc",
-			Title:       "Test Title",
-			Description: "Test Desc",
-			Status:      "in_progress",
-			Priority:    2,
-			IssueType:   "feature",
-			Assignee:    "user1",
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID: "bb-abc", Title: "Test Title", Description: "Test Desc",
+			Status: "in_progress", Priority: 2, IssueType: "feature", Assignee: "user1",
+			CreatedAt: now, UpdatedAt: now,
 		},
-		Assistant: "opencode",
-		Model:     "claude-sonnet",
-		Agent:     "coder",
+		Assistant: "opencode", Model: "claude-sonnet", Agent: "coder",
 	}
 
 	ctx := BuildTemplateContext(sel, "")
@@ -344,272 +408,53 @@ func TestBuildTemplateContext_Complete(t *testing.T) {
 	if ctx.TicketAssignee != "user1" {
 		t.Errorf("Expected TicketAssignee 'user1', got %q", ctx.TicketAssignee)
 	}
-
-	if ctx.HarnessName != "opencode" {
-		t.Errorf("Expected HarnessName 'opencode', got %q", ctx.HarnessName)
+	if ctx.Assistant != "opencode" {
+		t.Errorf("Expected Assistant 'opencode', got %q", ctx.Assistant)
 	}
-
 	if ctx.Model.ModelID() != "claude-sonnet" {
 		t.Errorf("Expected ModelID 'claude-sonnet', got %q", ctx.Model.ModelID())
-	}
-	if ctx.Model.Name() != "claude-sonnet" {
-		t.Errorf("Expected Model.Name 'claude-sonnet', got %q", ctx.Model.Name())
 	}
 	if ctx.Agent != "coder" {
 		t.Errorf("Expected Agent 'coder', got %q", ctx.Agent)
 	}
-
 	if ctx.Timestamp != now.Unix() {
 		t.Errorf("Expected Timestamp %d, got %d", now.Unix(), ctx.Timestamp)
 	}
 }
 
-func TestRenderer_MultilineTemplate(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		PromptTemplate: `Ticket: {{.TicketID}}
-Title: {{.TicketTitle}}
-Priority: {{.TicketPriority}}`,
-	}
-	ctx := TemplateContext{
-		TicketID:       "bb-456",
-		TicketTitle:    "Multiline Test",
-		TicketPriority: 1,
-	}
-
-	result, err := renderer.RenderPrompt(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := "Ticket: bb-456\nTitle: Multiline Test\nPriority: 1"
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
-	}
-}
-
-func TestRenderer_Escaping(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo '{{.TicketTitle}}'",
-	}
-	ctx := TemplateContext{
-		TicketTitle: `It is a "test"`, // Contains quotes, no backslash needed
-	}
-
-	result, err := renderer.RenderCommand(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := `echo 'It is a "test"'`
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
-	}
-}
-
-func TestRenderer_RenderCommand_WithPromptVariable(t *testing.T) {
-	renderer := NewRenderer()
-	now := time.Now()
-
+func TestBuildTemplateContext_Environment(t *testing.T) {
 	sel := Selection{
-		Ticket: Ticket{
-			ID:          "bb-xyz",
-			Title:       "Test Ticket",
-			Description: "Test description",
-			Status:      "open",
-			Priority:    2,
-			IssueType:   "task",
-			Assignee:    "user",
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		},
-		Assistant: "test",
-		Model:     "gpt-4",
-		Agent:     "coder",
-	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "ai-agent --prompt \"{{.Prompt}}\"",
-		PromptTemplate:  "Fix issue {{.TicketID}}: {{.TicketTitle}}",
+		Ticket:    Ticket{ID: "bb-test", Title: "Test"},
+		Assistant: "claude", Model: "claude-sonnet", Agent: "coder",
 	}
 
-	spec, err := renderer.RenderSelection(sel, cfg, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
+	t.Run("custom workdir", func(t *testing.T) {
+		ctx := BuildTemplateContext(sel, "/custom/workdir")
+		if ctx.WorkDir != "/custom/workdir" {
+			t.Errorf("Expected WorkDir '/custom/workdir', got %q", ctx.WorkDir)
+		}
+		if ctx.RepoPath != "" {
+			t.Errorf("Expected empty RepoPath, got %q", ctx.RepoPath)
+		}
+	})
 
-	expectedPrompt := "Fix issue bb-xyz: Test Ticket"
-	if spec.RenderedPrompt != expectedPrompt {
-		t.Errorf("Expected prompt %q, got %q", expectedPrompt, spec.RenderedPrompt)
-	}
+	t.Run("timestamp from updated_at", func(t *testing.T) {
+		now := time.Now()
+		sel := sel
+		sel.Ticket.UpdatedAt = now
+		ctx := BuildTemplateContext(sel, "")
+		if ctx.Timestamp != now.Unix() {
+			t.Errorf("Expected Timestamp %d, got %d", now.Unix(), ctx.Timestamp)
+		}
+	})
 
-	expectedCmd := `ai-agent --prompt "Fix issue bb-xyz: Test Ticket"`
-	if spec.RenderedCommand != expectedCmd {
-		t.Errorf("Expected command %q, got %q", expectedCmd, spec.RenderedCommand)
-	}
-}
-
-func TestRenderer_RenderCommand_PromptVariable_EmptyPrompt(t *testing.T) {
-	renderer := NewRenderer()
-	now := time.Now()
-
-	sel := Selection{
-		Ticket: Ticket{
-			ID:          "bb-empty",
-			Title:       "Test",
-			Description: "Desc",
-			Status:      "open",
-			Priority:    2,
-			IssueType:   "task",
-			Assignee:    "user",
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		},
-		Assistant: "test",
-		Model:     "gpt-4",
-		Agent:     "coder",
-	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo '{{.Prompt}}'",
-		// No PromptTemplate - will be empty
-	}
-
-	spec, err := renderer.RenderSelection(sel, cfg, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if spec.RenderedPrompt != "" {
-		t.Errorf("Expected empty prompt, got %q", spec.RenderedPrompt)
-	}
-
-	expectedCmd := "echo ''"
-	if spec.RenderedCommand != expectedCmd {
-		t.Errorf("Expected command %q, got %q", expectedCmd, spec.RenderedCommand)
-	}
-}
-
-func TestRenderer_RenderCommand_PromptVariable_Multiline(t *testing.T) {
-	renderer := NewRenderer()
-	now := time.Now()
-
-	sel := Selection{
-		Ticket: Ticket{
-			ID:          "bb-multi",
-			Title:       "Multiline Test",
-			Description: "Test",
-			Status:      "open",
-			Priority:    2,
-			IssueType:   "task",
-			Assignee:    "user",
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		},
-		Assistant: "test",
-		Model:     "gpt-4",
-		Agent:     "coder",
-	}
-	cfg := config.AssistantConfig{
-		CommandTemplate: "script.sh << 'EOF'\n{{.Prompt}}\nEOF",
-		PromptTemplate:  "Line 1: {{.TicketID}}\nLine 2: {{.TicketTitle}}\nLine 3: Done",
-	}
-
-	spec, err := renderer.RenderSelection(sel, cfg, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expectedPrompt := "Line 1: bb-multi\nLine 2: Multiline Test\nLine 3: Done"
-	if spec.RenderedPrompt != expectedPrompt {
-		t.Errorf("Expected prompt %q, got %q", expectedPrompt, spec.RenderedPrompt)
-	}
-
-	expectedCmd := "script.sh << 'EOF'\nLine 1: bb-multi\nLine 2: Multiline Test\nLine 3: Done\nEOF"
-	if spec.RenderedCommand != expectedCmd {
-		t.Errorf("Expected command %q, got %q", expectedCmd, spec.RenderedCommand)
-	}
-}
-
-func TestRenderer_RenderCommand_ModelStructuredFields(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo {{.Model.Provider}}/{{.Model.Org}}/{{.Model.Name}} {{.Model.ModelID}}",
-	}
-	ctx := TemplateContext{
-		Model: NewModelContext("openrouter/google/gemini-3-pro"),
-	}
-
-	result, err := renderer.RenderCommand(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := "echo openrouter/google/gemini-3-pro openrouter/google/gemini-3-pro"
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
-	}
-}
-
-func TestRenderer_RenderCommand_ModelBackwardCompatible(t *testing.T) {
-	renderer := NewRenderer()
-	cfg := config.AssistantConfig{
-		CommandTemplate: "echo {{.Model}}",
-	}
-	ctx := TemplateContext{
-		Model: NewModelContext("openrouter/google/gemini-3-pro"),
-	}
-
-	result, err := renderer.RenderCommand(cfg, ctx)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	expected := "echo openrouter/google/gemini-3-pro"
-	if result != expected {
-		t.Errorf("Expected %q, got %q", expected, result)
-	}
-}
-
-func TestBuildTemplateContext_EmptyWorkDir(t *testing.T) {
-	sel := Selection{
-		Ticket: Ticket{
-			ID:    "bb-test",
-			Title: "Test",
-		},
-		Assistant: "claude",
-		Model:     "claude-sonnet",
-		Agent:     "coder",
-	}
-
-	ctx := BuildTemplateContext(sel, "/custom/workdir")
-
-	if ctx.WorkDir != "/custom/workdir" {
-		t.Errorf("Expected WorkDir '/custom/workdir', got %q", ctx.WorkDir)
-	}
-	if ctx.RepoPath != "" {
-		t.Errorf("Expected empty RepoPath, got %q", ctx.RepoPath)
-	}
-	if ctx.Branch != "" {
-		t.Errorf("Expected empty Branch, got %q", ctx.Branch)
-	}
-}
-
-func TestBuildTemplateContext_TimestampFromUpdatedAt(t *testing.T) {
-	now := time.Now()
-	sel := Selection{
-		Ticket: Ticket{
-			ID:        "bb-ts",
-			Title:     "Timestamp Test",
-			UpdatedAt: now,
-		},
-		Assistant: "claude",
-		Model:     "claude-sonnet",
-		Agent:     "coder",
-	}
-
-	ctx := BuildTemplateContext(sel, "")
-
-	if ctx.Timestamp != now.Unix() {
-		t.Errorf("Expected Timestamp %d, got %d", now.Unix(), ctx.Timestamp)
-	}
+	t.Run("templates not hydrated", func(t *testing.T) {
+		ctx := BuildTemplateContext(sel, "")
+		if ctx.CommandTemplate != "" {
+			t.Errorf("Expected empty CommandTemplate, got %q", ctx.CommandTemplate)
+		}
+		if ctx.PromptTemplate != "" {
+			t.Errorf("Expected empty PromptTemplate, got %q", ctx.PromptTemplate)
+		}
+	})
 }
