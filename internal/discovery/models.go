@@ -14,6 +14,9 @@ const (
 	PrefixProvider = "provider:"
 	// KeywordDiscoverActive is the keyword used to dynamically include all models from all active providers.
 	KeywordDiscoverActive = "discover:active"
+
+	defaultRetryCount = 3
+	defaultRetryDelay = time.Second
 )
 
 // Provider represents an LLM provider from models.dev/api.json.
@@ -38,10 +41,12 @@ type Model struct {
 
 // Registry handles model discovery and caching.
 type Registry struct {
-	cachePath string
-	mu        sync.RWMutex
-	providers map[string]Provider
-	client    *http.Client
+	cachePath  string
+	mu         sync.RWMutex
+	providers  map[string]Provider
+	client     *http.Client
+	retryCount int
+	retryDelay time.Duration
 }
 
 // NewRegistry creates a new Registry with a default cache path.
@@ -55,8 +60,10 @@ func NewRegistry(cacheDir string) (*Registry, error) {
 		cacheDir = filepath.Join(home, ".amux")
 	}
 	return &Registry{
-		cachePath: filepath.Join(cacheDir, "models-api.json"),
-		providers: make(map[string]Provider),
+		cachePath:  filepath.Join(cacheDir, "models-api.json"),
+		providers:  make(map[string]Provider),
+		retryCount: defaultRetryCount,
+		retryDelay: defaultRetryDelay,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
