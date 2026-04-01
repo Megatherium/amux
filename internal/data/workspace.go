@@ -30,13 +30,24 @@ func NormalizeRuntime(runtime string) string {
 	}
 }
 
-// TabInfo stores information about an open tab
+// TabInfo stores information about an open tab.
+// Ticket metadata fields (TicketID, TicketTitle, Model, Agent) enable
+// ticket context survival across restarts. They are populated by the
+// ticket-aware tab creation path and consumed by the tmux tag writer.
 type TabInfo struct {
 	Assistant   string `json:"assistant"`
 	Name        string `json:"name"`
 	SessionName string `json:"session_name,omitempty"`
 	Status      string `json:"status,omitempty"`
 	CreatedAt   int64  `json:"created_at,omitempty"`
+
+	// Ticket metadata — populated when a tab is launched from a ticket selection.
+	// These use omitempty so existing workspace.json files without ticket context
+	// load cleanly (zero-value strings are omitted from serialization).
+	TicketID    string `json:"ticket_id,omitempty"`
+	TicketTitle string `json:"ticket_title,omitempty"`
+	Model       string `json:"model,omitempty"`
+	Agent       string `json:"agent,omitempty"`
 }
 
 // ScriptsConfig holds the setup/run/archive script commands
