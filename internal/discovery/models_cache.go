@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -116,7 +117,7 @@ func (r *Registry) fetchWithRetry(ctx context.Context, req *http.Request) (*http
 
 func validateProviders(parsed map[string]Provider) error {
 	if len(parsed) == 0 {
-		return fmt.Errorf("validation error: decoded JSON is empty")
+		return errors.New("validation error: decoded JSON is empty")
 	}
 
 	for key, provider := range parsed {

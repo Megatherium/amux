@@ -3,7 +3,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -317,5 +317,5 @@ func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 type errorTransport struct{}
 
 func (t *errorTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return nil, fmt.Errorf("simulated network error")
+	return nil, errors.New("simulated network error")
 }
