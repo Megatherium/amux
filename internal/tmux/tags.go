@@ -23,6 +23,11 @@ const (
 	TagLastInputAt    = "@amux_last_input_at"
 	TagSessionOwner   = "@amux_session_owner"
 	TagSessionLeaseAt = "@amux_session_lease_ms"
+
+	TagTicketID    = "@amux_ticket_id"
+	TagTicketTitle = "@amux_ticket_title"
+	TagModel       = "@amux_model"
+	TagAgentMode   = "@amux_agent_mode"
 )
 
 // SessionsWithTags returns sessions matching the provided tags, plus values for requested tag keys.

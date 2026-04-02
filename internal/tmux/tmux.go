@@ -36,6 +36,11 @@ type SessionTags struct {
 	InstanceID   string
 	SessionOwner string
 	LeaseAtMS    int64
+
+	TicketID    string // External ticket identifier (e.g. beads issue ID).
+	TicketTitle string // Ticket title; sanitized before writing to tmux.
+	Model       string // LLM model name (e.g. "claude-sonnet-4-20250514").
+	AgentMode   string // Agent mode (e.g. "code", "plan"). Mapped to data.TabInfo.Agent by the read side (bmx-dg8).
 }
 
 const tmuxCommandTimeout = 5 * time.Second

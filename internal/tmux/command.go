@@ -91,7 +91,11 @@ func appendSessionTags(settings *strings.Builder, base, session string, tags Ses
 		tags.CreatedAt == 0 &&
 		tags.InstanceID == "" &&
 		tags.SessionOwner == "" &&
-		tags.LeaseAtMS == 0 {
+		tags.LeaseAtMS == 0 &&
+		tags.TicketID == "" &&
+		tags.TicketTitle == "" &&
+		tags.Model == "" &&
+		tags.AgentMode == "" {
 		return
 	}
 	fmt.Fprintf(settings, "%s set-option -t %s @amux 1 2>/dev/null; ", base, session)
@@ -104,6 +108,10 @@ func appendSessionTags(settings *strings.Builder, base, session string, tags Ses
 		{"@amux_instance", tags.InstanceID},
 		{TagSessionOwner, tags.SessionOwner},
 		{TagSessionLeaseAt, formatInt64Positive(tags.LeaseAtMS)},
+		{TagTicketID, tags.TicketID},
+		{TagTicketTitle, sanitizeTicketTitle(tags.TicketTitle)},
+		{TagModel, tags.Model},
+		{TagAgentMode, tags.AgentMode},
 	}
 	for _, e := range entries {
 		if e.value != "" {
@@ -117,6 +125,23 @@ func appendSessionTags(settings *strings.Builder, base, session string, tags Ses
 			)
 		}
 	}
+}
+
+const maxTicketTitleLen = 200
+
+func sanitizeTicketTitle(title string) string {
+	if title == "" {
+		return ""
+	}
+	title = strings.ReplaceAll(title, "\n", " ")
+	title = strings.ReplaceAll(title, "\r", " ")
+	title = strings.ReplaceAll(title, "\t", " ")
+	title = strings.TrimSpace(title)
+	runes := []rune(title)
+	if len(runes) > maxTicketTitleLen {
+		title = string(runes[:maxTicketTitleLen])
+	}
+	return title
 }
 
 func formatInt64NonZero(v int64) string {
