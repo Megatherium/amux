@@ -328,6 +328,12 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
+	case messages.DiscoveryLoadedMsg:
+		cmds = append(cmds, a.handleDiscoveryLoaded(msg)...)
+
+	case ticketStoreResult:
+		cmds = append(cmds, a.handleTicketStoreResult(msg)...)
+
 	case messages.TriggerUpgrade:
 		if cmd := a.handleTriggerUpgrade(); cmd != nil {
 			cmds = append(cmds, cmd)

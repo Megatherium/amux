@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,11 +12,14 @@ import (
 	"github.com/andyrewlee/amux/internal/app/activity"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/discovery"
 	"github.com/andyrewlee/amux/internal/git"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/process"
 	"github.com/andyrewlee/amux/internal/supervisor"
+	"github.com/andyrewlee/amux/internal/tickets"
+	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
 	"github.com/andyrewlee/amux/internal/ui/center"
 	"github.com/andyrewlee/amux/internal/ui/common"
@@ -43,6 +47,12 @@ func New(version, commit, date string) (*App, error) {
 	workspaces := data.NewWorkspaceStore(cfg.Paths.MetadataRoot)
 	scripts := process.NewScriptRunner(cfg.PortStart, cfg.PortRangeSize)
 	workspaceService := newWorkspaceService(registry, workspaces, scripts, cfg.Paths.WorkspacesRoot)
+
+	modelReg, err := discovery.NewRegistry(cfg.Paths.Home)
+	if err != nil {
+		logging.Warn("Model discovery registry disabled: %v", err)
+	}
+	ticketRenderer := tickets.NewRenderer()
 
 	// Create status manager (callback will be nil, we use it for caching only)
 	statusManager := git.NewStatusManager(nil)
@@ -90,6 +100,8 @@ func New(version, commit, date string) (*App, error) {
 		gitStatus:              gitStatus,
 		tmuxService:            tmuxSvc,
 		updateService:          updateSvc,
+		modelRegistry:          modelReg,
+		ticketRenderer:         ticketRenderer,
 		fileWatcher:            fileWatcher,
 		fileWatcherCh:          fileWatcherCh,
 		fileWatcherErr:         fileWatcherErr,
@@ -175,6 +187,7 @@ func (a *App) Init() tea.Cmd {
 		a.startFileWatcher(),
 		a.startStateWatcher(),
 		a.checkForUpdates(),
+		a.loadDiscoveryRegistry(),
 	}
 	if a.fileWatcherErr != nil {
 		cmds = append(cmds, a.toast.ShowWarning("File watching disabled; git status may be stale"))
@@ -300,4 +313,102 @@ func (a *App) startStateWatcher() tea.Cmd {
 	return func() tea.Msg {
 		return <-a.stateWatcherCh
 	}
+}
+
+// ticketStoreResult is sent when a per-project ticket store initialization completes.
+type ticketStoreResult struct {
+	projectPath string
+	store       *dolt.ServerStore
+	service     *tickets.TicketService
+	err         error
+}
+
+// loadDiscoveryRegistry loads the models.dev cache asynchronously.
+// On success it returns a DiscoveryLoadedMsg; on failure it logs a warning
+// and returns nil (discovery features remain disabled).
+func (a *App) loadDiscoveryRegistry() tea.Cmd {
+	if a.modelRegistry == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := a.modelRegistry.Load(context.Background()); err != nil {
+			logging.Warn("Model discovery cache load failed: %v", err)
+			return nil
+		}
+		return messages.DiscoveryLoadedMsg{}
+	}
+}
+
+// initTicketStore attempts to connect to a beads Dolt database at beadsDir.
+// If the connection fails, the per-project entry remains nil and ticket
+// features are disabled for that project.
+func (a *App) initTicketStore(projectPath, beadsDir string) tea.Cmd {
+	return func() tea.Msg {
+		store, err := dolt.NewStore(context.Background(), beadsDir, false)
+		if err != nil {
+			logging.Debug("Ticket store not available for %s: %v", projectPath, err)
+			return ticketStoreResult{projectPath: projectPath, err: err}
+		}
+
+		var svc *tickets.TicketService
+		if a.modelRegistry != nil && a.ticketRenderer != nil {
+			svc = tickets.NewTicketService(store, a.modelRegistry, a.ticketRenderer)
+		}
+
+		return ticketStoreResult{
+			projectPath: projectPath,
+			store:       store,
+			service:     svc,
+		}
+	}
+}
+
+// handleDiscoveryLoaded processes the discovery registry loaded message.
+// Once discovery is ready, attempt to init ticket stores for any projects
+// that have already been loaded.
+func (a *App) handleDiscoveryLoaded(_ messages.DiscoveryLoadedMsg) []tea.Cmd {
+	logging.Debug("Model discovery registry loaded")
+	a.discoveryReady = true
+	return a.initTicketStoresForLoadedProjects()
+}
+
+// initTicketStoresForLoadedProjects scans loaded projects for .beads/
+// directories and returns init cmds for each. This is called both when
+// discovery finishes (projects may already be loaded) and when projects
+// load (discovery may already be finished).
+func (a *App) initTicketStoresForLoadedProjects() []tea.Cmd {
+	if !a.discoveryReady || !a.projectsLoaded {
+		return nil
+	}
+	var cmds []tea.Cmd
+	for i := range a.projects {
+		p := &a.projects[i]
+		beadsDir := filepath.Join(p.Path, ".beads")
+		if _, err := os.Stat(beadsDir); err != nil {
+			continue
+		}
+		if _, exists := a.doltStores[p.Path]; exists {
+			continue
+		}
+		cmds = append(cmds, a.initTicketStore(p.Path, beadsDir))
+	}
+	return cmds
+}
+
+// handleTicketStoreResult processes the async ticket store initialization result.
+func (a *App) handleTicketStoreResult(msg ticketStoreResult) []tea.Cmd {
+	if msg.err != nil {
+		logging.Debug("Ticket service disabled for %s: %v", msg.projectPath, msg.err)
+		return nil
+	}
+	if a.doltStores == nil {
+		a.doltStores = make(map[string]*dolt.ServerStore)
+	}
+	if a.ticketServices == nil {
+		a.ticketServices = make(map[string]*tickets.TicketService)
+	}
+	a.doltStores[msg.projectPath] = msg.store
+	a.ticketServices[msg.projectPath] = msg.service
+	logging.Debug("Ticket service initialized for %s", msg.projectPath)
+	return nil
 }

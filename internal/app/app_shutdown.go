@@ -23,6 +23,11 @@ func (a *App) Shutdown() {
 		if a.workspaceService != nil {
 			a.workspaceService.StopAll()
 		}
+		if a.doltStores != nil {
+			for _, store := range a.doltStores {
+				_ = store.Close()
+			}
+		}
 		perf.Flush("shutdown")
 	})
 }

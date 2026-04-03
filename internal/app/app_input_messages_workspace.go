@@ -38,6 +38,7 @@ func (a *App) handleProjectsLoaded(msg messages.ProjectsLoaded) []tea.Cmd {
 			cmds = append(cmds, a.requestGitStatus(ws.Root))
 		}
 	}
+	cmds = append(cmds, a.initTicketStoresForLoadedProjects()...)
 	return cmds
 }
 

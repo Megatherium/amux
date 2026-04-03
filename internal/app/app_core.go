@@ -11,9 +11,12 @@ import (
 	"github.com/andyrewlee/amux/internal/app/activity"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/discovery"
 	"github.com/andyrewlee/amux/internal/git"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/supervisor"
+	"github.com/andyrewlee/amux/internal/tickets"
+	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
 	"github.com/andyrewlee/amux/internal/ui/center"
 	"github.com/andyrewlee/amux/internal/ui/common"
@@ -48,6 +51,11 @@ type App struct {
 	gitStatus        GitStatusService
 	tmuxService      TmuxOps
 	updateService    UpdateService
+	modelRegistry    *discovery.Registry
+	ticketServices   map[string]*tickets.TicketService
+	doltStores       map[string]*dolt.ServerStore
+	ticketRenderer   *tickets.Renderer
+	discoveryReady   bool
 
 	// Limits
 	maxAttachedAgentTabs int
