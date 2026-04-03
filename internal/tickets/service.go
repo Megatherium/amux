@@ -8,6 +8,7 @@ package tickets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -43,7 +44,7 @@ func NewTicketService(store TicketStore, registry *discovery.Registry, renderer 
 // Delegates directly to the underlying TicketStore.
 func (s *TicketService) ListTickets(ctx context.Context, filter TicketFilter) ([]Ticket, error) {
 	if s.store == nil {
-		return nil, fmt.Errorf("ticket service: store not configured")
+		return nil, errors.New("ticket service: store not configured")
 	}
 	return s.store.ListTickets(ctx, filter)
 }
@@ -52,7 +53,7 @@ func (s *TicketService) ListTickets(ctx context.Context, filter TicketFilter) ([
 // Delegates directly to the underlying TicketStore.
 func (s *TicketService) LatestUpdate(ctx context.Context) (time.Time, error) {
 	if s.store == nil {
-		return time.Time{}, fmt.Errorf("ticket service: store not configured")
+		return time.Time{}, errors.New("ticket service: store not configured")
 	}
 	return s.store.LatestUpdate(ctx)
 }
@@ -110,7 +111,7 @@ func (s *TicketService) resolveKeyword(keyword string) []string {
 // execution by the app's PTY/tmux layer.
 func (s *TicketService) RenderLaunch(sel Selection, workDir, cmdTemplate, promptTemplate string) (*LaunchSpec, error) {
 	if s.renderer == nil {
-		return nil, fmt.Errorf("ticket service: renderer not configured")
+		return nil, errors.New("ticket service: renderer not configured")
 	}
 
 	ctx := BuildTemplateContext(sel, workDir)
