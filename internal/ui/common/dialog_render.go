@@ -177,6 +177,9 @@ func (d *Dialog) renderOptionsLines(baseLine int) []string {
 	if d.id == "agent-picker" {
 		return d.renderAgentPickerOptions(baseLine)
 	}
+	if d.id == "ticket-picker" {
+		return d.renderTicketPickerOptions(baseLine)
+	}
 	return []string{d.renderHorizontalOptionsLine(baseLine)}
 }
 

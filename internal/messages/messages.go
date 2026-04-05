@@ -247,6 +247,9 @@ type AddProject struct {
 // ShowSelectAssistantDialog requests showing the assistant selection dialog
 type ShowSelectAssistantDialog struct{}
 
+// ShowSelectTicketDialog requests showing the ticket selection dialog
+type ShowSelectTicketDialog struct{}
+
 // LaunchAgent requests launching an agent in a new tab
 type LaunchAgent struct {
 	Assistant string

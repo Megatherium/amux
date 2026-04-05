@@ -156,6 +156,14 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.ShowSelectAssistantDialog:
 		a.handleShowSelectAssistantDialog()
 
+	case messages.ShowSelectTicketDialog:
+		if cmd := a.handleShowSelectTicketDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case ticketsForPickerLoaded:
+		a.handleTicketsForPickerLoaded(msg)
+
 	case messages.ShowSettingsDialog:
 		a.handleShowSettingsDialog()
 
@@ -333,6 +341,15 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ticketStoreResult:
 		cmds = append(cmds, a.handleTicketStoreResult(msg)...)
+
+	case messages.TicketsLoadedMsg:
+		if a.dashboard != nil {
+			newDashboard, cmd := a.dashboard.Update(msg)
+			a.dashboard = newDashboard
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 
 	case messages.TriggerUpgrade:
 		if cmd := a.handleTriggerUpgrade(); cmd != nil {

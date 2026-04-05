@@ -34,6 +34,7 @@ const (
 	DialogDeleteWorkspace = "delete_workspace"
 	DialogRemoveProject   = "remove_project"
 	DialogSelectAssistant = "select_assistant"
+	DialogSelectTicket    = "select_ticket"
 	DialogQuit            = "quit"
 	DialogCleanupTmux     = "cleanup_tmux"
 )
@@ -102,6 +103,9 @@ type App struct {
 	pendingWorkspaceProject *data.Project
 	pendingWorkspaceName    string
 	pendingWorkspaceBase    string
+	// Ticket picker state
+	selectedTicket *tickets.Ticket
+	pendingTickets []tickets.Ticket
 
 	// Git status management
 	fileWatcher     *git.FileWatcher

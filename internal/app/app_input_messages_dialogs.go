@@ -8,6 +8,7 @@ import (
 
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 	"github.com/andyrewlee/amux/internal/validation"
 )
@@ -83,6 +84,46 @@ func (a *App) handleShowSelectAssistantDialog() {
 		return
 	}
 	a.dialog = common.NewAgentPicker(a.assistantNames())
+	a.dialog.SetSize(a.width, a.height)
+	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.dialog.Show()
+}
+
+// handleShowSelectTicketDialog shows the ticket picker dialog.
+// If no ticket service is available for the active project, it falls back
+// directly to the assistant picker.
+func (a *App) handleShowSelectTicketDialog() tea.Cmd {
+	if a.activeWorkspace == nil || a.activeProject == nil {
+		return nil
+	}
+	svc := a.ticketServices[a.activeProject.Path]
+	if svc == nil {
+		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+	}
+	return func() tea.Msg {
+		t, _ := loadOpenAndInProgress(svc, a.activeProject.Path, 50)
+		return ticketsForPickerLoaded{tickets: t}
+	}
+}
+
+// ticketsForPickerLoaded is an internal message carrying tickets for the picker dialog.
+type ticketsForPickerLoaded struct {
+	tickets []tickets.Ticket
+}
+
+func (a *App) handleTicketsForPickerLoaded(msg ticketsForPickerLoaded) {
+	items := make([]common.TicketPickerItem, 0, len(msg.tickets))
+	for _, t := range msg.tickets {
+		items = append(items, common.TicketPickerItem{
+			ID:        t.ID,
+			Title:     t.Title,
+			Status:    t.Status,
+			IssueType: t.IssueType,
+			Priority:  t.Priority,
+		})
+	}
+	a.pendingTickets = msg.tickets
+	a.dialog = common.NewTicketPicker(items)
 	a.dialog.SetSize(a.width, a.height)
 	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.dialog.Show()

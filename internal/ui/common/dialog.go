@@ -56,6 +56,9 @@ type Dialog struct {
 	filterInput     textinput.Model
 	filteredIndices []int // indices into options
 
+	// Ticket picker state
+	ticketItems []TicketPickerItem
+
 	// Layout
 	width      int
 	height     int

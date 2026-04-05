@@ -261,7 +261,7 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 		if !a.tmuxAvailable {
 			return a.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
 		}
-		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+		return func() tea.Msg { return messages.ShowSelectTicketDialog{} }
 	case "new_terminal_tab":
 		if a.activeWorkspace == nil || a.activeProject == nil {
 			return a.requireWorkspaceSelection("create terminal tab")

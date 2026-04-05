@@ -409,6 +409,47 @@ func (a *App) handleTicketStoreResult(msg ticketStoreResult) []tea.Cmd {
 	}
 	a.doltStores[msg.projectPath] = msg.store
 	a.ticketServices[msg.projectPath] = msg.service
-	logging.Debug("Ticket service initialized for %s", msg.projectPath)
-	return nil
+	logging.Debug("Ticket service initialized for %s (service=%v)", msg.projectPath, msg.service != nil)
+	var cmds []tea.Cmd
+	if msg.service != nil {
+		cmds = append(cmds, a.loadTicketsForProject(msg.projectPath))
+	}
+	return cmds
+}
+
+// loadTicketsForProject loads open tickets for a project and sends TicketsLoadedMsg.
+func (a *App) loadTicketsForProject(path string) tea.Cmd {
+	svc := a.ticketServices[path]
+	if svc == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		t, _ := loadOpenAndInProgress(svc, path, 20)
+		return messages.TicketsLoadedMsg{
+			ProjectPath: path,
+			Tickets:     t,
+		}
+	}
+}
+
+// loadOpenAndInProgress fetches open and in_progress tickets from a TicketService.
+func loadOpenAndInProgress(svc *tickets.TicketService, path string, limit int) ([]tickets.Ticket, error) {
+	t, err := svc.ListTickets(context.Background(), tickets.TicketFilter{
+		Status: "open",
+		Limit:  limit,
+	})
+	if err != nil {
+		logging.Debug("Ticket load failed for %s (open): %v", path, err)
+		return nil, err
+	}
+	inProgress, err := svc.ListTickets(context.Background(), tickets.TicketFilter{
+		Status: "in_progress",
+		Limit:  limit,
+	})
+	if err != nil {
+		logging.Debug("Ticket load failed for %s (in_progress): %v", path, err)
+	} else {
+		t = append(t, inProgress...)
+	}
+	return t, nil
 }

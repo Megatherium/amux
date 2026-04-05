@@ -21,7 +21,7 @@ func (a *App) handleDialogResultMsg(msg tea.Msg) (bool, tea.Cmd) {
 	}
 	logging.Info("Received DialogResult: id=%s confirmed=%v", result.ID, result.Confirmed)
 	switch result.ID {
-	case DialogAddProject, DialogCreateWorkspace, DialogDeleteWorkspace, DialogRemoveProject, DialogSelectAssistant, "agent-picker", DialogQuit, DialogCleanupTmux:
+	case DialogAddProject, DialogCreateWorkspace, DialogDeleteWorkspace, DialogRemoveProject, DialogSelectAssistant, "agent-picker", DialogSelectTicket, "ticket-picker", DialogQuit, DialogCleanupTmux:
 		return true, common.SafeCmd(a.handleDialogResult(result))
 	}
 	// If not an App-level dialog, let it fall through to components.
@@ -109,6 +109,10 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 			a.pendingWorkspaceProject = nil
 			a.pendingWorkspaceName = ""
 			a.pendingWorkspaceBase = ""
+		}
+		if result.ID == DialogSelectTicket || result.ID == "ticket-picker" {
+			a.selectedTicket = nil
+			a.pendingTickets = nil
 		}
 		logging.Debug("Dialog canceled")
 		return nil
@@ -204,6 +208,15 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 				}
 			}
 		}
+
+	case DialogSelectTicket, "ticket-picker":
+		if result.Index < len(a.pendingTickets) {
+			a.selectedTicket = &a.pendingTickets[result.Index]
+		} else {
+			a.selectedTicket = nil
+		}
+		a.pendingTickets = nil
+		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
 
 	case DialogQuit:
 		// Persist workspace tabs synchronously before shutdown.
