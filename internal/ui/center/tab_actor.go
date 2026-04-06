@@ -194,10 +194,7 @@ func (m *Model) handleTabEvent(ev tabEvent) {
 		tab.mu.Lock()
 		text := ""
 		if ev.notifyCopy && tab.Terminal != nil && tab.Terminal.HasSelection() {
-			text = tab.Terminal.GetSelectedText(
-				tab.Terminal.SelStartX(), tab.Terminal.SelStartLine(),
-				tab.Terminal.SelEndX(), tab.Terminal.SelEndLine(),
-			)
+			text = tab.Terminal.SelectedText()
 		}
 		if tab.Terminal != nil {
 			tab.Terminal.ClearSelection()
@@ -212,10 +209,7 @@ func (m *Model) handleTabEvent(ev tabEvent) {
 		tab.mu.Lock()
 		text := ""
 		if ev.notifyCopy && tab.Terminal != nil && tab.Terminal.HasSelection() {
-			text = tab.Terminal.GetSelectedText(
-				tab.Terminal.SelStartX(), tab.Terminal.SelStartLine(),
-				tab.Terminal.SelEndX(), tab.Terminal.SelEndLine(),
-			)
+			text = tab.Terminal.SelectedText()
 		}
 		tab.mu.Unlock()
 		if ev.notifyCopy && text != "" && m.msgSink != nil {
@@ -302,10 +296,7 @@ func (m *Model) handleTabEvent(ev tabEvent) {
 		if tab.Terminal != nil &&
 			(tab.Selection.StartX != tab.Selection.EndX ||
 				tab.Selection.StartLine != tab.Selection.EndLine) {
-			text = tab.Terminal.GetSelectedText(
-				tab.Terminal.SelStartX(), tab.Terminal.SelStartLine(),
-				tab.Terminal.SelEndX(), tab.Terminal.SelEndLine(),
-			)
+			text = tab.Terminal.SelectedText()
 		}
 		tab.mu.Unlock()
 		if text != "" && m.msgSink != nil {

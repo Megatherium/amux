@@ -99,10 +99,7 @@ func (m *TerminalModel) Update(msg tea.Msg) (*TerminalModel, tea.Cmd) {
 		if isCopyKey {
 			ts.mu.Lock()
 			if ts.VTerm != nil && ts.VTerm.HasSelection() {
-				text := ts.VTerm.GetSelectedText(
-					ts.VTerm.SelStartX(), ts.VTerm.SelStartLine(),
-					ts.VTerm.SelEndX(), ts.VTerm.SelEndLine(),
-				)
+				text := ts.VTerm.SelectedText()
 				if text != "" {
 					if err := common.CopyToClipboard(text); err != nil {
 						logging.Error("Failed to copy to clipboard: %v", err)

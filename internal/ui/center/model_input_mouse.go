@@ -195,10 +195,7 @@ func (m *Model) updateMouseRelease(msg tea.MouseReleaseMsg) (*Model, tea.Cmd) {
 		if tab.Terminal != nil &&
 			(tab.Selection.StartX != tab.Selection.EndX ||
 				tab.Selection.StartLine != tab.Selection.EndLine) {
-			text := tab.Terminal.GetSelectedText(
-				tab.Terminal.SelStartX(), tab.Terminal.SelStartLine(),
-				tab.Terminal.SelEndX(), tab.Terminal.SelEndLine(),
-			)
+			text := tab.Terminal.SelectedText()
 			if text != "" {
 				if err := common.CopyToClipboard(text); err != nil {
 					logging.Error("Failed to copy to clipboard: %v", err)
