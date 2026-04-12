@@ -12,7 +12,8 @@ import (
 
 // TicketsLoadedMsg is sent when tickets have been loaded or refreshed from the beads store.
 type TicketsLoadedMsg struct {
-	Tickets []tickets.Ticket
+	ProjectPath string
+	Tickets     []tickets.Ticket
 }
 
 // TicketSelectedMsg is sent when the user selects a ticket for context.

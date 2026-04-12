@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -143,7 +144,7 @@ func (m *Metadata) resolveFromPortFile(beadsDir string) (int, error) {
 		return 0, fmt.Errorf("failed to read port file: %w", err)
 	}
 
-	port, err := strconv.Atoi(string(data))
+	port, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil || port <= 0 || port > 65535 {
 		return 0, fmt.Errorf("invalid port in file: %s", string(data))
 	}

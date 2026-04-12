@@ -154,6 +154,39 @@ func (m *Model) renderRow(row Row, selected bool) string {
 
 		return unstyledPrefix + style.Render(styledPrefix+name+deleteSlot) + status
 
+	case RowTicket:
+		unstyledPrefix := "  "
+		ticket := row.Ticket
+		var icon string
+		switch ticket.Status {
+		case "closed":
+			icon = common.Icons.Clean // ✓
+		case "in_progress":
+			icon = common.Icons.Pending // ◌
+		default:
+			icon = common.Icons.Idle // ○ (open)
+		}
+		text := icon + " " + ticket.ID + ": " + ticket.Title
+		maxTextWidth := m.width - 4 - lipgloss.Width(unstyledPrefix)
+		if maxTextWidth > 0 && lipgloss.Width(text) > maxTextWidth {
+			runes := []rune(text)
+			for len(runes) > 0 && lipgloss.Width(string(runes)) > maxTextWidth-1 {
+				runes = runes[:len(runes)-1]
+			}
+			text = string(runes) + "…"
+		}
+		style := m.styles.WorkspaceRow
+		if selected {
+			style = m.styles.SelectedRow
+		}
+		switch ticket.Status {
+		case "closed":
+			style = style.Foreground(common.ColorMuted())
+		case "in_progress":
+			style = style.Foreground(common.ColorSecondary())
+		}
+		return unstyledPrefix + style.Render(text)
+
 	case RowCreate:
 		unstyledPrefix := " "
 		styledPrefix := " "
@@ -200,6 +233,8 @@ func (m *Model) helpLines(contentWidth int) []string {
 			items = append(items, m.helpItem("D", "delete"))
 		case RowProject:
 			items = append(items, m.helpItem("D", "remove"))
+		case RowTicket:
+			items = append(items, m.helpItem("enter", "view ticket"))
 		}
 	}
 	items = append(items,

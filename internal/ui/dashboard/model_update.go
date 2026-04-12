@@ -180,6 +180,9 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 
 	case messages.ShowWelcome:
 		m.activeRoot = ""
+
+	case messages.TicketsLoadedMsg:
+		m.SetTickets(msg.ProjectPath, msg.Tickets)
 	}
 
 	return m, common.SafeBatch(cmds...)

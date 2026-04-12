@@ -7,6 +7,7 @@ import (
 
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/git"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -24,6 +25,7 @@ const (
 	RowAddProject
 	RowProject
 	RowWorkspace
+	RowTicket
 	RowCreate
 	RowSpacer
 )
@@ -33,6 +35,7 @@ type Row struct {
 	Type      RowType
 	Project   *data.Project
 	Workspace *data.Workspace
+	Ticket    *tickets.Ticket
 	// ActivityWorkspaceID is precomputed to avoid per-frame path normalization.
 	ActivityWorkspaceID string
 	// MainWorkspace points to a project's primary/main workspace for project rows.
@@ -83,6 +86,9 @@ type Model struct {
 
 	// Agent activity state
 	activeWorkspaceIDs map[string]bool // Workspace IDs with active agents (synced from center)
+
+	// Ticket state
+	ticketCache map[string][]tickets.Ticket // project path → cached tickets
 
 	// Styles
 	styles common.Styles
@@ -169,6 +175,15 @@ func (m *Model) SetProjects(projects []data.Project) {
 		m.scrollOffset = prevOffset
 		m.clampScrollOffset()
 	}
+}
+
+// SetTickets updates the cached tickets for a project and rebuilds rows.
+func (m *Model) SetTickets(projectPath string, t []tickets.Ticket) {
+	if m.ticketCache == nil {
+		m.ticketCache = make(map[string][]tickets.Ticket)
+	}
+	m.ticketCache[projectPath] = t
+	m.rebuildRows()
 }
 
 // visibleHeight returns the number of visible rows in the dashboard

@@ -152,8 +152,8 @@ func TestHandleTicketStoreResult_Success_SetsPerProjectFields(t *testing.T) {
 		service:     tickets.NewTicketService(nil, reg, tickets.NewRenderer()),
 	}
 	cmds := app.handleTicketStoreResult(result)
-	if len(cmds) != 0 {
-		t.Fatalf("expected no cmds on success, got %d", len(cmds))
+	if len(cmds) != 1 {
+		t.Fatalf("expected 1 cmd (loadTicketsForProject) on success, got %d", len(cmds))
 	}
 	if app.ticketServices["/test"] == nil {
 		t.Fatal("ticketServices[\"/test\"] should be set on success")

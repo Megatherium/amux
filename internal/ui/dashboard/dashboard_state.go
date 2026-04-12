@@ -95,6 +95,16 @@ func (m *Model) rebuildRows() {
 			})
 		}
 
+		if cached, ok := m.ticketCache[project.Path]; ok {
+			for i := range cached {
+				m.rows = append(m.rows, Row{
+					Type:    RowTicket,
+					Project: project,
+					Ticket:  &cached[i],
+				})
+			}
+		}
+
 		m.rows = append(m.rows, Row{
 			Type:    RowCreate,
 			Project: project,

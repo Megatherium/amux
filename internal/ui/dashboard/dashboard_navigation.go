@@ -145,6 +145,10 @@ func (m *Model) activateCurrentRow() tea.Cmd {
 				Workspace: row.Workspace,
 			}
 		}
+	case RowTicket:
+		// TicketSelectedMsg is currently unhandled at the app layer.
+		// Only emit on explicit Enter (handleEnter), not auto-activate.
+		return nil
 	}
 
 	// RowCreate, RowAddProject, RowSpacer - no auto-preview
@@ -186,6 +190,10 @@ func (m *Model) handleEnter() tea.Cmd {
 				Project:   row.Project,
 				Workspace: row.Workspace,
 			}
+		}
+	case RowTicket:
+		return func() tea.Msg {
+			return messages.TicketSelectedMsg{Ticket: row.Ticket}
 		}
 	case RowCreate:
 		return func() tea.Msg {
