@@ -117,3 +117,153 @@ func TestAutoReattachActiveTabOnSelection_SkipsRestoreInFlightPlaceholder(t *tes
 		t.Fatalf("expected auto reattach to skip while restore reattach is in flight")
 	}
 }
+
+func TestAddDetachedTab_PreservesTicketMetadata(t *testing.T) {
+	m := newTestModel()
+	ws := newTestWorkspace("ws", "/repo/ws")
+	wsID := string(ws.ID())
+
+	m.addDetachedTab(ws, data.TabInfo{
+		Assistant:   "claude",
+		Name:        "Claude",
+		SessionName: "sess-detached",
+		TicketID:    "bmx-42",
+		TicketTitle: "Fix the thing",
+		Model:       "claude-sonnet-4-20250514",
+		Agent:       "code",
+	})
+
+	tabs := m.tabsByWorkspace[wsID]
+	if len(tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(tabs))
+	}
+	tab := tabs[0]
+	if tab.TicketID != "bmx-42" {
+		t.Errorf("TicketID: got %q, want %q", tab.TicketID, "bmx-42")
+	}
+	if tab.TicketTitle != "Fix the thing" {
+		t.Errorf("TicketTitle: got %q, want %q", tab.TicketTitle, "Fix the thing")
+	}
+	if tab.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model: got %q, want %q", tab.Model, "claude-sonnet-4-20250514")
+	}
+	if tab.AgentMode != "code" {
+		t.Errorf("AgentMode: got %q, want %q", tab.AgentMode, "code")
+	}
+}
+
+func TestAddPlaceholderTab_PreservesTicketMetadata(t *testing.T) {
+	m := newTestModel()
+	ws := newTestWorkspace("ws", "/repo/ws")
+	wsID := string(ws.ID())
+
+	_, _ = m.addPlaceholderTab(ws, data.TabInfo{
+		Assistant:   "claude",
+		Name:        "Claude",
+		SessionName: "sess-placeholder",
+		TicketID:    "bmx-99",
+		TicketTitle: "Implement feature",
+		Model:       "gpt-4o",
+		Agent:       "plan",
+	})
+
+	tabs := m.tabsByWorkspace[wsID]
+	if len(tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(tabs))
+	}
+	tab := tabs[0]
+	if tab.TicketID != "bmx-99" {
+		t.Errorf("TicketID: got %q, want %q", tab.TicketID, "bmx-99")
+	}
+	if tab.TicketTitle != "Implement feature" {
+		t.Errorf("TicketTitle: got %q, want %q", tab.TicketTitle, "Implement feature")
+	}
+	if tab.Model != "gpt-4o" {
+		t.Errorf("Model: got %q, want %q", tab.Model, "gpt-4o")
+	}
+	if tab.AgentMode != "plan" {
+		t.Errorf("AgentMode: got %q, want %q", tab.AgentMode, "plan")
+	}
+}
+
+func TestGetTabsInfoForWorkspace_PreservesTicketMetadata(t *testing.T) {
+	m := newTestModel()
+	ws := newTestWorkspace("ws", "/repo/ws")
+	wsID := string(ws.ID())
+
+	m.addDetachedTab(ws, data.TabInfo{
+		Assistant:   "claude",
+		Name:        "Claude",
+		SessionName: "sess-1",
+		TicketID:    "bmx-7",
+		TicketTitle: "Roundtrip test",
+		Model:       "claude-sonnet-4-20250514",
+		Agent:       "code",
+	})
+	m.addDetachedTab(ws, data.TabInfo{
+		Assistant:   "codex",
+		Name:        "Codex",
+		SessionName: "sess-2",
+	})
+
+	infos, _ := m.GetTabsInfoForWorkspace(wsID)
+	if len(infos) != 2 {
+		t.Fatalf("expected 2 tab infos, got %d", len(infos))
+	}
+
+	got := infos[0]
+	if got.TicketID != "bmx-7" {
+		t.Errorf("TicketID: got %q, want %q", got.TicketID, "bmx-7")
+	}
+	if got.TicketTitle != "Roundtrip test" {
+		t.Errorf("TicketTitle: got %q, want %q", got.TicketTitle, "Roundtrip test")
+	}
+	if got.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model: got %q, want %q", got.Model, "claude-sonnet-4-20250514")
+	}
+	if got.Agent != "code" {
+		t.Errorf("Agent: got %q, want %q", got.Agent, "code")
+	}
+
+	empty := infos[1]
+	if empty.TicketID != "" {
+		t.Errorf("TicketID: got %q, want empty", empty.TicketID)
+	}
+	if empty.Agent != "" {
+		t.Errorf("Agent: got %q, want empty", empty.Agent)
+	}
+}
+
+func TestGetTabsInfo_PreservesTicketMetadata(t *testing.T) {
+	m := newTestModel()
+	ws := newTestWorkspace("ws", "/repo/ws")
+
+	m.workspace = ws
+	m.addDetachedTab(ws, data.TabInfo{
+		Assistant:   "claude",
+		Name:        "Claude",
+		SessionName: "sess-1",
+		TicketID:    "bmx-55",
+		TicketTitle: "GetTabsInfo roundtrip",
+		Model:       "gemini-pro",
+		Agent:       "plan",
+	})
+
+	infos, _ := m.GetTabsInfo()
+	if len(infos) != 1 {
+		t.Fatalf("expected 1 tab info, got %d", len(infos))
+	}
+	got := infos[0]
+	if got.TicketID != "bmx-55" {
+		t.Errorf("TicketID: got %q, want %q", got.TicketID, "bmx-55")
+	}
+	if got.TicketTitle != "GetTabsInfo roundtrip" {
+		t.Errorf("TicketTitle: got %q, want %q", got.TicketTitle, "GetTabsInfo roundtrip")
+	}
+	if got.Model != "gemini-pro" {
+		t.Errorf("Model: got %q, want %q", got.Model, "gemini-pro")
+	}
+	if got.Agent != "plan" {
+		t.Errorf("Agent: got %q, want %q", got.Agent, "plan")
+	}
+}

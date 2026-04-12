@@ -47,6 +47,10 @@ func (m *Model) addDetachedTab(ws *data.Workspace, info data.TabInfo) {
 		Terminal:      term,
 		createdAt:     ca,
 		lastFocusedAt: time.Unix(ca, 0),
+		TicketID:      info.TicketID,
+		TicketTitle:   info.TicketTitle,
+		Model:         info.Model,
+		AgentMode:     info.Agent,
 	}
 	isChat := m.isChatTab(tab)
 	term.IgnoreCursorVisibilityControls = false
@@ -87,18 +91,21 @@ func (m *Model) addPlaceholderTab(ws *data.Workspace, info data.TabInfo) (TabID,
 		ca = time.Now().Unix()
 	}
 	tab := &Tab{
-		ID:          tabID,
-		Name:        displayName,
-		Assistant:   info.Assistant,
-		Workspace:   ws,
-		SessionName: sessionName,
-		Detached:    true,
-		Running:     false,
-		// Placeholder tabs are immediately queued for async reattach.
+		ID:               tabID,
+		Name:             displayName,
+		Assistant:        info.Assistant,
+		Workspace:        ws,
+		SessionName:      sessionName,
+		Detached:         true,
+		Running:          false,
 		reattachInFlight: true,
 		Terminal:         term,
 		createdAt:        ca,
 		lastFocusedAt:    time.Unix(ca, 0),
+		TicketID:         info.TicketID,
+		TicketTitle:      info.TicketTitle,
+		Model:            info.Model,
+		AgentMode:        info.Agent,
 	}
 	isChat := m.isChatTab(tab)
 	term.IgnoreCursorVisibilityControls = false
@@ -116,6 +123,15 @@ func (m *Model) reattachToSession(ws *data.Workspace, tabID TabID, assistant, se
 	termWidth := tm.Width
 	termHeight := tm.Height
 	opts := m.getTmuxOptions()
+	wsID := string(ws.ID())
+	tab := m.getTabByID(wsID, tabID)
+	var ticketID, ticketTitle, modelName, agentMode string
+	if tab != nil {
+		ticketID = tab.TicketID
+		ticketTitle = tab.TicketTitle
+		modelName = tab.Model
+		agentMode = tab.AgentMode
+	}
 	return func() tea.Msg {
 		state, err := tmux.SessionStateFor(sessionName, opts)
 		if err != nil {
@@ -143,6 +159,10 @@ func (m *Model) reattachToSession(ws *data.Workspace, tabID TabID, assistant, se
 			InstanceID:   m.instanceID,
 			SessionOwner: m.instanceID,
 			LeaseAtMS:    time.Now().UnixMilli(),
+			TicketID:     ticketID,
+			TicketTitle:  ticketTitle,
+			Model:        modelName,
+			AgentMode:    agentMode,
 		}
 		agent, err := m.agentManager.CreateAgentWithTags(ws, appPty.AgentType(assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
 		if err != nil {

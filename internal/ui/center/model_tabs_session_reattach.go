@@ -68,6 +68,10 @@ func (m *Model) ReattachActiveTab() tea.Cmd {
 	assistant := tab.Assistant
 	ws := tab.Workspace
 	tabID := tab.ID
+	ticketID := tab.TicketID
+	ticketTitle := tab.TicketTitle
+	modelName := tab.Model
+	agentMode := tab.AgentMode
 	opts := m.getTmuxOptions()
 	return func() tea.Msg {
 		state, err := tmux.SessionStateFor(sessionName, opts)
@@ -92,6 +96,10 @@ func (m *Model) ReattachActiveTab() tea.Cmd {
 				InstanceID:   m.instanceID,
 				SessionOwner: m.instanceID,
 				LeaseAtMS:    time.Now().UnixMilli(),
+				TicketID:     ticketID,
+				TicketTitle:  ticketTitle,
+				Model:        modelName,
+				AgentMode:    agentMode,
 			}
 			agent, err := m.agentManager.CreateAgentWithTags(ws, appPty.AgentType(assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
 			if err != nil {
@@ -121,6 +129,10 @@ func (m *Model) ReattachActiveTab() tea.Cmd {
 			InstanceID:   m.instanceID,
 			SessionOwner: m.instanceID,
 			LeaseAtMS:    time.Now().UnixMilli(),
+			TicketID:     ticketID,
+			TicketTitle:  ticketTitle,
+			Model:        modelName,
+			AgentMode:    agentMode,
 		}
 		agent, err := m.agentManager.CreateAgentWithTags(ws, appPty.AgentType(assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
 		if err != nil {
@@ -196,6 +208,10 @@ func (m *Model) RestartActiveTab() tea.Cmd {
 	termWidth := tm.Width
 	termHeight := tm.Height
 	assistant := tab.Assistant
+	ticketID := tab.TicketID
+	ticketTitle := tab.TicketTitle
+	modelName := tab.Model
+	agentMode := tab.AgentMode
 
 	return func() tea.Msg {
 		// KillSession is synchronous: it calls cmd.Run() which blocks until the
@@ -215,6 +231,10 @@ func (m *Model) RestartActiveTab() tea.Cmd {
 			InstanceID:   m.instanceID,
 			SessionOwner: m.instanceID,
 			LeaseAtMS:    time.Now().UnixMilli(),
+			TicketID:     ticketID,
+			TicketTitle:  ticketTitle,
+			Model:        modelName,
+			AgentMode:    agentMode,
 		}
 		agent, err := m.agentManager.CreateAgentWithTags(ws, appPty.AgentType(assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
 		if err != nil {

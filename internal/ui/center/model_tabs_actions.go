@@ -240,6 +240,10 @@ func (m *Model) GetTabsInfo() ([]data.TabInfo, int) {
 			SessionName: sessionName,
 			Status:      status,
 			CreatedAt:   tab.createdAt,
+			TicketID:    tab.TicketID,
+			TicketTitle: tab.TicketTitle,
+			Model:       tab.Model,
+			Agent:       tab.AgentMode,
 		})
 	}
 	return result, m.getActiveTabIdx()
@@ -273,6 +277,10 @@ func (m *Model) GetTabsInfoForWorkspace(wsID string) ([]data.TabInfo, int) {
 			SessionName: sessionName,
 			Status:      status,
 			CreatedAt:   tab.createdAt,
+			TicketID:    tab.TicketID,
+			TicketTitle: tab.TicketTitle,
+			Model:       tab.Model,
+			Agent:       tab.AgentMode,
 		})
 	}
 	return result, m.activeTabByWorkspace[wsID]

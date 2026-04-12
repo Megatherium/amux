@@ -55,6 +55,13 @@ type Tab struct {
 	Agent       *appPty.Agent
 	SessionName string
 	Detached    bool
+	// Ticket metadata — carried from TabInfo so that persistence round-trips
+	// (TabInfo → Tab → GetTabsInfo → TabInfo) preserve ticket context.
+	// AgentMode maps to TabInfo.Agent (string) and SessionTags.AgentMode.
+	TicketID    string
+	TicketTitle string
+	Model       string
+	AgentMode   string
 	// reattachInFlight prevents overlapping reattach attempts for the same tab.
 	reattachInFlight  bool
 	Terminal          *vterm.VTerm // Virtual terminal emulator with scrollback
