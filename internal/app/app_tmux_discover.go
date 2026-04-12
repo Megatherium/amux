@@ -9,6 +9,7 @@ import (
 
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/logging"
+	"github.com/andyrewlee/amux/internal/tmux"
 	"github.com/andyrewlee/amux/internal/ui/sidebar"
 )
 
@@ -57,7 +58,11 @@ func (a *App) discoverWorkspaceTabsFromTmux(ws *data.Workspace) tea.Cmd {
 			"@amux_workspace": wsID,
 			"@amux_type":      "agent",
 		}
-		rows, err := svc.SessionsWithTags(match, []string{"@amux_assistant", "@amux_created_at"}, opts)
+		rows, err := svc.SessionsWithTags(match, []string{
+			"@amux_assistant", "@amux_created_at",
+			tmux.TagTicketID, tmux.TagTicketTitle,
+			tmux.TagModel, tmux.TagAgentMode,
+		}, opts)
 		if err != nil {
 			logging.Warn("tmux session discovery failed: %v", err)
 			return nil
@@ -93,6 +98,10 @@ func (a *App) discoverWorkspaceTabsFromTmux(ws *data.Workspace) tea.Cmd {
 				SessionName: row.Name,
 				Status:      "running",
 				CreatedAt:   createdAt,
+				TicketID:    strings.TrimSpace(row.Tags[tmux.TagTicketID]),
+				TicketTitle: strings.TrimSpace(row.Tags[tmux.TagTicketTitle]),
+				Model:       strings.TrimSpace(row.Tags[tmux.TagModel]),
+				Agent:       strings.TrimSpace(row.Tags[tmux.TagAgentMode]),
 			})
 		}
 		sort.Slice(tabs, func(i, j int) bool {
