@@ -126,6 +126,13 @@ func (v *VTerm) shiftSelectionAfterTrim(trim int) {
 	}
 }
 
+// SelectedText returns text from the stored selection coordinates.
+// It does not check selActive so callers that hold their own Active flag
+// (e.g. common.SelectionState) can still copy after a concurrent ClearSelection.
+func (v *VTerm) SelectedText() string {
+	return v.GetSelectedText(v.selStartX, v.selStartLine, v.selEndX, v.selEndLine)
+}
+
 // GetSelectedText extracts text from the current selection.
 // Returns empty string if no selection is active.
 func (v *VTerm) GetSelectedText(startX, startLine, endX, endLine int) string {

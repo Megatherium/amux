@@ -134,10 +134,7 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 			}
 			tab.mu.Lock()
 			if tab.Terminal != nil && tab.Terminal.HasSelection() {
-				text := tab.Terminal.GetSelectedText(
-					tab.Terminal.SelStartX(), tab.Terminal.SelStartLine(),
-					tab.Terminal.SelEndX(), tab.Terminal.SelEndLine(),
-				)
+				text := tab.Terminal.SelectedText()
 				if text != "" {
 					if err := common.CopyToClipboard(text); err != nil {
 						logging.Error("Failed to copy to clipboard: %v", err)

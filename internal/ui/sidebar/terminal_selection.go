@@ -249,10 +249,7 @@ func (m *TerminalModel) handleMouseRelease(msg tea.MouseReleaseMsg) (*TerminalMo
 		if ts.VTerm != nil &&
 			(ts.Selection.StartX != ts.Selection.EndX ||
 				ts.Selection.StartLine != ts.Selection.EndLine) {
-			text := ts.VTerm.GetSelectedText(
-				ts.VTerm.SelStartX(), ts.VTerm.SelStartLine(),
-				ts.VTerm.SelEndX(), ts.VTerm.SelEndLine(),
-			)
+			text := ts.VTerm.SelectedText()
 			if text != "" {
 				if err := common.CopyToClipboard(text); err != nil {
 					logging.Error("Failed to copy sidebar selection: %v", err)
