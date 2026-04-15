@@ -9,7 +9,9 @@ import (
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/center"
+	"github.com/andyrewlee/amux/internal/ui/dashboard"
 	"github.com/andyrewlee/amux/internal/ui/layout"
+	"github.com/andyrewlee/amux/internal/ui/sidebar"
 )
 
 func newPrefixTestApp(t *testing.T) (*App, *data.Workspace, *center.Model) {
@@ -34,6 +36,30 @@ func newPrefixTestApp(t *testing.T) (*App, *data.Workspace, *center.Model) {
 		focusedPane: messages.PaneCenter,
 	}
 	return app, ws, centerModel
+}
+
+// newLayoutTestApp returns an App with all UI components initialized for layout testing.
+func newLayoutTestApp(t *testing.T) *App {
+	t.Helper()
+
+	cfg := &config.Config{
+		Assistants: map[string]config.AssistantConfig{
+			"claude": {},
+		},
+	}
+
+	app := &App{
+		center:          center.New(cfg),
+		dashboard:       dashboard.New(),
+		sidebar:         sidebar.NewTabbedSidebar(),
+		sidebarTerminal: sidebar.NewTerminalModel(),
+		layout:          layout.NewManager(),
+		keymap:          DefaultKeyMap(),
+		focusedPane:     messages.PaneCenter,
+	}
+	app.layout.Resize(200, 40)
+	app.updateLayout()
+	return app
 }
 
 func TestHandlePrefixNumericTabSelection_InvalidIndexNoOp(t *testing.T) {
@@ -399,5 +425,185 @@ func TestRunPrefixAction_FocusRightPartialApp_NoPanic(t *testing.T) {
 	_ = app.runPrefixAction("focus_right")
 	if app.focusedPane != messages.PaneCenter {
 		t.Fatalf("expected focused pane center, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleBothSidebars(t *testing.T) {
+	app := newLayoutTestApp(t)
+
+	if app.layout.IsCollapsed() {
+		t.Fatal("should not be collapsed initially")
+	}
+
+	app.runPrefixAction("toggle_both_sidebars")
+
+	if !app.layout.IsCollapsed() {
+		t.Fatal("layout should be collapsed after toggle_both_sidebars")
+	}
+	if !app.layout.ShowCenter() {
+		t.Fatal("center should be visible when collapsed")
+	}
+	if app.layout.ShowDashboard() {
+		t.Fatal("dashboard should be hidden when collapsed")
+	}
+	if app.layout.ShowSidebar() {
+		t.Fatal("sidebar should be hidden when collapsed")
+	}
+}
+
+func TestRunPrefixAction_ToggleBothSidebars_Roundtrip(t *testing.T) {
+	app := newLayoutTestApp(t)
+	origCenter := app.layout.CenterWidth()
+
+	app.runPrefixAction("toggle_both_sidebars")
+	if app.layout.CenterWidth() <= origCenter {
+		t.Fatalf("center should expand when collapsed: got %d, had %d", app.layout.CenterWidth(), origCenter)
+	}
+
+	app.runPrefixAction("toggle_both_sidebars")
+	if app.layout.CenterWidth() != origCenter {
+		t.Fatalf("center should restore: got %d, want %d", app.layout.CenterWidth(), origCenter)
+	}
+}
+
+func TestRunPrefixAction_ToggleDashboard(t *testing.T) {
+	app := newLayoutTestApp(t)
+
+	app.runPrefixAction("toggle_dashboard")
+
+	if app.layout.ShowDashboard() {
+		t.Fatal("dashboard should be hidden after toggle_dashboard")
+	}
+	if !app.layout.ShowSidebar() {
+		t.Fatal("sidebar should remain visible after toggle_dashboard")
+	}
+	if !app.layout.ShowCenter() {
+		t.Fatal("center should remain visible")
+	}
+}
+
+func TestRunPrefixAction_ToggleSidebar(t *testing.T) {
+	app := newLayoutTestApp(t)
+
+	app.runPrefixAction("toggle_sidebar")
+
+	if app.layout.ShowSidebar() {
+		t.Fatal("sidebar should be hidden after toggle_sidebar")
+	}
+	if !app.layout.ShowDashboard() {
+		t.Fatal("dashboard should remain visible after toggle_sidebar")
+	}
+	if !app.layout.ShowCenter() {
+		t.Fatal("center should remain visible")
+	}
+}
+
+func TestRunPrefixAction_ToggleBoth_RelocatesFocusFromDashboard(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneDashboard
+
+	app.runPrefixAction("toggle_both_sidebars")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleBoth_KeepsCenterFocus(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneCenter
+
+	app.runPrefixAction("toggle_both_sidebars")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("center focus should be preserved, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleBoth_RelocatesFocusFromSidebar(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneSidebar
+
+	app.runPrefixAction("toggle_both_sidebars")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleBoth_RelocatesFocusFromSidebarTerminal(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneSidebarTerminal
+
+	app.runPrefixAction("toggle_both_sidebars")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar terminal is hidden, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleDashboard_RelocatesFocusFromDashboard(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneDashboard
+
+	app.runPrefixAction("toggle_dashboard")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when dashboard is hidden, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleSidebar_RelocatesFocusFromSidebar(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneSidebar
+
+	app.runPrefixAction("toggle_sidebar")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.focusedPane)
+	}
+}
+
+func TestRunPrefixAction_ToggleSidebar_RelocatesFocusFromSidebarTerminal(t *testing.T) {
+	app := newLayoutTestApp(t)
+	app.focusedPane = messages.PaneSidebarTerminal
+
+	app.runPrefixAction("toggle_sidebar")
+
+	if app.focusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.focusedPane)
+	}
+}
+
+func TestPrefixCommand_bb_MatchesToggleBoth(t *testing.T) {
+	app, _, _ := newPrefixTestApp(t)
+
+	app.prefixActive = true
+	app.prefixSequence = []string{"b"}
+	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'b', Text: "b"})
+	if status != prefixMatchComplete {
+		t.Fatalf("prefix 'b b' should complete, got %v", status)
+	}
+}
+
+func TestPrefixCommand_bh_IsPartial(t *testing.T) {
+	app, _, _ := newPrefixTestApp(t)
+
+	app.prefixActive = true
+	app.prefixSequence = []string{"b"}
+	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'h', Text: "h"})
+	if status != prefixMatchComplete {
+		t.Fatalf("prefix 'b h' should complete, got %v", status)
+	}
+}
+
+func TestPrefixCommand_bl_IsPartial(t *testing.T) {
+	app, _, _ := newPrefixTestApp(t)
+
+	app.prefixActive = true
+	app.prefixSequence = []string{"b"}
+	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'l', Text: "l"})
+	if status != prefixMatchComplete {
+		t.Fatalf("prefix 'b l' should complete, got %v", status)
 	}
 }

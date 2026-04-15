@@ -40,7 +40,9 @@ func (a *App) focusPaneLeft() tea.Cmd {
 		}
 		return a.focusPane(messages.PaneDashboard)
 	case messages.PaneCenter:
-		return a.focusPane(messages.PaneDashboard)
+		if a.layout == nil || a.layout.ShowDashboard() {
+			return a.focusPane(messages.PaneDashboard)
+		}
 	}
 	return nil
 }
@@ -79,6 +81,9 @@ type prefixCommand struct {
 
 var prefixCommandTable = []prefixCommand{
 	{Sequence: []string{"a"}, Desc: "add project", Action: "add_project"},
+	{Sequence: []string{"b", "b"}, Desc: "toggle both sidebars", Action: "toggle_both_sidebars"},
+	{Sequence: []string{"b", "h"}, Desc: "toggle dashboard", Action: "toggle_dashboard"},
+	{Sequence: []string{"b", "l"}, Desc: "toggle sidebar", Action: "toggle_sidebar"},
 	{Sequence: []string{"d"}, Desc: "delete workspace", Action: "delete_workspace"},
 	{Sequence: []string{"S"}, Desc: "Settings", Action: "open_settings"},
 	{Sequence: []string{"q"}, Desc: "quit", Action: "quit"},
@@ -249,6 +254,12 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 		}
 	case "open_settings":
 		return func() tea.Msg { return messages.ShowSettingsDialog{} }
+	case "toggle_both_sidebars":
+		return a.togglePaneCollapse("both")
+	case "toggle_dashboard":
+		return a.togglePaneCollapse("dashboard")
+	case "toggle_sidebar":
+		return a.togglePaneCollapse("sidebar")
 	case "quit":
 		a.showQuitDialog()
 		return nil
@@ -343,6 +354,38 @@ func (a *App) prefixSelectTab(index int) tea.Cmd {
 	return common.SafeBatch(cmd, a.persistActiveWorkspaceTabs())
 }
 
+// togglePaneCollapse toggles a pane's collapse state and relocates focus if needed.
+func (a *App) togglePaneCollapse(pane string) tea.Cmd {
+	if a.layout == nil {
+		return nil
+	}
+	switch pane {
+	case "both":
+		a.layout.ToggleBoth()
+	case "dashboard":
+		a.layout.ToggleDashboard()
+	case "sidebar":
+		a.layout.ToggleSidebar()
+	default:
+		return nil
+	}
+	a.updateLayout()
+
+	needsRelocate := false
+	switch a.focusedPane {
+	case messages.PaneDashboard:
+		needsRelocate = !a.layout.ShowDashboard()
+	case messages.PaneSidebar, messages.PaneSidebarTerminal:
+		needsRelocate = !a.layout.ShowSidebar()
+	}
+	if needsRelocate {
+		a.focusPane(messages.PaneCenter)
+	} else {
+		a.syncPaneFocusFlags()
+	}
+	return nil
+}
+
 // sendPrefixToTerminal sends a literal Ctrl-Space (NUL) to the focused terminal
 func (a *App) sendPrefixToTerminal() {
 	switch a.focusedPane {
@@ -362,12 +405,12 @@ func (a *App) updateLayout() {
 	leftGutter := a.layout.LeftGutter()
 	topGutter := a.layout.TopGutter()
 	gapX := 0
-	if a.layout.ShowCenter() {
+	if a.layout.ShowCenter() && a.layout.ShowDashboard() {
 		gapX = a.layout.GapX()
 	}
 	a.center.SetOffset(
 		leftGutter + a.layout.DashboardWidth() + gapX,
-	) // Set X offset for mouse coordinate conversion
+	)
 	a.center.SetCanFocusRight(a.layout.ShowSidebar())
 	a.dashboard.SetCanFocusRight(a.layout.ShowCenter())
 
@@ -394,12 +437,13 @@ func (a *App) updateLayout() {
 	// Calculate and set offsets for sidebar mouse handling
 	// X: Dashboard + Center + Border(1) + Padding(1)
 	sidebarX := leftGutter + a.layout.DashboardWidth()
-	if a.layout.ShowCenter() {
-		sidebarX += a.layout.GapX() + a.layout.CenterWidth()
-	}
-	if a.layout.ShowSidebar() {
+	if a.layout.ShowDashboard() && a.layout.ShowCenter() {
 		sidebarX += a.layout.GapX()
 	}
+	if a.layout.ShowCenter() {
+		sidebarX += a.layout.CenterWidth()
+	}
+	sidebarX += a.layout.GapX()
 	sidebarContentOffsetX := sidebarX + 2 // +2 for border and padding
 
 	// Y: Top pane height (including its border) + Bottom pane border(1)

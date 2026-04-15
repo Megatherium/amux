@@ -19,6 +19,9 @@ const (
 type Manager struct {
 	mode LayoutMode
 
+	dashboardCollapsed bool
+	sidebarCollapsed   bool
+
 	totalWidth  int
 	totalHeight int
 
@@ -63,6 +66,84 @@ func NewManager() *Manager {
 	}
 }
 
+// IsCollapsed returns whether any sidebar is user-collapsed.
+func (m *Manager) IsCollapsed() bool {
+	return m.dashboardCollapsed || m.sidebarCollapsed
+}
+
+// ToggleDashboard flips the dashboard collapse state.
+func (m *Manager) ToggleDashboard() {
+	m.dashboardCollapsed = !m.dashboardCollapsed
+	m.applyWidths()
+}
+
+// ToggleSidebar flips the sidebar collapse state.
+func (m *Manager) ToggleSidebar() {
+	m.sidebarCollapsed = !m.sidebarCollapsed
+	m.applyWidths()
+}
+
+// ToggleBoth flips both collapse states together.
+func (m *Manager) ToggleBoth() {
+	if m.dashboardCollapsed && m.sidebarCollapsed {
+		m.dashboardCollapsed = false
+		m.sidebarCollapsed = false
+	} else {
+		m.dashboardCollapsed = true
+		m.sidebarCollapsed = true
+	}
+	m.applyWidths()
+}
+
+// applyWidths recalculates pane widths based on current mode and collapse state.
+func (m *Manager) applyWidths() {
+	anyCollapsed := m.dashboardCollapsed || m.sidebarCollapsed
+	if !anyCollapsed {
+		switch m.mode {
+		case LayoutThreePane:
+			m.calculateThreePaneWidths()
+		case LayoutTwoPane:
+			m.calculateTwoPaneWidths()
+		default:
+			m.dashboardWidth = m.totalWidth
+			m.centerWidth = 0
+			m.sidebarWidth = 0
+		}
+		return
+	}
+
+	// Calculate base widths from mode, then zero out collapsed panes.
+	switch m.mode {
+	case LayoutThreePane:
+		m.calculateThreePaneWidths()
+	case LayoutTwoPane:
+		m.calculateTwoPaneWidths()
+	default:
+		m.dashboardWidth = m.totalWidth
+		m.centerWidth = 0
+		m.sidebarWidth = 0
+	}
+
+	recovered := 0
+	if m.dashboardCollapsed {
+		recovered += m.dashboardWidth
+		if m.mode != LayoutOnePane {
+			recovered += m.gapX
+		}
+		m.dashboardWidth = 0
+	}
+	if m.sidebarCollapsed {
+		if m.sidebarWidth > 0 {
+			recovered += m.sidebarWidth + m.gapX
+		}
+		m.sidebarWidth = 0
+	}
+	m.centerWidth += recovered
+	if m.centerWidth < 1 {
+		m.centerWidth = 1
+	}
+}
+
 // Resize recalculates layout based on new dimensions
 func (m *Manager) Resize(width, height int) {
 	m.leftGutter = m.baseOuterGutter
@@ -85,18 +166,15 @@ func (m *Manager) Resize(width, height int) {
 	minTwo := m.minDashboardWidth + m.minChatWidth + m.gapX
 
 	switch {
-	case usableWidth >= minThree+20: // Some buffer for borders
+	case usableWidth >= minThree+20:
 		m.mode = LayoutThreePane
-		m.calculateThreePaneWidths()
 	case usableWidth >= minTwo+10:
 		m.mode = LayoutTwoPane
-		m.calculateTwoPaneWidths()
 	default:
 		m.mode = LayoutOnePane
-		m.dashboardWidth = usableWidth
-		m.centerWidth = 0
-		m.sidebarWidth = 0
 	}
+
+	m.applyWidths()
 }
 
 // calculateThreePaneWidths calculates widths for three-pane mode
@@ -214,10 +292,18 @@ func (m *Manager) Render(dashboard, center, sidebar string) string {
 
 // ShowSidebar returns whether the sidebar should be shown
 func (m *Manager) ShowSidebar() bool {
-	return m.mode == LayoutThreePane
+	return !m.sidebarCollapsed && m.mode == LayoutThreePane
 }
 
 // ShowCenter returns whether the center pane should be shown
 func (m *Manager) ShowCenter() bool {
+	if m.dashboardCollapsed || m.sidebarCollapsed {
+		return true
+	}
 	return m.mode != LayoutOnePane
+}
+
+// ShowDashboard returns whether the dashboard pane should be shown
+func (m *Manager) ShowDashboard() bool {
+	return !m.dashboardCollapsed
 }

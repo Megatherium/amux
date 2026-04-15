@@ -115,30 +115,38 @@ func (a *App) viewLayerBased() tea.View {
 	// Create canvas at screen dimensions
 	canvas := a.canvasFor(a.width, a.height)
 
-	// Dashboard pane (leftmost)
+	// Shared layout metrics (used by center and sidebar rendering below).
 	leftGutter := a.layout.LeftGutter()
 	topGutter := a.layout.TopGutter()
 	dashWidth := a.layout.DashboardWidth()
-	dashHeight := a.layout.Height()
-	dashContentWidth := dashWidth - 3
-	dashContentHeight := dashHeight - 2
-	if dashContentWidth < 1 {
-		dashContentWidth = 1
-	}
-	if dashContentHeight < 1 {
-		dashContentHeight = 1
-	}
-	dashContent := clampLines(a.dashboard.View(), dashContentWidth, dashContentHeight)
-	if dashDrawable := a.dashboardContent.get(dashContent, leftGutter+1, topGutter+1); dashDrawable != nil {
-		canvas.Compose(dashDrawable)
-	}
-	for _, border := range a.dashboardBorders.get(leftGutter, topGutter, dashWidth, dashHeight) {
-		canvas.Compose(border)
+
+	// Dashboard pane (leftmost)
+	if a.layout.ShowDashboard() {
+		dashHeight := a.layout.Height()
+		dashContentWidth := dashWidth - 3
+		dashContentHeight := dashHeight - 2
+		if dashContentWidth < 1 {
+			dashContentWidth = 1
+		}
+		if dashContentHeight < 1 {
+			dashContentHeight = 1
+		}
+		dashContent := clampLines(a.dashboard.View(), dashContentWidth, dashContentHeight)
+		if dashDrawable := a.dashboardContent.get(dashContent, leftGutter+1, topGutter+1); dashDrawable != nil {
+			canvas.Compose(dashDrawable)
+		}
+		for _, border := range a.dashboardBorders.get(leftGutter, topGutter, dashWidth, dashHeight) {
+			canvas.Compose(border)
+		}
 	}
 
 	// Center pane
 	if a.layout.ShowCenter() {
-		centerX := leftGutter + dashWidth + a.layout.GapX()
+		centerGap := 0
+		if a.layout.ShowDashboard() {
+			centerGap = a.layout.GapX()
+		}
+		centerX := leftGutter + dashWidth + centerGap
 		centerWidth := a.layout.CenterWidth()
 		centerHeight := a.layout.Height()
 
@@ -225,12 +233,13 @@ func (a *App) viewLayerBased() tea.View {
 	// Sidebar pane (rightmost)
 	if a.layout.ShowSidebar() {
 		sidebarX := leftGutter + a.layout.DashboardWidth()
-		if a.layout.ShowCenter() {
-			sidebarX += a.layout.GapX() + a.layout.CenterWidth()
-		}
-		if a.layout.ShowSidebar() {
+		if a.layout.ShowDashboard() && a.layout.ShowCenter() {
 			sidebarX += a.layout.GapX()
 		}
+		if a.layout.ShowCenter() {
+			sidebarX += a.layout.CenterWidth()
+		}
+		sidebarX += a.layout.GapX()
 		sidebarWidth := a.layout.SidebarWidth()
 		sidebarHeight := a.layout.Height()
 		topPaneHeight, bottomPaneHeight := sidebarPaneHeights(sidebarHeight)
