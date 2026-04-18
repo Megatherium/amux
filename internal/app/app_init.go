@@ -94,6 +94,7 @@ func New(version, commit, date string) (*App, error) {
 	}
 
 	ctx := context.Background()
+	kmap := buildKeymapFromEnv()
 	app := &App{
 		config:                 cfg,
 		workspaceService:       workspaceService,
@@ -116,7 +117,9 @@ func New(version, commit, date string) (*App, error) {
 		toast:                  common.NewToastModel(),
 		focusedPane:            messages.PaneDashboard,
 		showWelcome:            true,
-		keymap:                 DefaultKeyMap(),
+		keymap:                 kmap,
+		prefixLabel:            PrefixKeyLabel(),
+		prefixHelpLabel:        PrefixHelpLabel(),
 		dashboardChrome:        &compositor.ChromeCache{},
 		centerChrome:           &compositor.ChromeCache{},
 		sidebarChrome:          &compositor.ChromeCache{},
@@ -153,6 +156,10 @@ func New(version, commit, date string) (*App, error) {
 	app.center.SetStyles(app.styles)
 	app.toast.SetStyles(app.styles)
 	app.setKeymapHintsEnabled(cfg.UI.ShowKeymapHints)
+	// Propagate prefix key label to components for help bars
+	app.dashboard.SetPrefixHelpLabel(app.prefixHelpLabel)
+	app.center.SetPrefixHelpLabel(app.prefixHelpLabel)
+	app.sidebarTerminal.SetPrefixHelpLabel(app.prefixHelpLabel)
 	// Propagate tmux config to components
 	app.center.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
 	app.sidebarTerminal.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)

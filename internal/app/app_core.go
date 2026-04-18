@@ -128,9 +128,11 @@ type App struct {
 	ctx          context.Context
 	supervisor   *supervisor.Supervisor
 	// Prefix mode (leader key)
-	prefixActive   bool
-	prefixToken    int
-	prefixSequence []string
+	prefixActive    bool
+	prefixToken     int
+	prefixSequence  []string
+	prefixLabel     string
+	prefixHelpLabel string
 
 	tmuxSyncToken             int
 	tmuxActivityToken         int

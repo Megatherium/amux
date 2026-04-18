@@ -50,6 +50,9 @@ type Model struct {
 	tabHits    []tabHit
 	tmuxConfig tmuxConfig
 	instanceID string
+
+	// Prefix key label (e.g. "C-Spc" or custom override)
+	prefixHelpLabel string
 }
 
 // tmuxConfig holds tmux-related configuration
@@ -81,6 +84,19 @@ func (m *Model) SetTmuxConfig(serverName, configPath string) {
 	if m.agentManager != nil {
 		m.agentManager.SetTmuxOptions(m.getTmuxOptions())
 	}
+}
+
+// SetPrefixHelpLabel sets the display label for the prefix key in help bars.
+func (m *Model) SetPrefixHelpLabel(label string) {
+	m.prefixHelpLabel = label
+}
+
+// pfx returns the prefix help label, defaulting to "C-Spc".
+func (m *Model) pfx() string {
+	if m.prefixHelpLabel != "" {
+		return m.prefixHelpLabel
+	}
+	return "C-Spc"
 }
 
 type tabHitKind int

@@ -264,13 +264,25 @@ func (a *App) togglePaneCollapse(pane string) tea.Cmd {
 	return nil
 }
 
-// sendPrefixToTerminal sends a literal Ctrl-Space (NUL) to the focused terminal
+// sendPrefixToTerminal sends a literal prefix key byte to the focused terminal.
+// For the default C-Space it sends NUL (\x00). For custom overrides like ctrl+p
+// it sends the appropriate control byte. For keys with no single-byte form (e.g.
+// function keys), it sends nothing.
 func (a *App) sendPrefixToTerminal() {
+	keys := a.keymap.Prefix.Keys()
+	if len(keys) == 0 {
+		return
+	}
+	b := PrefixKeyByte(keys[0])
+	if b < 0 {
+		return
+	}
+	raw := string([]byte{byte(b)})
 	switch a.focusedPane {
 	case messages.PaneCenter:
-		a.center.SendToTerminal("\x00")
+		a.center.SendToTerminal(raw)
 	case messages.PaneSidebarTerminal:
-		a.sidebarTerminal.SendToTerminal("\x00")
+		a.sidebarTerminal.SendToTerminal(raw)
 	}
 }
 

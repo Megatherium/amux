@@ -130,6 +130,9 @@ type TerminalModel struct {
 	tmuxServerName string
 	tmuxConfigPath string
 	instanceID     string
+
+	// Prefix key label (e.g. "C-Spc" or custom override)
+	prefixHelpLabel string
 }
 
 // NewTerminalModel creates a new sidebar terminal model
@@ -140,6 +143,19 @@ func NewTerminalModel() *TerminalModel {
 		pendingCreation:      make(map[string]bool),
 		styles:               common.DefaultStyles(),
 	}
+}
+
+// SetPrefixHelpLabel sets the display label for the prefix key in help bars.
+func (m *TerminalModel) SetPrefixHelpLabel(label string) {
+	m.prefixHelpLabel = label
+}
+
+// pfx returns the prefix help label, defaulting to "C-Spc".
+func (m *TerminalModel) pfx() string {
+	if m.prefixHelpLabel != "" {
+		return m.prefixHelpLabel
+	}
+	return "C-Spc"
 }
 
 // SetTmuxConfig updates the tmux configuration.

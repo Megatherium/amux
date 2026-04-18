@@ -233,19 +233,19 @@ func (m *TerminalModel) helpLines(contentWidth int) []string {
 	hasTerm := ts != nil && ts.VTerm != nil
 
 	// Tab management hints
-	items = append(items, m.helpItem("C-Spc t t", "new term"))
+	items = append(items, m.helpItem(m.pfx()+" t t", "new term"))
 	if m.HasMultipleTabs() {
 		items = append(items,
-			m.helpItem("C-Spc t n", "next"),
-			m.helpItem("C-Spc t p", "prev"),
-			m.helpItem("C-Spc t x", "close"),
+			m.helpItem(m.pfx()+" t n", "next"),
+			m.helpItem(m.pfx()+" t p", "prev"),
+			m.helpItem(m.pfx()+" t x", "close"),
 		)
 	}
 	if hasTerm {
 		items = append(items,
-			m.helpItem("C-Spc t d", "detach"),
-			m.helpItem("C-Spc t r", "reattach"),
-			m.helpItem("C-Spc t s", "restart"),
+			m.helpItem(m.pfx()+" t d", "detach"),
+			m.helpItem(m.pfx()+" t r", "reattach"),
+			m.helpItem(m.pfx()+" t s", "restart"),
 		)
 	}
 

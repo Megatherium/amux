@@ -92,6 +92,9 @@ type Model struct {
 
 	// Styles
 	styles common.Styles
+
+	// Prefix key label (e.g. "C-Spc" or custom override)
+	prefixHelpLabel string
 }
 
 // New creates a new dashboard model
@@ -107,6 +110,19 @@ func New() *Model {
 		focused:            true,
 		styles:             common.DefaultStyles(),
 	}
+}
+
+// SetPrefixHelpLabel sets the display label for the prefix key in help bars.
+func (m *Model) SetPrefixHelpLabel(label string) {
+	m.prefixHelpLabel = label
+}
+
+// pfx returns the prefix help label, defaulting to "C-Space".
+func (m *Model) pfx() string {
+	if m.prefixHelpLabel != "" {
+		return m.prefixHelpLabel
+	}
+	return "C-Space"
 }
 
 // SetActiveWorkspaces updates the set of workspaces with active agents.

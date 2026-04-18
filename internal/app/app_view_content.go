@@ -89,7 +89,7 @@ func (a *App) renderWorkspaceInfo() string {
 	agentBtn := btnStyle.Render("[New agent]")
 	content += "\n" + agentBtn
 	if a.config.UI.ShowKeymapHints {
-		content += "\n" + a.styles.Help.Render("C-Spc t a:new agent")
+		content += "\n" + a.styles.Help.Render(a.prefixHelpLabel+" t a:new agent")
 	}
 
 	return content

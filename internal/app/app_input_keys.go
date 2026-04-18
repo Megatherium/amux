@@ -33,11 +33,11 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 
-	// 1. Handle prefix key (Ctrl+Space)
+	// 1. Handle prefix key
 	if a.isPrefixKey(msg) {
 		if a.prefixActive {
 			if len(a.prefixSequence) == 0 {
-				// Prefix + Prefix = send literal Ctrl+Space to terminal.
+				// Prefix + Prefix = send literal prefix key to terminal.
 				a.sendPrefixToTerminal()
 				a.exitPrefix()
 				return nil

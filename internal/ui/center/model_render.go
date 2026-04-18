@@ -130,18 +130,18 @@ func (m *Model) helpLines(contentWidth int) []string {
 	hasTabs := len(m.getTabs()) > 0
 	if m.workspace != nil {
 		items = append(items,
-			m.helpItem("C-Spc t a", "new agent tab"),
+			m.helpItem(m.pfx()+" t a", "new agent tab"),
 		)
 	}
 	if hasTabs {
 		items = append(items,
-			m.helpItem("C-Spc t x", "close"),
-			m.helpItem("C-Spc t d", "detach"),
-			m.helpItem("C-Spc t r", "reattach"),
-			m.helpItem("C-Spc t s", "restart"),
-			m.helpItem("C-Spc t p", "prev"),
-			m.helpItem("C-Spc t n", "next"),
-			m.helpItem("C-Spc 1-9", "jump tab"),
+			m.helpItem(m.pfx()+" t x", "close"),
+			m.helpItem(m.pfx()+" t d", "detach"),
+			m.helpItem(m.pfx()+" t r", "reattach"),
+			m.helpItem(m.pfx()+" t s", "restart"),
+			m.helpItem(m.pfx()+" t p", "prev"),
+			m.helpItem(m.pfx()+" t n", "next"),
+			m.helpItem(m.pfx()+" 1-9", "jump tab"),
 			m.helpItem("PgUp", "scroll up"),
 			m.helpItem("PgDn", "scroll down"),
 		)
@@ -163,7 +163,7 @@ func (m *Model) renderEmpty() string {
 	// Help text
 	b.WriteString("\n\n")
 	helpStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
-	b.WriteString(helpStyle.Render("C-Spc t a:new agent"))
+	b.WriteString(helpStyle.Render(m.pfx() + " t a:new agent"))
 
 	return b.String()
 }
