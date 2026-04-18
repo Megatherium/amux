@@ -65,6 +65,11 @@ type ptyTabCreateResult struct {
 	SnapshotCursorY             int
 	SnapshotHasCursor           bool
 	SnapshotModeState           tmux.PaneModeState
+	// Draft metadata
+	TicketID    string
+	TicketTitle string
+	Model       string
+	AgentMode   string
 }
 
 type ptyTabReattachResult struct {
@@ -99,12 +104,12 @@ func truncateDisplayName(name string) string {
 	return name
 }
 
-// createAgentTab creates a new agent tab
-func (m *Model) createAgentTab(assistant string, ws *data.Workspace) tea.Cmd {
-	return m.createAgentTabWithSession(assistant, ws, "", "", true)
+// createAgentTabWithMetadata creates a new agent tab with draft metadata.
+func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace, ticketID, ticketTitle, model, agentMode string) tea.Cmd {
+	return m.createAgentTabWithSession(assistant, ws, "", "", true, ticketID, ticketTitle, model, agentMode)
 }
 
-func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, sessionName, displayName string, activate bool) tea.Cmd {
+func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, sessionName, displayName string, activate bool, ticketID, ticketTitle, model, agentMode string) tea.Cmd {
 	if ws == nil {
 		return func() tea.Msg {
 			return messages.Error{Err: errors.New("no workspace selected"), Context: "creating agent"}
@@ -161,6 +166,10 @@ func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, 
 			CaptureFullPane:   false,
 			SnapshotCols:      termWidth,
 			SnapshotRows:      termHeight,
+			TicketID:          ticketID,
+			TicketTitle:       ticketTitle,
+			Model:             model,
+			AgentMode:         agentMode,
 		}
 	}
 }
@@ -341,6 +350,10 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 		Running:       true, // Agent/viewer starts running
 		createdAt:     now.Unix(),
 		lastFocusedAt: now,
+		TicketID:      msg.TicketID,
+		TicketTitle:   msg.TicketTitle,
+		Model:         msg.Model,
+		AgentMode:     msg.AgentMode,
 	}
 	isChat := m.isChatTab(tab)
 	term.IgnoreCursorVisibilityControls = false

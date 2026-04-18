@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/tickets"
@@ -222,4 +223,41 @@ func (a *App) handleSettingsResult(_ common.SettingsResult) tea.Cmd {
 	a.settingsDialog = nil
 	a.settingsDialogSession++
 	return a.persistSettingsThemeIfDirty()
+}
+
+// handleTicketSelected handles a ticket selection from the dashboard,
+// starting the draft flow in the center pane.
+func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
+	if msg.Ticket == nil {
+		return nil
+	}
+
+	project := msg.Project
+	if project == nil {
+		return []tea.Cmd{a.toast.ShowError("No project associated with this ticket")}
+	}
+
+	var mainWS *data.Workspace
+	for i := range project.Workspaces {
+		ws := &project.Workspaces[i]
+		if ws.IsMainBranch() || ws.IsPrimaryCheckout() {
+			mainWS = ws
+			break
+		}
+	}
+	if mainWS == nil {
+		return []tea.Cmd{a.toast.ShowError("No workspace found for project " + project.Name)}
+	}
+
+	var cmds []tea.Cmd
+	if a.activeWorkspace == nil || string(a.activeWorkspace.ID()) != string(mainWS.ID()) {
+		cmds = append(cmds, a.handleWorkspaceActivated(messages.WorkspaceActivated{
+			Project:   project,
+			Workspace: mainWS,
+		})...)
+	}
+
+	a.center.StartDraft(msg.Ticket, mainWS)
+	cmds = append(cmds, a.focusPane(messages.PaneCenter))
+	return cmds
 }

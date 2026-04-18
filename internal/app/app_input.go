@@ -164,6 +164,9 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ticketsForPickerLoaded:
 		a.handleTicketsForPickerLoaded(msg)
 
+	case messages.TicketSelectedMsg:
+		cmds = append(cmds, a.handleTicketSelected(msg)...)
+
 	case messages.ShowSettingsDialog:
 		a.handleShowSettingsDialog()
 

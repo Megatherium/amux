@@ -66,6 +66,7 @@ Start with `internal/app/ARCHITECTURE.md` for lifecycle, PTY flow, tmux tagging,
 ## Features
 
 - **Parallel agents**: Launch multiple agents within main repo and within workspaces
+- **Ticket-to-agent draft flow**: Select a ticket from the dashboard and configure an agent through a step-by-step slot stack (Harness → Model → Agent)
 - **No wrappers**: Works with Claude Code, Codex, Gemini, Amp, OpenCode, and Droid
 - **Keyboard + mouse**: Can be operated with just the keyboard or with a mouse
 - **All-in-one tool**: Run agents, view diffs, and access terminal

@@ -6,6 +6,7 @@ import (
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	appPty "github.com/andyrewlee/amux/internal/pty"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -49,6 +50,23 @@ func (m *Model) Blur() {
 // Focused returns whether the center pane is focused.
 func (m *Model) Focused() bool {
 	return m.focused
+}
+
+// StartDraft begins a draft flow for the given ticket.
+func (m *Model) StartDraft(ticket *tickets.Ticket, ws *data.Workspace) {
+	m.draft = NewDraft(ticket, ws, m.config, m.styles)
+	m.draft.SetSize(m.contentWidth(), m.height-4)
+	m.draft.Focus()
+}
+
+// CancelDraft removes the active draft.
+func (m *Model) CancelDraft() {
+	m.draft = nil
+}
+
+// HasDraft returns whether a draft is in progress.
+func (m *Model) HasDraft() bool {
+	return m.draft != nil
 }
 
 // SetWorkspace sets the active workspace.
@@ -116,6 +134,10 @@ func (m *Model) SetMsgSinkTry(sink func(tea.Msg) bool) {
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+
+	if m.draft != nil {
+		m.draft.SetSize(m.contentWidth(), m.height-4)
+	}
 
 	// Use centralized metrics for terminal sizing
 	tm := m.terminalMetrics()

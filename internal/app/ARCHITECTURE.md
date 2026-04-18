@@ -60,3 +60,21 @@ This makes PTY delivery observable, debounced, and safe for UI state.
 - UI models mutate only their own state; IO and side effects live in services.
 - tmux session state is reconciled via periodic sync or explicit discovery, not
   during rendering.
+- Draft state is owned by the center model (`m.draft`); draft input is routed
+  before terminal input. When draft is active, mouse events are suppressed and
+  key events go to the draft's own `Update`/`View` cycle.
+
+## Draft Flow
+
+When `Enter` is pressed on a ticket row in the dashboard, the app emits
+`messages.TicketSelectedMsg`, which is handled by `handleTicketSelected`. This
+resolves the main workspace, activates it, calls `center.StartDraft()`, and
+focuses the center pane.
+
+The draft component (`center.Draft`) is a 4-slot state machine
+(Ticket → Harness → Model → Agent) rendered inline in the center pane. Each
+slot shows a fuzzy-filterable option list. Selecting a harness prunes
+model/agent options from `AssistantConfig`. Config defaults auto-advance
+slots. On completion, `DraftComplete` is emitted, which the center model
+converts to `messages.LaunchAgent` with full metadata (ticket ID/title,
+model, agent mode) and creates an agent tab.

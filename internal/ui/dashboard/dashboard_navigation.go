@@ -193,7 +193,7 @@ func (m *Model) handleEnter() tea.Cmd {
 		}
 	case RowTicket:
 		return func() tea.Msg {
-			return messages.TicketSelectedMsg{Ticket: row.Ticket}
+			return messages.TicketSelectedMsg{Ticket: row.Ticket, Project: row.Project}
 		}
 	case RowCreate:
 		return func() tea.Msg {

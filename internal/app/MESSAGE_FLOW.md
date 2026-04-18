@@ -30,6 +30,9 @@ Examples:
 - Key/mouse input
 - Dialog results
 - UI-only actions (focus changes, toggles, local commands)
+- Draft flow: `messages.TicketSelectedMsg` → `center.Draft` slots →
+  `center.DraftComplete` → `messages.LaunchAgent` (with ticket/model/agent
+  metadata) → async tab creation
 
 Rules:
 - Internal messages may be generated synchronously in Update.

@@ -7,6 +7,7 @@
 package messages
 
 import (
+	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/tickets"
 )
 
@@ -18,7 +19,8 @@ type TicketsLoadedMsg struct {
 
 // TicketSelectedMsg is sent when the user selects a ticket for context.
 type TicketSelectedMsg struct {
-	Ticket *tickets.Ticket
+	Ticket  *tickets.Ticket
+	Project *data.Project
 }
 
 // TicketRefreshMsg requests a refresh of the ticket list.

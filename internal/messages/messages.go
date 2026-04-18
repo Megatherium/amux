@@ -254,6 +254,11 @@ type ShowSelectTicketDialog struct{}
 type LaunchAgent struct {
 	Assistant string
 	Workspace *data.Workspace
+	// Draft metadata — populated when a tab is launched from the draft flow.
+	TicketID    string
+	TicketTitle string
+	Model       string
+	AgentMode   string
 }
 
 // OpenDiff requests opening a diff viewer for a file

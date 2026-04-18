@@ -30,7 +30,9 @@ func (m *Model) View() string {
 	// Content
 	tabs := m.getTabs()
 	activeIdx := m.getActiveTabIdx()
-	if len(tabs) == 0 {
+	if m.draft != nil {
+		b.WriteString(m.draft.View())
+	} else if len(tabs) == 0 {
 		b.WriteString(m.renderEmpty())
 	} else if activeIdx < len(tabs) {
 		tab := tabs[activeIdx]

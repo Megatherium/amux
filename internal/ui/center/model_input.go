@@ -50,6 +50,9 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
+		if m.draft != nil {
+			return m, nil
+		}
 		return m.updateMouseClick(msg)
 
 	case tea.MouseMotionMsg:
@@ -59,6 +62,9 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		return m.updateMouseRelease(msg)
 
 	case tea.MouseWheelMsg:
+		if m.draft != nil {
+			return m, nil
+		}
 		return m.updateMouseWheel(msg)
 
 	case tea.PasteMsg:
@@ -109,6 +115,12 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if m.draft != nil {
+			newDraft, cmd := m.draft.Update(msg)
+			m.draft = newDraft
+			return m, cmd
+		}
+
 		tabs := m.getTabs()
 		activeIdx := m.getActiveTabIdx()
 		logging.Debug("Center received key: %s, focused=%v, hasTabs=%v, numTabs=%d",
@@ -338,6 +350,23 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+
+	case DraftComplete:
+		m.draft = nil
+		return m, func() tea.Msg {
+			return messages.LaunchAgent{
+				Assistant:   msg.Assistant,
+				Workspace:   msg.Workspace,
+				TicketID:    msg.TicketID,
+				TicketTitle: msg.TicketTitle,
+				Model:       msg.Model,
+				AgentMode:   msg.AgentMode,
+			}
+		}
+
+	case DraftCancelled:
+		m.draft = nil
+		return m, nil
 
 	case messages.LaunchAgent:
 		return m.updateLaunchAgent(msg)
