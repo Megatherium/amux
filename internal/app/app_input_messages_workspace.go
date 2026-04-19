@@ -263,9 +263,10 @@ func (a *App) handleWorkspaceActivated(msg messages.WorkspaceActivated) []tea.Cm
 	if restoreCmd := a.center.RestoreTabsFromWorkspace(msg.Workspace); restoreCmd != nil {
 		cmds = append(cmds, restoreCmd)
 	}
-	// Mouse-first behavior: if this workspace already has center chat tabs,
-	// route keyboard input to the active chat tab immediately.
-	if msg.Workspace != nil {
+	// Focus routing: transfer focus only on explicit activation (Enter / click /
+	// dialog). Preview activations (cursor navigation) update workspace state
+	// above but leave focus on the current pane.
+	if msg.Workspace != nil && !msg.Preview {
 		wsID := string(msg.Workspace.ID())
 		centerVisible := a.layout != nil && a.layout.ShowCenter()
 		if centerVisible {

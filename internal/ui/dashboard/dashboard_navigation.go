@@ -134,6 +134,7 @@ func (m *Model) activateCurrentRow() tea.Cmd {
 				return messages.WorkspaceActivated{
 					Project:   row.Project,
 					Workspace: mainWS,
+					Preview:   true,
 				}
 			}
 		}
@@ -143,6 +144,7 @@ func (m *Model) activateCurrentRow() tea.Cmd {
 			return messages.WorkspaceActivated{
 				Project:   row.Project,
 				Workspace: row.Workspace,
+				Preview:   true,
 			}
 		}
 	case RowTicket:

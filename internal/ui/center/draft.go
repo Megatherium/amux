@@ -401,7 +401,7 @@ func (d *Draft) renderCollapsedSlot(slot DraftSlot, label string) string {
 	return checkStyle.Render("  ✓ ") + mutedStyle.Render(label+": "+value)
 }
 
-func (d *Draft) renderExpandedSlot(slot DraftSlot, label string) string {
+func (d *Draft) renderExpandedSlot(_ DraftSlot, label string) string {
 	var b strings.Builder
 
 	arrowStyle := lipgloss.NewStyle().Foreground(common.ColorPrimary())
@@ -475,6 +475,12 @@ func (d *Draft) availableOptionLines() int {
 	linesUsed := 4 + int(d.activeSlot)*2
 	remaining := max(3, d.height-linesUsed-2)
 	return remaining
+}
+
+// HelpLines returns the help lines for the drafting flow. When a draft is active,
+// the draft UX is self-explanatory and traditional keymap hints would be confusing.
+func (d *Draft) HelpLines(_ int) []string {
+	return nil
 }
 
 func truncateStr(s string, maxRunes int) string {

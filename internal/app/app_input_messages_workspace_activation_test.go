@@ -57,3 +57,43 @@ func TestHandleWorkspaceActivated_AutoFocusCenterQueuesSingleReattach(t *testing
 		t.Fatalf("expected exactly one reattach toast command, got %d", toastCount)
 	}
 }
+
+func TestHandleWorkspaceActivated_PreviewSkipsFocusTransfer(t *testing.T) {
+	ws := data.NewWorkspace("feature", "feature", "main", "/repo", "/repo")
+	project := data.NewProject("/repo")
+	project.AddWorkspace(*ws)
+
+	centerModel := center.New(nil)
+	centerModel.SetWorkspace(ws)
+	centerModel.AddTab(&center.Tab{
+		ID:          center.TabID("tab-1"),
+		Name:        "Claude",
+		Assistant:   "claude",
+		SessionName: "amux-test-session",
+		Workspace:   ws,
+		Detached:    true,
+	})
+
+	layoutManager := layout.NewManager()
+	layoutManager.Resize(140, 40)
+
+	app := &App{
+		layout:          layoutManager,
+		dashboard:       dashboard.New(),
+		center:          centerModel,
+		sidebar:         sidebar.NewTabbedSidebar(),
+		sidebarTerminal: sidebar.NewTerminalModel(),
+		focusedPane:     messages.PaneDashboard,
+	}
+	app.syncPaneFocusFlags()
+
+	_ = app.handleWorkspaceActivated(messages.WorkspaceActivated{
+		Project:   project,
+		Workspace: ws,
+		Preview:   true,
+	})
+
+	if app.focusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus to remain on dashboard, got %v", app.focusedPane)
+	}
+}

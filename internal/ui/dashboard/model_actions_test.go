@@ -28,6 +28,9 @@ func TestDashboardHandleEnterProjectSelectsMain(t *testing.T) {
 	if activated.Workspace == nil || activated.Workspace.Branch != "main" {
 		t.Fatalf("expected main workspace activation, got %+v", activated.Workspace)
 	}
+	if activated.Preview {
+		t.Fatal("expected Preview=false for handleEnter")
+	}
 }
 
 func TestDashboardHandleEnterHome(t *testing.T) {
@@ -70,6 +73,9 @@ func TestDashboardHandleEnterWorkspace(t *testing.T) {
 	}
 	if activated.Workspace == nil {
 		t.Fatalf("expected workspace in activation message")
+	}
+	if activated.Preview {
+		t.Fatal("expected Preview=false for handleEnter")
 	}
 }
 
@@ -115,6 +121,9 @@ func TestDashboardActivateCurrentRowProject(t *testing.T) {
 	if activated.Workspace == nil || activated.Workspace.Branch != "main" {
 		t.Fatalf("expected main workspace activation, got %+v", activated.Workspace)
 	}
+	if !activated.Preview {
+		t.Fatal("expected Preview=true for activateCurrentRow")
+	}
 }
 
 func TestDashboardActivateCurrentRowWorkspace(t *testing.T) {
@@ -141,6 +150,9 @@ func TestDashboardActivateCurrentRowWorkspace(t *testing.T) {
 	}
 	if activated.Workspace == nil {
 		t.Fatalf("expected workspace in activation message")
+	}
+	if !activated.Preview {
+		t.Fatal("expected Preview=true for activateCurrentRow")
 	}
 }
 
@@ -192,8 +204,12 @@ func TestDashboardArrowKeyActivatesWorkspace(t *testing.T) {
 	}
 
 	result := cmd()
-	if _, ok := result.(messages.WorkspaceActivated); !ok {
+	activated, ok := result.(messages.WorkspaceActivated)
+	if !ok {
 		t.Fatalf("expected arrow key movement to emit WorkspaceActivated, got %T", result)
+	}
+	if !activated.Preview {
+		t.Fatal("expected Preview=true for arrow key navigation")
 	}
 }
 

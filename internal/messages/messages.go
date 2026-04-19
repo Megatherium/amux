@@ -20,10 +20,13 @@ type ProjectsLoaded struct {
 	Projects []data.Project
 }
 
-// WorkspaceActivated is sent when a workspace is selected
+// WorkspaceActivated is sent when a workspace is selected.
+// When Preview is true the handler updates workspace state (center content,
+// sidebar, etc.) but does not transfer keyboard focus away from the dashboard.
 type WorkspaceActivated struct {
 	Project   *data.Project
 	Workspace *data.Workspace
+	Preview   bool
 }
 
 // WorkspaceCreated is sent when a new workspace is created
