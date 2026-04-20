@@ -92,6 +92,7 @@ func TestTicketPickerResult_StoresTicketAndChains(t *testing.T) {
 		t.Fatalf("NewHarness: %v", err)
 	}
 	h.app.activeWorkspace = &data.Workspace{Name: "ws", Repo: "/r", Root: "/r/ws"}
+	h.app.activeProject = &data.Project{Name: "p", Path: "/r"}
 	h.app.pendingTickets = []tickets.Ticket{
 		{ID: "bmx-1", Title: "Fix bug", Status: "open"},
 	}
@@ -103,14 +104,15 @@ func TestTicketPickerResult_StoresTicketAndChains(t *testing.T) {
 		Index:     0,
 	})
 	if cmd == nil {
-		t.Fatal("expected cmd chaining to assistant picker")
+		t.Fatal("expected cmd chaining to TicketSelectedMsg")
 	}
 	msg := cmd()
-	if _, ok := msg.(messages.ShowSelectAssistantDialog); !ok {
-		t.Fatalf("expected ShowSelectAssistantDialog, got %T", msg)
+	sel, ok := msg.(messages.TicketSelectedMsg)
+	if !ok {
+		t.Fatalf("expected TicketSelectedMsg, got %T", msg)
 	}
-	if h.app.selectedTicket == nil || h.app.selectedTicket.ID != "bmx-1" {
-		t.Fatalf("expected selectedTicket bmx-1, got %v", h.app.selectedTicket)
+	if sel.Ticket == nil || sel.Ticket.ID != "bmx-1" {
+		t.Fatalf("expected ticket bmx-1, got %v", sel.Ticket)
 	}
 }
 
@@ -134,8 +136,8 @@ func TestTicketPickerResult_NoTicketOption(t *testing.T) {
 		Value:     "no-ticket",
 		Index:     1,
 	})
-	if cmd == nil {
-		t.Fatal("expected cmd chaining to assistant picker")
+	if cmd != nil {
+		t.Fatal("expected nil cmd for out of bounds ticket option")
 	}
 	if h.app.selectedTicket != nil {
 		t.Fatalf("expected nil selectedTicket for no-ticket, got %v", h.app.selectedTicket)

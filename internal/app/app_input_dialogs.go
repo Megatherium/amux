@@ -211,12 +211,17 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 
 	case DialogSelectTicket, "ticket-picker":
 		if result.Index < len(a.pendingTickets) {
-			a.selectedTicket = &a.pendingTickets[result.Index]
+			ticket := a.pendingTickets[result.Index]
+			project := a.activeProject
+			a.pendingTickets = nil
+			return func() tea.Msg {
+				return messages.TicketSelectedMsg{Ticket: &ticket, Project: project}
+			}
 		} else {
 			a.selectedTicket = nil
 		}
 		a.pendingTickets = nil
-		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+		return nil
 
 	case DialogQuit:
 		// Persist workspace tabs synchronously before shutdown.
