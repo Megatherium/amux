@@ -43,7 +43,7 @@ func TestSidebarTerminalDiscoveryAvoidsExtraSession(t *testing.T) {
 
 	waitForUIContains(t, sessionA, filepath.Base(repo), 10*time.Second)
 	activatePrimaryWorkspace(t, sessionA)
-	waitForUIContains(t, sessionA, "[New agent]", 15*time.Second)
+	waitForUIContains(t, sessionA, "[New Agent]", 15*time.Second)
 	waitForUIContains(t, sessionA, "Terminal 1", 15*time.Second)
 
 	opts := tmux.Options{ServerName: server, ConfigPath: "/dev/null"}

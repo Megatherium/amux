@@ -43,7 +43,7 @@ func TestTmuxPersistenceKeepsSessions(t *testing.T) {
 
 	waitForUIContains(t, session, filepath.Base(repo), persistenceTimeout)
 	activatePrimaryWorkspace(t, session)
-	waitForUIContains(t, session, "[New agent]", persistenceTimeout)
+	waitForUIContains(t, session, "[New Agent]", persistenceTimeout)
 	createAgentTab(t, session)
 	waitForUIContains(t, session, "claude", persistenceTimeout)
 

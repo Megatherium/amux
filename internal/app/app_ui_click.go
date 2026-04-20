@@ -100,10 +100,28 @@ func (a *App) handleWorkspaceInfoClick(localX, localY int) tea.Cmd {
 	content := a.renderWorkspaceInfo()
 	lines := strings.Split(content, "\n")
 
+	hasBeads := a.hasTicketService()
+
 	for i, line := range lines {
 		strippedLine := ansi.Strip(line)
-		agentText := "[New agent]"
-		if idx := strings.Index(strippedLine, agentText); idx >= 0 {
+
+		if hasBeads {
+			ticketText := "[New Agent with Ticket]"
+			if idx := strings.Index(strippedLine, ticketText); idx >= 0 {
+				region := common.HitRegion{
+					X:      idx,
+					Y:      i,
+					Width:  len(ticketText),
+					Height: 1,
+				}
+				if region.Contains(localX, localY) {
+					return func() tea.Msg { return messages.ShowSelectTicketDialog{} }
+				}
+			}
+		}
+
+		agentText := "[New Agent]"
+		if idx := strings.LastIndex(strippedLine, agentText); idx >= 0 {
 			region := common.HitRegion{
 				X:      idx,
 				Y:      i,

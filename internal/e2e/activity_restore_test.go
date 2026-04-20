@@ -40,7 +40,7 @@ func TestWorkspaceFirstActivation_DoesNotFlashTabActive(t *testing.T) {
 	if err := first.SendString("\r"); err != nil {
 		t.Fatalf("activate workspace: %v", err)
 	}
-	waitForUIContains(t, first, "[New agent]", workspaceAgentTimeout)
+	waitForUIContains(t, first, "[New Agent]", workspaceAgentTimeout)
 	createAgentTab(t, first)
 	waitForUIContains(t, first, "claude", workspaceAgentTimeout)
 	quitApp(t, first)

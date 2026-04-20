@@ -61,7 +61,7 @@ func TestMultiInstanceOrphanGCDoesNotKillNewWorkspace(t *testing.T) {
 	if err := sessionA.SendString("\r"); err != nil {
 		t.Fatalf("activate workspace: %v", err)
 	}
-	waitForUIContains(t, sessionA, "[New agent]", 15*time.Second)
+	waitForUIContains(t, sessionA, "[New Agent]", 15*time.Second)
 
 	createAgentTab(t, sessionA)
 	waitForUIContains(t, sessionA, "claude", 15*time.Second)

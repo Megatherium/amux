@@ -172,7 +172,10 @@ func (a *App) centerButtonCount() int {
 		return 2 // [Add project], [Settings]
 	}
 	if a.activeWorkspace != nil {
-		return 1 // [New agent]
+		if a.hasTicketService() {
+			return 2 // [New Agent with Ticket], [New Agent]
+		}
+		return 1 // [New Agent]
 	}
 	return 0
 }
@@ -187,6 +190,14 @@ func (a *App) activateCenterButton() tea.Cmd {
 			return func() tea.Msg { return messages.ShowSettingsDialog{} }
 		}
 	} else if a.activeWorkspace != nil {
+		if a.hasTicketService() {
+			switch a.centerBtnIndex {
+			case 0:
+				return func() tea.Msg { return messages.ShowSelectTicketDialog{} }
+			case 1:
+				return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+			}
+		}
 		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
 	}
 	return nil

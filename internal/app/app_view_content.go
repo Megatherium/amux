@@ -66,6 +66,11 @@ func (a *App) goHome() {
 	a.centerBtnIndex = 0
 }
 
+// hasTicketService reports whether the active project has a ticket service configured.
+func (a *App) hasTicketService() bool {
+	return a.activeProject != nil && a.ticketServices != nil && a.ticketServices[a.activeProject.Path] != nil
+}
+
 // renderWorkspaceInfo renders information about the active workspace
 func (a *App) renderWorkspaceInfo() string {
 	ws := a.activeWorkspace
@@ -82,12 +87,30 @@ func (a *App) renderWorkspaceInfo() string {
 	activeStyle := lipgloss.NewStyle().Foreground(common.ColorForeground()).Bold(true)
 	inactiveStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
 
-	btnStyle := inactiveStyle
-	if a.centerBtnFocused && a.centerBtnIndex == 0 {
-		btnStyle = activeStyle
+	hasBeads := a.hasTicketService()
+
+	if hasBeads {
+		ticketBtnStyle := inactiveStyle
+		if a.centerBtnFocused && a.centerBtnIndex == 0 {
+			ticketBtnStyle = activeStyle
+		}
+		agentBtnStyle := inactiveStyle
+		if a.centerBtnFocused && a.centerBtnIndex == 1 {
+			agentBtnStyle = activeStyle
+		}
+
+		ticketBtn := ticketBtnStyle.Render("[New Agent with Ticket]")
+		agentBtn := agentBtnStyle.Render("[New Agent]")
+		content += "\n" + ticketBtn + "  " + agentBtn
+	} else {
+		btnStyle := inactiveStyle
+		if a.centerBtnFocused && a.centerBtnIndex == 0 {
+			btnStyle = activeStyle
+		}
+		agentBtn := btnStyle.Render("[New Agent]")
+		content += "\n" + agentBtn
 	}
-	agentBtn := btnStyle.Render("[New agent]")
-	content += "\n" + agentBtn
+
 	if a.config.UI.ShowKeymapHints {
 		content += "\n" + a.styles.Help.Render(a.prefixHelpLabel+" t a:new agent")
 	}

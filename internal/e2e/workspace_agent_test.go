@@ -46,7 +46,7 @@ func TestWorkspaceCreateAgentTabStaysRunning(t *testing.T) {
 	if err := session.SendString("\r"); err != nil {
 		t.Fatalf("activate workspace: %v", err)
 	}
-	waitForUIContains(t, session, "[New agent]", workspaceAgentTimeout)
+	waitForUIContains(t, session, "[New Agent]", workspaceAgentTimeout)
 
 	createAgentTab(t, session)
 	waitForUIContains(t, session, "claude", workspaceAgentTimeout)
