@@ -174,6 +174,7 @@ func TestDashboardActivateCurrentRowHome(t *testing.T) {
 
 func TestDashboardActivateCurrentRowCreate(t *testing.T) {
 	m := New()
+	m.SetSize(60, 20)
 	m.SetProjects([]data.Project{makeProject()})
 
 	// Find a create row
@@ -185,8 +186,16 @@ func TestDashboardActivateCurrentRowCreate(t *testing.T) {
 	}
 
 	cmd := m.activateCurrentRow()
-	if cmd != nil {
-		t.Fatalf("expected activateCurrentRow to return nil for RowCreate, got a command")
+	if cmd == nil {
+		t.Fatal("expected activateCurrentRow to return a command for RowCreate (clear preview)")
+	}
+	msg := cmd()
+	preview, ok := msg.(messages.TicketPreviewMsg)
+	if !ok {
+		t.Fatalf("expected TicketPreviewMsg for RowCreate, got %T", msg)
+	}
+	if preview.Ticket != nil {
+		t.Fatal("RowCreate should emit TicketPreviewMsg with nil ticket to clear preview")
 	}
 }
 

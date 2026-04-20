@@ -261,3 +261,17 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 	cmds = append(cmds, a.focusPane(messages.PaneCenter))
 	return cmds
 }
+
+// handleTicketPreview updates the preview state when the cursor hovers over
+// a ticket row in the dashboard. When no agent tabs are open, the ticket info
+// is shown in the center pane. When agent tabs exist, the info is shown in the
+// sidebar's ticket tab (without auto-focusing the sidebar).
+func (a *App) handleTicketPreview(msg messages.TicketPreviewMsg) {
+	a.previewTicket = msg.Ticket
+	a.previewProject = msg.Project
+
+	// Forward the preview to the sidebar for the ticket tab
+	if a.sidebar != nil {
+		a.sidebar.SetPreviewTicket(msg.Ticket)
+	}
+}

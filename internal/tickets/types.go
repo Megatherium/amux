@@ -9,6 +9,7 @@ package tickets
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -216,4 +217,43 @@ type TemplateContext struct {
 	// Prompt is the rendered prompt text, available in command_template
 	// via {{.Prompt}} for composable template designs.
 	Prompt string `json:"prompt"`
+}
+
+// PriorityLabel returns a verbose human-readable label for a priority number
+// (e.g., "P0 critical", "P1 high"). Used in the center pane where space is
+// available.
+func PriorityLabel(p int) string {
+	switch {
+	case p <= 0:
+		return "P?"
+	case p == 1:
+		return "P0 critical"
+	case p == 2:
+		return "P1 high"
+	case p == 3:
+		return "P2 medium"
+	case p == 4:
+		return "P3 low"
+	default:
+		return fmt.Sprintf("P%d", p-1)
+	}
+}
+
+// PriorityLabelShort returns a compact priority label (e.g., "P0", "P1").
+// Used in the sidebar where horizontal space is limited.
+func PriorityLabelShort(p int) string {
+	switch {
+	case p <= 0:
+		return "?"
+	case p == 1:
+		return "P0"
+	case p == 2:
+		return "P1"
+	case p == 3:
+		return "P2"
+	case p == 4:
+		return "P3"
+	default:
+		return fmt.Sprintf("P%d", p-1)
+	}
 }

@@ -124,7 +124,7 @@ func TestTicketNavigation(t *testing.T) {
 	}
 }
 
-func TestTicketActivateReturnsNil(t *testing.T) {
+func TestTicketActivateReturnsPreviewMsg(t *testing.T) {
 	p, ts := makeProjectWithTickets()
 	m := New()
 	m.SetSize(60, 20)
@@ -140,8 +140,69 @@ func TestTicketActivateReturnsNil(t *testing.T) {
 	}
 	m.cursor = ticketIdx
 	cmd := m.activateCurrentRow()
-	if cmd != nil {
-		t.Fatal("activateCurrentRow should return nil for ticket rows (auto-activate gated)")
+	if cmd == nil {
+		t.Fatal("activateCurrentRow should return a command for ticket rows (preview)")
+	}
+	msg := cmd()
+	preview, ok := msg.(messages.TicketPreviewMsg)
+	if !ok {
+		t.Fatalf("expected TicketPreviewMsg, got %T", msg)
+	}
+	if preview.Ticket == nil || preview.Ticket.ID != "bmx-001" {
+		t.Fatalf("expected ticket bmx-001, got %v", preview.Ticket)
+	}
+}
+
+func TestNonTicketActivateClearsPreview(t *testing.T) {
+	p, ts := makeProjectWithTickets()
+	m := New()
+	m.SetSize(60, 20)
+	m.SetProjects([]data.Project{p})
+	m.SetTickets(p.Path, ts)
+
+	// Navigate to a workspace row (not ticket)
+	for i, row := range m.rows {
+		if row.Type == RowWorkspace {
+			m.cursor = i
+			break
+		}
+	}
+	cmd := m.activateCurrentRow()
+	// Should return a WorkspaceActivated, not a TicketPreviewMsg
+	if cmd == nil {
+		return // some workspace rows may return nil
+	}
+	msg := cmd()
+	if _, ok := msg.(messages.TicketPreviewMsg); ok {
+		t.Fatal("non-ticket rows should not emit TicketPreviewMsg")
+	}
+}
+
+func TestCreateRowActivateClearsPreview(t *testing.T) {
+	p, ts := makeProjectWithTickets()
+	m := New()
+	m.SetSize(60, 20)
+	m.SetProjects([]data.Project{p})
+	m.SetTickets(p.Path, ts)
+
+	// Navigate to the RowCreate row
+	for i, row := range m.rows {
+		if row.Type == RowCreate {
+			m.cursor = i
+			break
+		}
+	}
+	cmd := m.activateCurrentRow()
+	if cmd == nil {
+		t.Fatal("activateCurrentRow should return a command for RowCreate (clear preview)")
+	}
+	msg := cmd()
+	preview, ok := msg.(messages.TicketPreviewMsg)
+	if !ok {
+		t.Fatalf("expected TicketPreviewMsg for RowCreate, got %T", msg)
+	}
+	if preview.Ticket != nil {
+		t.Fatal("RowCreate should emit TicketPreviewMsg with nil ticket to clear preview")
 	}
 }
 

@@ -106,6 +106,10 @@ type App struct {
 	// Ticket picker state
 	pendingTickets []tickets.Ticket
 
+	// Ticket preview state (cursor hover in dashboard)
+	previewTicket  *tickets.Ticket
+	previewProject *data.Project
+
 	// Git status management
 	fileWatcher     *git.FileWatcher
 	fileWatcherCh   chan messages.FileWatcherEvent

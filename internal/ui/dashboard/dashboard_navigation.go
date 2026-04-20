@@ -148,13 +148,19 @@ func (m *Model) activateCurrentRow() tea.Cmd {
 			}
 		}
 	case RowTicket:
-		// TicketSelectedMsg is currently unhandled at the app layer.
-		// Only emit on explicit Enter (handleEnter), not auto-activate.
-		return nil
+		// Emit a preview message so the center pane or sidebar can show
+		// ticket info. This is distinct from TicketSelectedMsg (Enter) which
+		// starts the draft flow.
+		return func() tea.Msg {
+			return messages.TicketPreviewMsg{Ticket: row.Ticket, Project: row.Project}
+		}
+	default:
+		// RowCreate, RowAddProject, RowSpacer — these don't emit their own
+		// preview-clearing messages (unlike RowHome→ShowWelcome or
+		// RowProject/RowWorkspace→WorkspaceActivated), so we explicitly
+		// clear any stale ticket preview.
+		return func() tea.Msg { return messages.TicketPreviewMsg{Ticket: nil, Project: nil} }
 	}
-
-	// RowCreate, RowAddProject, RowSpacer - no auto-preview
-	return nil
 }
 
 // handleEnter handles the enter key

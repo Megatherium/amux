@@ -47,6 +47,27 @@ func TestTicketSelectedMsg(t *testing.T) {
 	}
 }
 
+func TestTicketPreviewMsg(t *testing.T) {
+	ticket := &tickets.Ticket{
+		ID:    "bmx-preview",
+		Title: "Preview ticket",
+	}
+	msg := TicketPreviewMsg{Ticket: ticket}
+
+	if msg.Ticket == nil {
+		t.Fatal("expected non-nil ticket")
+	}
+	if msg.Ticket.ID != "bmx-preview" {
+		t.Fatalf("expected ticket ID bmx-preview, got %s", msg.Ticket.ID)
+	}
+
+	// Nil ticket means cursor moved away
+	clearMsg := TicketPreviewMsg{Ticket: nil}
+	if clearMsg.Ticket != nil {
+		t.Fatal("expected nil ticket for clear message")
+	}
+}
+
 func TestTicketRefreshMsg(t *testing.T) {
 	msg := TicketRefreshMsg{}
 	_ = msg

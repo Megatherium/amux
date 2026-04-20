@@ -175,6 +175,50 @@ func TestLaunchResult(t *testing.T) {
 	})
 }
 
+func TestPriorityLabel(t *testing.T) {
+	tests := []struct {
+		p    int
+		want string
+	}{
+		{0, "P?"},
+		{-1, "P?"},
+		{1, "P0 critical"},
+		{2, "P1 high"},
+		{3, "P2 medium"},
+		{4, "P3 low"},
+		{5, "P4"},
+		{10, "P9"},
+	}
+	for _, tt := range tests {
+		got := PriorityLabel(tt.p)
+		if got != tt.want {
+			t.Errorf("PriorityLabel(%d) = %q, want %q", tt.p, got, tt.want)
+		}
+	}
+}
+
+func TestPriorityLabelShort(t *testing.T) {
+	tests := []struct {
+		p    int
+		want string
+	}{
+		{0, "?"},
+		{-1, "?"},
+		{1, "P0"},
+		{2, "P1"},
+		{3, "P2"},
+		{4, "P3"},
+		{5, "P4"},
+		{10, "P9"},
+	}
+	for _, tt := range tests {
+		got := PriorityLabelShort(tt.p)
+		if got != tt.want {
+			t.Errorf("PriorityLabelShort(%d) = %q, want %q", tt.p, got, tt.want)
+		}
+	}
+}
+
 func TestModelContext(t *testing.T) {
 	t.Run("String", func(t *testing.T) {
 		m := NewModelContext("anthropic/claude/claude-sonnet-4")

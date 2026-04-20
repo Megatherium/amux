@@ -247,9 +247,13 @@ func (a *App) handleWorkspaceActivated(msg messages.WorkspaceActivated) []tea.Cm
 	a.showWelcome = false
 	a.centerBtnFocused = false
 	a.centerBtnIndex = 0
+	// Clear ticket preview when navigating to a workspace
+	a.previewTicket = nil
+	a.previewProject = nil
 	a.center.SetWorkspace(msg.Workspace)
 	a.center.SetHasTicketService(a.hasTicketService())
 	a.sidebar.SetWorkspace(msg.Workspace)
+	a.sidebar.SetPreviewTicket(nil)
 	a.sidebarTerminal.SetWorkspacePreview(msg.Workspace)
 	// Discover shared tmux tabs first; restore/sync happens below.
 	if discoverCmd := a.discoverWorkspaceTabsFromTmux(msg.Workspace); discoverCmd != nil {

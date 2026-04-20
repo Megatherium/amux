@@ -9,6 +9,7 @@ import (
 
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/git"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -18,6 +19,7 @@ type SidebarTab int
 const (
 	TabChanges SidebarTab = iota
 	TabProject
+	TabTicket
 )
 
 // tabHitKind identifies the type of tab bar click target
@@ -26,6 +28,7 @@ type tabHitKind int
 const (
 	tabHitChanges tabHitKind = iota
 	tabHitProject
+	tabHitTicket
 )
 
 // tabHit represents a clickable region in the tab bar
@@ -34,11 +37,12 @@ type tabHit struct {
 	region common.HitRegion
 }
 
-// TabbedSidebar wraps the Changes and Project views with tabs
+// TabbedSidebar wraps the Changes, Project, and Ticket views with tabs
 type TabbedSidebar struct {
 	activeTab   SidebarTab
 	changes     *Model
 	projectTree *ProjectTree
+	ticketView  *TicketView
 	tabHits     []tabHit
 
 	workspace       *data.Workspace
@@ -56,6 +60,7 @@ func NewTabbedSidebar() *TabbedSidebar {
 		activeTab:   TabChanges,
 		changes:     New(),
 		projectTree: NewProjectTree(),
+		ticketView:  NewTicketView(),
 		styles:      common.DefaultStyles(),
 	}
 }
@@ -65,6 +70,7 @@ func (m *TabbedSidebar) SetShowKeymapHints(show bool) {
 	m.showKeymapHints = show
 	m.changes.SetShowKeymapHints(show)
 	m.projectTree.SetShowKeymapHints(show)
+	m.ticketView.SetShowKeymapHints(show)
 }
 
 // SetStyles updates the component's styles (for theme changes).
@@ -72,6 +78,7 @@ func (m *TabbedSidebar) SetStyles(styles common.Styles) {
 	m.styles = styles
 	m.changes.SetStyles(styles)
 	m.projectTree.SetStyles(styles)
+	m.ticketView.SetStyles(styles)
 }
 
 // Init initializes the tabbed sidebar
@@ -100,6 +107,9 @@ func (m *TabbedSidebar) Update(msg tea.Msg) (*TabbedSidebar, tea.Cmd) {
 					case tabHitProject:
 						m.activeTab = TabProject
 						m.updateFocus()
+					case tabHitTicket:
+						m.activeTab = TabTicket
+						m.updateFocus()
 					}
 					return m, nil
 				}
@@ -121,6 +131,8 @@ func (m *TabbedSidebar) Update(msg tea.Msg) (*TabbedSidebar, tea.Cmd) {
 			var cmd tea.Cmd
 			m.projectTree, cmd = m.projectTree.Update(adjustedMsg)
 			cmds = append(cmds, cmd)
+		case TabTicket:
+			// Ticket view is read-only; swallow click events
 		}
 		return m, common.SafeBatch(cmds...)
 
@@ -140,6 +152,8 @@ func (m *TabbedSidebar) Update(msg tea.Msg) (*TabbedSidebar, tea.Cmd) {
 			var cmd tea.Cmd
 			m.projectTree, cmd = m.projectTree.Update(adjustedMsg)
 			cmds = append(cmds, cmd)
+		case TabTicket:
+			// Ticket view does not scroll
 		}
 		return m, common.SafeBatch(cmds...)
 
@@ -155,6 +169,12 @@ func (m *TabbedSidebar) Update(msg tea.Msg) (*TabbedSidebar, tea.Cmd) {
 				m.activeTab = TabProject
 				m.updateFocus()
 				return m, nil
+			case key.Matches(msg, key.NewBinding(key.WithKeys("3"))):
+				if m.ticketView.ticket != nil {
+					m.activeTab = TabTicket
+					m.updateFocus()
+				}
+				return m, nil
 			}
 		}
 	}
@@ -169,6 +189,8 @@ func (m *TabbedSidebar) Update(msg tea.Msg) (*TabbedSidebar, tea.Cmd) {
 		var cmd tea.Cmd
 		m.projectTree, cmd = m.projectTree.Update(msg)
 		cmds = append(cmds, cmd)
+	case TabTicket:
+		// Ticket view is read-only; no key forwarding needed
 	}
 
 	return m, common.SafeBatch(cmds...)
@@ -181,13 +203,20 @@ func (m *TabbedSidebar) updateFocus() {
 		case TabChanges:
 			m.changes.Focus()
 			m.projectTree.Blur()
+			m.ticketView.Blur()
 		case TabProject:
 			m.changes.Blur()
 			m.projectTree.Focus()
+			m.ticketView.Blur()
+		case TabTicket:
+			m.changes.Blur()
+			m.projectTree.Blur()
+			m.ticketView.Focus()
 		}
 	} else {
 		m.changes.Blur()
 		m.projectTree.Blur()
+		m.ticketView.Blur()
 	}
 }
 
@@ -246,6 +275,28 @@ func (m *TabbedSidebar) renderTabBar() string {
 	})
 	tabs = append(tabs, projectRendered)
 
+	// Ticket tab (only shown when there is a preview ticket)
+	if m.ticketView.ticket != nil {
+		ticketLabel := "Ticket"
+		var ticketRendered string
+		if m.activeTab == TabTicket {
+			ticketRendered = activeTabStyle.Render(ticketLabel)
+		} else {
+			ticketRendered = inactiveStyle.Render(m.styles.Muted.Render(ticketLabel))
+		}
+		ticketWidth := lipgloss.Width(ticketRendered)
+		m.tabHits = append(m.tabHits, tabHit{
+			kind: tabHitTicket,
+			region: common.HitRegion{
+				X:      x,
+				Y:      0,
+				Width:  ticketWidth,
+				Height: 1,
+			},
+		})
+		tabs = append(tabs, ticketRendered)
+	}
+
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, tabs...)
 }
 
@@ -275,6 +326,9 @@ func (m *TabbedSidebar) View() string {
 	case TabProject:
 		m.projectTree.SetSize(m.width, contentHeight)
 		content = m.projectTree.View()
+	case TabTicket:
+		m.ticketView.SetSize(m.width, contentHeight)
+		content = m.ticketView.View()
 	}
 
 	b.WriteString(content)
@@ -300,6 +354,9 @@ func (m *TabbedSidebar) ContentView() string {
 	case TabProject:
 		m.projectTree.SetSize(m.width, contentHeight)
 		return m.projectTree.View()
+	case TabTicket:
+		m.ticketView.SetSize(m.width, contentHeight)
+		return m.ticketView.View()
 	}
 	return ""
 }
@@ -315,6 +372,7 @@ func (m *TabbedSidebar) SetSize(width, height int) {
 	}
 	m.changes.SetSize(width, contentHeight)
 	m.projectTree.SetSize(width, contentHeight)
+	m.ticketView.SetSize(width, contentHeight)
 }
 
 // Focus sets the focus state
@@ -328,6 +386,7 @@ func (m *TabbedSidebar) Blur() {
 	m.focused = false
 	m.changes.Blur()
 	m.projectTree.Blur()
+	m.ticketView.Blur()
 }
 
 // Focused returns whether the sidebar is focused
@@ -358,22 +417,38 @@ func (m *TabbedSidebar) SetActiveTab(tab SidebarTab) {
 	m.updateFocus()
 }
 
-// NextTab switches to the next tab (circular)
+// NextTab switches to the next tab (circular, skips Ticket if no preview)
 func (m *TabbedSidebar) NextTab() {
-	if m.activeTab == TabChanges {
+	hasTicket := m.ticketView.ticket != nil
+	switch m.activeTab {
+	case TabChanges:
 		m.activeTab = TabProject
-	} else {
+	case TabProject:
+		if hasTicket {
+			m.activeTab = TabTicket
+		} else {
+			m.activeTab = TabChanges
+		}
+	case TabTicket:
 		m.activeTab = TabChanges
 	}
 	m.updateFocus()
 }
 
-// PrevTab switches to the previous tab (circular)
+// PrevTab switches to the previous tab (circular, skips Ticket if no preview)
 func (m *TabbedSidebar) PrevTab() {
-	if m.activeTab == TabChanges {
-		m.activeTab = TabProject
-	} else {
+	hasTicket := m.ticketView.ticket != nil
+	switch m.activeTab {
+	case TabChanges:
+		if hasTicket {
+			m.activeTab = TabTicket
+		} else {
+			m.activeTab = TabProject
+		}
+	case TabProject:
 		m.activeTab = TabChanges
+	case TabTicket:
+		m.activeTab = TabProject
 	}
 	m.updateFocus()
 }
@@ -386,4 +461,15 @@ func (m *TabbedSidebar) Changes() *Model {
 // ProjectTree returns the project tree model (for direct access if needed)
 func (m *TabbedSidebar) ProjectTree() *ProjectTree {
 	return m.projectTree
+}
+
+// SetPreviewTicket updates the ticket shown in the Ticket tab.
+// Passing nil hides the tab. This does NOT auto-focus the sidebar.
+func (m *TabbedSidebar) SetPreviewTicket(t *tickets.Ticket) {
+	m.ticketView.SetTicket(t)
+	// If the ticket tab was active and ticket is cleared, switch away
+	if t == nil && m.activeTab == TabTicket {
+		m.activeTab = TabChanges
+		m.updateFocus()
+	}
 }
