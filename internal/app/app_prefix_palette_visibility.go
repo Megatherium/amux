@@ -22,7 +22,7 @@ func (a *App) prefixActionVisible(action string) bool {
 		}
 	case "toggle_both_sidebars", "toggle_dashboard", "toggle_sidebar":
 		return a.layout != nil && a.layout.ShowCenter()
-	case "new_agent_tab", "new_terminal_tab":
+	case "new_agent_tab", "new_agent_tab_direct", "new_terminal_tab":
 		if a.activeWorkspace == nil || a.activeProject == nil {
 			return false
 		}

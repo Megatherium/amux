@@ -165,7 +165,11 @@ func (m *Model) renderEmpty() string {
 	// Help text
 	b.WriteString("\n\n")
 	helpStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
-	b.WriteString(helpStyle.Render(m.pfx() + " t a:new agent"))
+	helpText := m.pfx() + " t a:agent"
+	if m.hasTicketSvc {
+		helpText = m.pfx() + " t b:agent+ticket  " + helpText
+	}
+	b.WriteString(helpStyle.Render(helpText))
 
 	return b.String()
 }

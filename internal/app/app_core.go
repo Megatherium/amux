@@ -104,7 +104,6 @@ type App struct {
 	pendingWorkspaceName    string
 	pendingWorkspaceBase    string
 	// Ticket picker state
-	selectedTicket *tickets.Ticket
 	pendingTickets []tickets.Ticket
 
 	// Git status management

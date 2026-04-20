@@ -112,7 +112,11 @@ func (a *App) renderWorkspaceInfo() string {
 	}
 
 	if a.config.UI.ShowKeymapHints {
-		content += "\n" + a.styles.Help.Render(a.prefixHelpLabel+" t a:new agent")
+		helpText := a.prefixHelpLabel + " t a:agent"
+		if hasBeads {
+			helpText = a.prefixHelpLabel + " t b:agent+ticket  " + "t a:agent"
+		}
+		content += "\n" + a.styles.Help.Render(helpText)
 	}
 
 	return content

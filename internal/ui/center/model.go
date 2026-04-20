@@ -56,6 +56,9 @@ type Model struct {
 
 	// Prefix key label (e.g. "C-Spc" or custom override)
 	prefixHelpLabel string
+
+	// Ticket service availability (for conditional help text)
+	hasTicketSvc bool
 }
 
 // tmuxConfig holds tmux-related configuration
@@ -92,6 +95,11 @@ func (m *Model) SetTmuxConfig(serverName, configPath string) {
 // SetPrefixHelpLabel sets the display label for the prefix key in help bars.
 func (m *Model) SetPrefixHelpLabel(label string) {
 	m.prefixHelpLabel = label
+}
+
+// SetHasTicketService sets whether a ticket service is available for the active project.
+func (m *Model) SetHasTicketService(has bool) {
+	m.hasTicketSvc = has
 }
 
 // pfx returns the prefix help label, defaulting to "C-Spc".

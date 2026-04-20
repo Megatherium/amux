@@ -8,6 +8,7 @@ import (
 
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 	"github.com/andyrewlee/amux/internal/ui/sidebar"
 	"github.com/andyrewlee/amux/internal/update"
@@ -111,7 +112,6 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 			a.pendingWorkspaceBase = ""
 		}
 		if result.ID == DialogSelectTicket || result.ID == "ticket-picker" {
-			a.selectedTicket = nil
 			a.pendingTickets = nil
 		}
 		logging.Debug("Dialog canceled")
@@ -210,13 +210,20 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 		}
 
 	case DialogSelectTicket, "ticket-picker":
+		var ticket *tickets.Ticket
 		if result.Index < len(a.pendingTickets) {
-			a.selectedTicket = &a.pendingTickets[result.Index]
-		} else {
-			a.selectedTicket = nil
+			ticket = &a.pendingTickets[result.Index]
 		}
 		a.pendingTickets = nil
-		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+		if ticket == nil {
+			return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+		}
+		return func() tea.Msg {
+			return messages.TicketSelectedMsg{
+				Ticket:  ticket,
+				Project: a.activeProject,
+			}
+		}
 
 	case DialogQuit:
 		// Persist workspace tabs synchronously before shutdown.

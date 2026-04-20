@@ -32,7 +32,8 @@ var prefixCommandTable = []prefixCommand{
 	{Sequence: []string{"K"}, Desc: "cleanup tmux", Action: "cleanup_tmux"},
 	{Sequence: []string{"h"}, Desc: "focus left", Action: "focus_left"},
 	{Sequence: []string{"l"}, Desc: "focus right", Action: "focus_right"},
-	{Sequence: []string{"t", "a"}, Desc: "new agent tab", Action: "new_agent_tab"},
+	{Sequence: []string{"t", "a"}, Desc: "new agent", Action: "new_agent_tab_direct"},
+	{Sequence: []string{"t", "b"}, Desc: "new agent with ticket", Action: "new_agent_tab"},
 	{Sequence: []string{"t", "t"}, Desc: "new terminal tab", Action: "new_terminal_tab"},
 	{Sequence: []string{"t", "n"}, Desc: "next tab", Action: "next_tab"},
 	{Sequence: []string{"t", "p"}, Desc: "prev tab", Action: "prev_tab"},
@@ -113,6 +114,14 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 			return a.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
 		}
 		return func() tea.Msg { return messages.ShowSelectTicketDialog{} }
+	case "new_agent_tab_direct":
+		if a.activeWorkspace == nil || a.activeProject == nil {
+			return a.requireWorkspaceSelection("create agent tab")
+		}
+		if !a.tmuxAvailable {
+			return a.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
+		}
+		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
 	case "new_terminal_tab":
 		if a.activeWorkspace == nil || a.activeProject == nil {
 			return a.requireWorkspaceSelection("create terminal tab")

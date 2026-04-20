@@ -74,8 +74,8 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	// 3. Passthrough mode - route keys to focused pane
-	// Handle button navigation when center pane is focused and showing welcome/workspace info (no tabs)
-	if a.focusedPane == messages.PaneCenter && !a.center.HasTabs() {
+	// Handle button navigation when center pane is focused and showing welcome/workspace info (no tabs, no draft)
+	if a.focusedPane == messages.PaneCenter && !a.center.HasTabs() && !a.center.HasDraft() {
 		maxIndex := a.centerButtonCount() - 1
 		switch {
 		case key.Matches(msg, a.keymap.Left), key.Matches(msg, a.keymap.Up):

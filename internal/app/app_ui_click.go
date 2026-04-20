@@ -15,7 +15,7 @@ func (a *App) handleCenterPaneClick(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
-	if a.layout == nil || !a.layout.ShowCenter() || a.center.HasTabs() {
+	if a.layout == nil || !a.layout.ShowCenter() || a.center.HasTabs() || a.center.HasDraft() {
 		return nil
 	}
 	dashWidth := a.layout.DashboardWidth()

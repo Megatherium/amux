@@ -248,6 +248,7 @@ func (a *App) handleWorkspaceActivated(msg messages.WorkspaceActivated) []tea.Cm
 	a.centerBtnFocused = false
 	a.centerBtnIndex = 0
 	a.center.SetWorkspace(msg.Workspace)
+	a.center.SetHasTicketService(a.hasTicketService())
 	a.sidebar.SetWorkspace(msg.Workspace)
 	a.sidebarTerminal.SetWorkspacePreview(msg.Workspace)
 	// Discover shared tmux tabs first; restore/sync happens below.
