@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestParsePrefixKeyDefault(t *testing.T) {
@@ -185,5 +186,53 @@ func TestBuildKeymapFromEnv(t *testing.T) {
 	keys := km.Prefix.Keys()
 	if len(keys) != 1 || keys[0] != "ctrl+p" {
 		t.Fatalf("expected [ctrl+p] from env, got %v", keys)
+	}
+}
+
+func TestPrefixTimeoutDefault(t *testing.T) {
+	os.Setenv("AMUX_PREFIX_TIMEOUT", "")
+	defer os.Unsetenv("AMUX_PREFIX_TIMEOUT")
+	if got := PrefixTimeout(); got != defaultPrefixTimeout {
+		t.Fatalf("expected default %s, got %s", defaultPrefixTimeout, got)
+	}
+}
+
+func TestPrefixTimeoutOverride(t *testing.T) {
+	os.Setenv("AMUX_PREFIX_TIMEOUT", "10s")
+	defer os.Unsetenv("AMUX_PREFIX_TIMEOUT")
+	if got := PrefixTimeout(); got != 10*time.Second {
+		t.Fatalf("expected 10s, got %s", got)
+	}
+}
+
+func TestPrefixTimeoutMilliseconds(t *testing.T) {
+	os.Setenv("AMUX_PREFIX_TIMEOUT", "500ms")
+	defer os.Unsetenv("AMUX_PREFIX_TIMEOUT")
+	if got := PrefixTimeout(); got != 500*time.Millisecond {
+		t.Fatalf("expected 500ms, got %s", got)
+	}
+}
+
+func TestPrefixTimeoutInvalidFallsBack(t *testing.T) {
+	os.Setenv("AMUX_PREFIX_TIMEOUT", "not-a-duration")
+	defer os.Unsetenv("AMUX_PREFIX_TIMEOUT")
+	if got := PrefixTimeout(); got != defaultPrefixTimeout {
+		t.Fatalf("expected default fallback for invalid value, got %s", got)
+	}
+}
+
+func TestPrefixTimeoutNegativeFallsBack(t *testing.T) {
+	os.Setenv("AMUX_PREFIX_TIMEOUT", "-5s")
+	defer os.Unsetenv("AMUX_PREFIX_TIMEOUT")
+	if got := PrefixTimeout(); got != defaultPrefixTimeout {
+		t.Fatalf("expected default fallback for negative value, got %s", got)
+	}
+}
+
+func TestPrefixTimeoutZeroFallsBack(t *testing.T) {
+	os.Setenv("AMUX_PREFIX_TIMEOUT", "0s")
+	defer os.Unsetenv("AMUX_PREFIX_TIMEOUT")
+	if got := PrefixTimeout(); got != defaultPrefixTimeout {
+		t.Fatalf("expected default fallback for zero value, got %s", got)
 	}
 }

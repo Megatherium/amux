@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
+
+	"github.com/andyrewlee/amux/internal/logging"
 )
 
 const defaultPrefixEnv = ""
@@ -148,6 +151,22 @@ func PrefixHelpLabel() string {
 		return "C-Spc"
 	}
 	return label
+}
+
+// PrefixTimeout returns the prefix mode timeout duration, reading from
+// AMUX_PREFIX_TIMEOUT (e.g. "5s", "500ms"). Falls back to
+// defaultPrefixTimeout on missing or invalid values.
+func PrefixTimeout() time.Duration {
+	value := strings.TrimSpace(os.Getenv("AMUX_PREFIX_TIMEOUT"))
+	if value == "" {
+		return defaultPrefixTimeout
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil || d <= 0 {
+		logging.Warn("Invalid AMUX_PREFIX_TIMEOUT=%q; using %s", value, defaultPrefixTimeout)
+		return defaultPrefixTimeout
+	}
+	return d
 }
 
 // KeyMap defines all keybindings for the application

@@ -109,7 +109,7 @@ func (a *App) openCommandsPalette() tea.Cmd {
 func (a *App) refreshPrefixTimeout() tea.Cmd {
 	a.prefixToken++
 	token := a.prefixToken
-	return common.SafeTick(prefixTimeout, func(t time.Time) tea.Msg {
+	return common.SafeTick(PrefixTimeout(), func(t time.Time) tea.Msg {
 		return prefixTimeoutMsg{token: token}
 	})
 }

@@ -105,3 +105,5 @@ make run
 - pprof: set `AMUX_PPROF=1` (or a port like `6061`) to expose `net/http/pprof` on `127.0.0.1`.
 - Debug signals: set `AMUX_DEBUG_SIGNALS=1` and send `SIGUSR1` to dump goroutines into the log.
 - PTY tracing: set `AMUX_PTY_TRACE=1` or a comma-separated assistant list; traces write to the log dir (or OS temp dir if logging is disabled).
+- Prefix key: set `AMUX_PREFIX_KEY` to remap the prefix key (e.g. `ctrl+p`). Default is `ctrl+space`.
+- Prefix timeout: set `AMUX_PREFIX_TIMEOUT` to change how long the command palette waits for input (e.g. `5s`). Default is `3s`.
