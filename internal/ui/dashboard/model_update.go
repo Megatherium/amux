@@ -69,6 +69,10 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 
 			m.toolbarFocused = false
 			m.cursor = idx
+			// Clicking RowTicketsHeader toggles collapse instead of entering.
+			if m.rows[idx].Type == RowTicketsHeader {
+				return m, m.handleSpace()
+			}
 			return m, m.handleEnter()
 		}
 
@@ -140,6 +144,10 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 			return m, m.handleEnter()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("D"))):
 			return m, m.handleDelete()
+		case key.Matches(msg, key.NewBinding(key.WithKeys("space"))):
+			if cmd := m.handleSpace(); cmd != nil {
+				return m, cmd
+			}
 		case key.Matches(msg, key.NewBinding(key.WithKeys("r"))):
 			return m, m.refresh()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("G"))):

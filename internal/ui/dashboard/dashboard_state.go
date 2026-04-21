@@ -95,13 +95,20 @@ func (m *Model) rebuildRows() {
 			})
 		}
 
-		if cached, ok := m.ticketCache[project.Path]; ok {
-			for i := range cached {
-				m.rows = append(m.rows, Row{
-					Type:    RowTicket,
-					Project: project,
-					Ticket:  &cached[i],
-				})
+		// Tickets section: always show header, conditionally show ticket rows.
+		if cached, ok := m.ticketCache[project.Path]; ok && len(cached) > 0 {
+			m.rows = append(m.rows, Row{
+				Type:    RowTicketsHeader,
+				Project: project,
+			})
+			if !m.ticketsCollapsed[project.Path] {
+				for i := range cached {
+					m.rows = append(m.rows, Row{
+						Type:    RowTicket,
+						Project: project,
+						Ticket:  &cached[i],
+					})
+				}
 			}
 		}
 

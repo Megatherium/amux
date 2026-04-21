@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"fmt"
+
 	"charm.land/lipgloss/v2"
 
 	"github.com/andyrewlee/amux/internal/ui/common"
@@ -187,6 +189,22 @@ func (m *Model) renderRow(row Row, selected bool) string {
 		}
 		return unstyledPrefix + style.Render(text)
 
+	case RowTicketsHeader:
+		collapsed := m.ticketsCollapsed[row.Project.Path]
+		count := m.ticketCount(row.Project.Path)
+		indicator := common.Icons.DirOpen // ▼ expanded
+		suffix := ""
+		if collapsed {
+			indicator = common.Icons.DirClosed // ▶ collapsed
+			suffix = fmt.Sprintf(" (%d)", count)
+		}
+		text := indicator + " [Tickets]" + suffix
+		style := m.styles.WorkspaceRow
+		if selected {
+			style = m.styles.SelectedRow
+		}
+		return " " + style.Render(text)
+
 	case RowCreate:
 		unstyledPrefix := " "
 		styledPrefix := " "
@@ -235,6 +253,8 @@ func (m *Model) helpLines(contentWidth int) []string {
 			items = append(items, m.helpItem("D", "remove"))
 		case RowTicket:
 			items = append(items, m.helpItem("enter", "view ticket"))
+		case RowTicketsHeader:
+			items = append(items, m.helpItem("space", "toggle"))
 		}
 	}
 	items = append(items,

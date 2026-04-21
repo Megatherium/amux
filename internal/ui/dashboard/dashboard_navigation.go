@@ -9,7 +9,12 @@ import (
 
 // isSelectable returns whether a row type can be selected
 func isSelectable(rt RowType) bool {
-	return rt != RowSpacer
+	switch rt {
+	case RowSpacer:
+		return false
+	default:
+		return true
+	}
 }
 
 // findSelectableRow finds a selectable row starting from 'from' in direction 'dir'.
@@ -154,6 +159,9 @@ func (m *Model) activateCurrentRow() tea.Cmd {
 		return func() tea.Msg {
 			return messages.TicketPreviewMsg{Ticket: row.Ticket, Project: row.Project}
 		}
+	case RowTicketsHeader:
+		// No activation action; user presses Space to toggle collapse.
+		return nil
 	default:
 		// RowCreate, RowAddProject, RowSpacer — these don't emit their own
 		// preview-clearing messages (unlike RowHome→ShowWelcome or
@@ -203,6 +211,9 @@ func (m *Model) handleEnter() tea.Cmd {
 		return func() tea.Msg {
 			return messages.TicketSelectedMsg{Ticket: row.Ticket, Project: row.Project}
 		}
+	case RowTicketsHeader:
+		// No activation; use Space to toggle collapse.
+		return nil
 	case RowCreate:
 		return func() tea.Msg {
 			return messages.ShowCreateWorkspaceDialog{Project: row.Project}
@@ -241,4 +252,27 @@ func (m *Model) handleDelete() tea.Cmd {
 // refresh requests a workspace rescan/import.
 func (m *Model) refresh() tea.Cmd {
 	return func() tea.Msg { return messages.RescanWorkspaces{} }
+}
+
+// handleSpace handles the space key for toggling collapsible sections.
+func (m *Model) handleSpace() tea.Cmd {
+	if m.cursor >= len(m.rows) {
+		return nil
+	}
+	row := m.rows[m.cursor]
+	if row.Type == RowTicketsHeader && row.Project != nil {
+		path := row.Project.Path
+		m.ticketsCollapsed[path] = !m.ticketsCollapsed[path]
+		m.rebuildRows()
+		return m.activateCurrentRow()
+	}
+	return nil
+}
+
+// ticketCount returns the number of cached tickets for a project path.
+func (m *Model) ticketCount(projectPath string) int {
+	if m.ticketCache == nil {
+		return 0
+	}
+	return len(m.ticketCache[projectPath])
 }

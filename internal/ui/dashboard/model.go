@@ -26,6 +26,7 @@ const (
 	RowProject
 	RowWorkspace
 	RowTicket
+	RowTicketsHeader
 	RowCreate
 	RowSpacer
 )
@@ -88,7 +89,8 @@ type Model struct {
 	activeWorkspaceIDs map[string]bool // Workspace IDs with active agents (synced from center)
 
 	// Ticket state
-	ticketCache map[string][]tickets.Ticket // project path → cached tickets
+	ticketCache      map[string][]tickets.Ticket // project path → cached tickets
+	ticketsCollapsed map[string]bool             // project path → collapsed state
 
 	// Styles
 	styles common.Styles
@@ -106,6 +108,7 @@ func New() *Model {
 		creatingWorkspaces: make(map[string]*data.Workspace),
 		deletingWorkspaces: make(map[string]bool),
 		activeWorkspaceIDs: make(map[string]bool),
+		ticketsCollapsed:   make(map[string]bool),
 		cursor:             0,
 		focused:            true,
 		styles:             common.DefaultStyles(),
