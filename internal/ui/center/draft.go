@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
@@ -21,7 +21,16 @@ const (
 	SlotHarness
 	SlotModel
 	SlotAgent
+	SlotConfirm
 	SlotComplete
+)
+
+// editMode determines which template the inline editor is editing.
+type editMode int
+
+const (
+	editModeCommand editMode = iota
+	editModePrompt
 )
 
 type DraftComplete struct {
@@ -33,7 +42,21 @@ type DraftComplete struct {
 	AgentMode   string
 }
 
+// DraftCancelled is emitted when the user cancels the draft flow.
 type DraftCancelled struct{}
+
+// draftTemplateLoadedMsg carries template content loaded from a file.
+type draftTemplateLoadedMsg struct {
+	content string
+}
+
+// draftTemplateErrorMsg carries an error from loading a template file.
+type draftTemplateErrorMsg struct {
+	err error
+}
+
+// filePickerID is the dialog ID used for the template file picker.
+const filePickerID = "draft-template-picker"
 
 type Draft struct {
 	ticket     *tickets.Ticket
@@ -58,6 +81,26 @@ type Draft struct {
 	filteredIndices []int
 
 	workspace *data.Workspace
+
+	// Confirm state
+	renderer *tickets.Renderer
+	dirty    bool // true if templates were edited or loaded from file
+
+	// Template overrides — populated by inline edit or file picker.
+	// Non-empty values take precedence over the shared config, so canceling
+	// the draft discards all edits without leaking mutations.
+	commandOverride string
+	promptOverride  string
+
+	// Inline editor state
+	inlineEditActive bool
+	inlineEditTA     textarea.Model
+	inlineEditMode   editMode
+	inlineEditError  string
+
+	// File picker state for template loading
+	filePickerActive bool
+	filePicker       *common.FilePicker
 }
 
 func NewDraft(ticket *tickets.Ticket, ws *data.Workspace, cfg *config.Config, styles common.Styles) *Draft {
@@ -77,6 +120,7 @@ func NewDraft(ticket *tickets.Ticket, ws *data.Workspace, cfg *config.Config, st
 		filterInput:    fi,
 		cursor:         0,
 		harnessOptions: cfg.AssistantNames(),
+		renderer:       tickets.NewRenderer(),
 	}
 
 	if len(d.harnessOptions) == 0 {
@@ -104,13 +148,41 @@ func (d *Draft) SetSize(width, height int) {
 	d.width = width
 	d.height = height
 	d.filterInput.SetWidth(min(30, max(10, width-6)))
+	if d.filePickerActive {
+		d.filePicker.SetSize(width, height)
+	}
+	if d.inlineEditActive {
+		d.inlineEditTA.SetWidth(min(60, max(20, width-10)))
+		d.inlineEditTA.SetHeight(min(10, max(3, height/3)))
+	}
 }
+
+// Dirty reports whether the draft has unsaved template edits.
+func (d *Draft) Dirty() bool { return d.dirty }
 
 func (d *Draft) Focus() { d.focused = true; d.filterInput.Focus() }
 func (d *Draft) Blur()  { d.focused = false; d.filterInput.Blur() }
 
 func (d *Draft) Update(msg tea.Msg) (*Draft, tea.Cmd) {
+	// File picker takes priority when active.
+	if d.filePickerActive {
+		return d.handleFilePickerMsg(msg)
+	}
+	// Inline editor takes priority when active.
+	if d.inlineEditActive {
+		return d.handleInlineEditMsg(msg)
+	}
+
 	switch msg := msg.(type) {
+	case draftTemplateLoadedMsg:
+		return d.handleTemplateLoaded(msg)
+	case draftTemplateErrorMsg:
+		// Re-show confirm view; the error was already shown as a warning.
+		return d, nil
+	case common.DialogResult:
+		if msg.ID == filePickerID {
+			return d.handleFilePickerResult(msg)
+		}
 	case tea.KeyPressMsg:
 		return d.handleKey(msg)
 	}
@@ -120,6 +192,11 @@ func (d *Draft) Update(msg tea.Msg) (*Draft, tea.Cmd) {
 func (d *Draft) handleKey(msg tea.KeyPressMsg) (*Draft, tea.Cmd) {
 	if d.activeSlot == SlotComplete {
 		return d, nil
+	}
+
+	// Confirm slot has its own key handling.
+	if d.activeSlot == SlotConfirm {
+		return d.handleConfirmKey(msg)
 	}
 
 	filterText := d.filterInput.Value()
@@ -178,6 +255,9 @@ func (d *Draft) handleKey(msg tea.KeyPressMsg) (*Draft, tea.Cmd) {
 
 func (d *Draft) goBack() {
 	switch d.activeSlot {
+	case SlotConfirm:
+		d.activeSlot = SlotAgent
+		d.resetFilter(d.agentOptions)
 	case SlotModel:
 		d.activeSlot = SlotHarness
 		d.model = ""
@@ -250,8 +330,10 @@ func (d *Draft) confirmSelection(idx int) (*Draft, tea.Cmd) {
 		}
 		name := d.harnessOptions[idx]
 		d.confirmHarness(name)
+		// confirmHarness may have auto-filled all slots via defaults.
+		// Safety net: if all defaults resolved, skip straight to confirm.
 		if d.activeSlot == SlotComplete {
-			return d, d.launchCmd()
+			d.activeSlot = SlotConfirm
 		}
 		return d, nil
 
@@ -266,8 +348,8 @@ func (d *Draft) confirmSelection(idx int) (*Draft, tea.Cmd) {
 			for _, a := range d.agentOptions {
 				if a == d.config.Defaults.Agent {
 					d.agent = a
-					d.activeSlot = SlotComplete
-					return d, d.launchCmd()
+					d.activeSlot = SlotConfirm
+					return d, nil
 				}
 			}
 		}
@@ -278,8 +360,8 @@ func (d *Draft) confirmSelection(idx int) (*Draft, tea.Cmd) {
 			return d, nil
 		}
 		d.agent = d.agentOptions[idx]
-		d.activeSlot = SlotComplete
-		return d, d.launchCmd()
+		d.activeSlot = SlotConfirm
+		return d, nil
 	}
 	return d, nil
 }
@@ -343,15 +425,27 @@ func (d *Draft) launchCmd() tea.Cmd {
 }
 
 func (d *Draft) View() string {
+	// File picker overlay takes over the entire view.
+	if d.filePickerActive {
+		return d.renderFilePicker()
+	}
+	// Inline editor overlay takes over the entire view.
+	if d.inlineEditActive {
+		return d.renderInlineEdit()
+	}
+
 	var b strings.Builder
 
 	b.WriteString("\n")
 
 	stepLabels := []string{"Ticket", "Harness", "Model", "Agent"}
-	stepNum := int(d.activeSlot) + 1
-	if d.activeSlot >= SlotComplete {
-		stepNum = 4
+
+	if d.activeSlot == SlotConfirm || d.activeSlot == SlotComplete {
+		b.WriteString(d.renderConfirmView(stepLabels))
+		return b.String()
 	}
+
+	stepNum := int(d.activeSlot) + 1
 
 	headerStyle := d.styles.Title
 	b.WriteString(headerStyle.Render(fmt.Sprintf("Configure Agent   Step %d/4", stepNum)))
@@ -375,121 +469,7 @@ func (d *Draft) View() string {
 	return b.String()
 }
 
-func (d *Draft) slotValue(slot DraftSlot) string {
-	switch slot {
-	case SlotTicket:
-		if d.ticket != nil {
-			return d.ticket.ID
-		}
-	case SlotHarness:
-		return d.harness
-	case SlotModel:
-		return d.model
-	case SlotAgent:
-		return d.agent
-	}
-	return ""
-}
-
-func (d *Draft) renderCollapsedSlot(slot DraftSlot, label string) string {
-	value := d.slotValue(slot)
-	if slot == SlotTicket && d.ticket != nil {
-		value = d.ticket.ID + " — " + truncateStr(d.ticket.Title, 40)
-	}
-	checkStyle := lipgloss.NewStyle().Foreground(common.ColorSuccess())
-	mutedStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
-	return checkStyle.Render("  ✓ ") + mutedStyle.Render(label+": "+value)
-}
-
-func (d *Draft) renderExpandedSlot(_ DraftSlot, label string) string {
-	var b strings.Builder
-
-	arrowStyle := lipgloss.NewStyle().Foreground(common.ColorPrimary())
-	b.WriteString(arrowStyle.Render("  ▸ Select " + label))
-	b.WriteString("\n")
-
-	options := d.currentOptions()
-	if len(options) == 0 {
-		mutedStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
-		b.WriteString("    ")
-		b.WriteString(mutedStyle.Render("No options available"))
-		return b.String()
-	}
-
-	boxWidth := max(20, min(d.width-4, 45))
-
-	b.WriteString("    ")
-	filterView := d.filterInput.View()
-	filterLine := lipgloss.NewStyle().Width(boxWidth).Render(filterView)
-	b.WriteString(filterLine)
-	b.WriteString("\n")
-
-	sepStyle := lipgloss.NewStyle().Foreground(common.ColorBorder())
-	sep := sepStyle.Render("    " + strings.Repeat("─", boxWidth))
-	b.WriteString(sep)
-	b.WriteString("\n")
-
-	maxVisible := min(len(d.filteredIndices), d.availableOptionLines())
-	start := 0
-	if d.cursor >= maxVisible {
-		start = d.cursor - maxVisible + 1
-	}
-	if start < 0 {
-		start = 0
-	}
-
-	for vi := range maxVisible {
-		fi := vi + start
-		if fi >= len(d.filteredIndices) {
-			break
-		}
-		origIdx := d.filteredIndices[fi]
-		opt := options[origIdx]
-		isCursor := fi == d.cursor
-
-		cursor := common.Icons.CursorEmpty + " "
-		nameStyle := lipgloss.NewStyle().Foreground(common.ColorForeground())
-		if isCursor {
-			cursor = common.Icons.Cursor + " "
-			nameStyle = lipgloss.NewStyle().
-				Foreground(common.ColorForeground()).
-				Background(common.ColorSelection()).
-				Bold(true)
-		}
-
-		indicator := lipgloss.NewStyle().Foreground(common.AgentColor(opt)).Render(common.Icons.Running)
-		line := "    " + cursor + indicator + " " + nameStyle.Render(opt)
-		b.WriteString(line)
-		b.WriteString("\n")
-	}
-
-	return b.String()
-}
-
-func (d *Draft) renderFutureSlot(label string) string {
-	dimStyle := lipgloss.NewStyle().Foreground(common.ColorBorder())
-	return dimStyle.Render("  ○ " + label)
-}
-
-func (d *Draft) availableOptionLines() int {
-	linesUsed := 4 + int(d.activeSlot)*2
-	remaining := max(3, d.height-linesUsed-2)
-	return remaining
-}
-
-// HelpLines returns the help lines for the drafting flow. When a draft is active,
-// the draft UX is self-explanatory and traditional keymap hints would be confusing.
+// HelpLines returns the help lines for the drafting flow.
 func (d *Draft) HelpLines(_ int) []string {
 	return nil
-}
-
-func truncateStr(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	if maxRunes > 3 {
-		return string(runes[:maxRunes-3]) + "..."
-	}
-	return string(runes[:maxRunes])
 }

@@ -17,11 +17,14 @@ func draftConfig() *config.Config {
 		Assistants: map[string]config.AssistantConfig{
 			"claude": {
 				Command:         "claude",
+				CommandTemplate: "claude --model {{.Model}} --agent {{.Agent}}",
+				PromptTemplate:  "Work on {{.TicketID}}: {{.TicketTitle}}",
 				SupportedModels: []string{"sonnet", "opus"},
 				SupportedAgents: []string{"auto-approve", "plan"},
 			},
 			"opencode": {
 				Command:         "opencode",
+				CommandTemplate: "opencode --model {{.Model}}",
 				SupportedModels: []string{"gpt-4", "sonnet"},
 				SupportedAgents: []string{"auto-approve"},
 			},
