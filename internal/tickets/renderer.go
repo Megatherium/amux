@@ -14,7 +14,8 @@
 //   - RenderCommand renders the command template with Prompt available as {{.Prompt}}
 //
 // Templates receive TemplateContext and can access any field directly:
-//   - Ticket fields: TicketID, TicketTitle, TicketDescription, TicketStatus, etc.
+//   - Ticket accessors: TicketID, TicketTitle, TicketDescription, etc. (method-based)
+//   - Ticket fields: .Ticket.ID, .Ticket.Title, etc. (from embedded Selection)
 //   - Selection fields: Assistant, Model (structured), Agent, WorkDir
 //   - Model helpers: {{.Model.Provider}}, {{.Model.Org}}, {{.Model.Name}}, {{.Model.ModelID}}
 //
@@ -106,16 +107,6 @@ func (r *Renderer) RenderSelection(ctx TemplateContext) (*LaunchSpec, error) {
 func BuildTemplateContext(sel Selection, workDir string) TemplateContext {
 	return TemplateContext{
 		Selection: sel,
-
-		TicketID:          sel.Ticket.ID,
-		TicketTitle:       sel.Ticket.Title,
-		TicketDescription: sel.Ticket.Description,
-		TicketStatus:      sel.Ticket.Status,
-		TicketPriority:    sel.Ticket.Priority,
-		TicketIssueType:   sel.Ticket.IssueType,
-		TicketAssignee:    sel.Ticket.Assignee,
-		TicketCreatedAt:   sel.Ticket.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		TicketUpdatedAt:   sel.Ticket.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 
 		Model: NewModelContext(sel.Model),
 

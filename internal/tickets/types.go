@@ -172,26 +172,18 @@ func (m ModelContext) parts() (provider, org, name string) {
 
 // TemplateContext is the fat context passed to both command and prompt templates.
 // It embeds Selection to avoid duplicating ticket and selection fields,
-// while also exposing all fields directly for template access.
+// while also exposing ticket fields directly for template access via methods.
 //
 // Templates receive this struct and can access any field directly:
-//   - Ticket fields via .Ticket.ID, .Ticket.Title, etc.
-//   - Selection fields via .Selection.Model, .Selection.Assistant, etc.
-//   - Flattened ticket fields via .TicketID, .TicketTitle, etc. for convenience
+//   - Ticket fields via .Ticket.ID, .Ticket.Title, etc. (from embedded Selection)
+//   - Flattened ticket accessors via .TicketID, .TicketTitle, etc. (method-based)
+//   - Selection fields via .Assistant, .Model, .Agent (from embedded Selection)
+//   - Model helpers: {{.Model.Provider}}, {{.Model.Org}}, {{.Model.Name}}, {{.Model.ModelID}}
+//
+// The method-based accessors eliminate manual field copying (Shotgun Surgery):
+// adding a new Ticket field only requires adding one accessor method here.
 type TemplateContext struct {
 	Selection `json:"selection"`
-
-	// Flattened ticket fields for template convenience.
-	// These are populated from Selection.Ticket at construction time.
-	TicketID          string `json:"ticket_id"`
-	TicketTitle       string `json:"ticket_title"`
-	TicketDescription string `json:"ticket_description"`
-	TicketStatus      string `json:"ticket_status"`
-	TicketPriority    int    `json:"ticket_priority"`
-	TicketIssueType   string `json:"ticket_issue_type"`
-	TicketAssignee    string `json:"ticket_assignee"`
-	TicketCreatedAt   string `json:"ticket_created_at"`
-	TicketUpdatedAt   string `json:"ticket_updated_at"`
 
 	// Model is exposed as ModelContext for structured template accessors.
 	Model ModelContext `json:"model"`
@@ -217,6 +209,37 @@ type TemplateContext struct {
 	// Prompt is the rendered prompt text, available in command_template
 	// via {{.Prompt}} for composable template designs.
 	Prompt string `json:"prompt"`
+}
+
+// TicketID returns the ticket's ID for template access as {{.TicketID}}.
+func (t TemplateContext) TicketID() string { return t.Ticket.ID }
+
+// TicketTitle returns the ticket's title for template access as {{.TicketTitle}}.
+func (t TemplateContext) TicketTitle() string { return t.Ticket.Title }
+
+// TicketDescription returns the ticket's description for template access as {{.TicketDescription}}.
+func (t TemplateContext) TicketDescription() string { return t.Ticket.Description }
+
+// TicketStatus returns the ticket's status for template access as {{.TicketStatus}}.
+func (t TemplateContext) TicketStatus() string { return t.Ticket.Status }
+
+// TicketPriority returns the ticket's priority for template access as {{.TicketPriority}}.
+func (t TemplateContext) TicketPriority() int { return t.Ticket.Priority }
+
+// TicketIssueType returns the ticket's issue type for template access as {{.TicketIssueType}}.
+func (t TemplateContext) TicketIssueType() string { return t.Ticket.IssueType }
+
+// TicketAssignee returns the ticket's assignee for template access as {{.TicketAssignee}}.
+func (t TemplateContext) TicketAssignee() string { return t.Ticket.Assignee }
+
+// TicketCreatedAt returns the ticket's creation timestamp as ISO 8601 for template access as {{.TicketCreatedAt}}.
+func (t TemplateContext) TicketCreatedAt() string {
+	return t.Ticket.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
+}
+
+// TicketUpdatedAt returns the ticket's update timestamp as ISO 8601 for template access as {{.TicketUpdatedAt}}.
+func (t TemplateContext) TicketUpdatedAt() string {
+	return t.Ticket.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")
 }
 
 // PriorityLabel returns a verbose human-readable label for a priority number

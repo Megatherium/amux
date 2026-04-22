@@ -32,8 +32,7 @@ func TestRenderer_RenderCommand(t *testing.T) {
 			name: "complex",
 			ctx: TemplateContext{
 				CommandTemplate: "opencode --model {{.Model}} --agent {{.Agent}} --ticket {{.TicketID}}",
-				Selection:       Selection{Agent: "coder"},
-				TicketID:        "bb-abc",
+				Selection:       Selection{Ticket: Ticket{ID: "bb-abc"}, Agent: "coder"},
 				Model:           NewModelContext("claude-sonnet-4-20250514"),
 			},
 			want: "opencode --model claude-sonnet-4-20250514 --agent coder --ticket bb-abc",
@@ -59,7 +58,7 @@ func TestRenderer_RenderCommand(t *testing.T) {
 			name: "escaping",
 			ctx: TemplateContext{
 				CommandTemplate: "echo '{{.TicketTitle}}'",
-				TicketTitle:     `It is a "test"`,
+				Selection:       Selection{Ticket: Ticket{Title: `It is a "test"`}},
 			},
 			want: `echo 'It is a "test"'`,
 		},
@@ -117,8 +116,7 @@ func TestRenderer_RenderPrompt(t *testing.T) {
 			name: "with template",
 			ctx: TemplateContext{
 				PromptTemplate: "Work on {{.TicketID}}: {{.TicketTitle}}",
-				TicketID:       "bb-123",
-				TicketTitle:    "Fix Bug",
+				Selection:      Selection{Ticket: Ticket{ID: "bb-123", Title: "Fix Bug"}},
 			},
 			want: "Work on bb-123: Fix Bug",
 		},
@@ -126,7 +124,7 @@ func TestRenderer_RenderPrompt(t *testing.T) {
 			name: "empty template",
 			ctx: TemplateContext{
 				PromptTemplate: "",
-				TicketID:       "bb-123",
+				Selection:      Selection{Ticket: Ticket{ID: "bb-123"}},
 			},
 			want: "",
 		},
@@ -140,9 +138,7 @@ func TestRenderer_RenderPrompt(t *testing.T) {
 			name: "multiline",
 			ctx: TemplateContext{
 				PromptTemplate: "Ticket: {{.TicketID}}\nTitle: {{.TicketTitle}}\nPriority: {{.TicketPriority}}",
-				TicketID:       "bb-456",
-				TicketTitle:    "Multiline Test",
-				TicketPriority: 1,
+				Selection:      Selection{Ticket: Ticket{ID: "bb-456", Title: "Multiline Test", Priority: 1}},
 			},
 			want: "Ticket: bb-456\nTitle: Multiline Test\nPriority: 1",
 		},
@@ -387,26 +383,26 @@ func TestBuildTemplateContext_Complete(t *testing.T) {
 
 	ctx := BuildTemplateContext(sel, "")
 
-	if ctx.TicketID != "bb-abc" {
-		t.Errorf("Expected TicketID 'bb-abc', got %q", ctx.TicketID)
+	if ctx.TicketID() != "bb-abc" {
+		t.Errorf("Expected TicketID 'bb-abc', got %q", ctx.TicketID())
 	}
-	if ctx.TicketTitle != "Test Title" {
-		t.Errorf("Expected TicketTitle 'Test Title', got %q", ctx.TicketTitle)
+	if ctx.TicketTitle() != "Test Title" {
+		t.Errorf("Expected TicketTitle 'Test Title', got %q", ctx.TicketTitle())
 	}
-	if ctx.TicketDescription != "Test Desc" {
-		t.Errorf("Expected TicketDescription 'Test Desc', got %q", ctx.TicketDescription)
+	if ctx.TicketDescription() != "Test Desc" {
+		t.Errorf("Expected TicketDescription 'Test Desc', got %q", ctx.TicketDescription())
 	}
-	if ctx.TicketStatus != "in_progress" {
-		t.Errorf("Expected TicketStatus 'in_progress', got %q", ctx.TicketStatus)
+	if ctx.TicketStatus() != "in_progress" {
+		t.Errorf("Expected TicketStatus 'in_progress', got %q", ctx.TicketStatus())
 	}
-	if ctx.TicketPriority != 2 {
-		t.Errorf("Expected TicketPriority 2, got %d", ctx.TicketPriority)
+	if ctx.TicketPriority() != 2 {
+		t.Errorf("Expected TicketPriority 2, got %d", ctx.TicketPriority())
 	}
-	if ctx.TicketIssueType != "feature" {
-		t.Errorf("Expected TicketIssueType 'feature', got %q", ctx.TicketIssueType)
+	if ctx.TicketIssueType() != "feature" {
+		t.Errorf("Expected TicketIssueType 'feature', got %q", ctx.TicketIssueType())
 	}
-	if ctx.TicketAssignee != "user1" {
-		t.Errorf("Expected TicketAssignee 'user1', got %q", ctx.TicketAssignee)
+	if ctx.TicketAssignee() != "user1" {
+		t.Errorf("Expected TicketAssignee 'user1', got %q", ctx.TicketAssignee())
 	}
 	if ctx.Assistant != "opencode" {
 		t.Errorf("Expected Assistant 'opencode', got %q", ctx.Assistant)
