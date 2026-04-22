@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/andyrewlee/amux/internal/tickets"
 )
 
 // draftAtConfirm creates a Draft that has progressed to SlotConfirm.
@@ -254,5 +256,210 @@ func TestDraftConfirmViewCapsOnSmallTerminal(t *testing.T) {
 	// Should contain truncation indicator instead of all 50 lines.
 	if !strings.Contains(view, "more lines") {
 		t.Errorf("small terminal should show truncation indicator, got:\n%s", view)
+	}
+}
+
+// --- Tests for extracted business logic ---
+
+func TestBuildTemplateContext(t *testing.T) {
+	d := draftAtConfirm()
+
+	ctx := d.buildTemplateContext()
+
+	// Verify the context was built from the Draft state.
+	if ctx.Assistant != "claude" {
+		t.Errorf("expected assistant=claude, got %s", ctx.Assistant)
+	}
+	if ctx.Model.ModelID() != "sonnet" {
+		t.Errorf("expected model=sonnet, got %s", ctx.Model.ModelID())
+	}
+	if ctx.Agent != "auto-approve" {
+		t.Errorf("expected agent=auto-approve, got %s", ctx.Agent)
+	}
+	if ctx.Ticket.ID != "bmx-42" {
+		t.Errorf("expected ticket ID=bmx-42, got %s", ctx.Ticket.ID)
+	}
+	if ctx.Ticket.Title != "My Ticket" {
+		t.Errorf("expected ticket title=My Ticket, got %s", ctx.Ticket.Title)
+	}
+	if ctx.WorkDir != "/repo" {
+		t.Errorf("expected workDir=/repo, got %s", ctx.WorkDir)
+	}
+
+	// Templates should come from the shared config.
+	if ctx.CommandTemplate != "claude --model {{.Model}} --agent {{.Agent}}" {
+		t.Errorf("unexpected command template: %s", ctx.CommandTemplate)
+	}
+	if ctx.PromptTemplate != "Work on {{.TicketID}}: {{.TicketTitle}}" {
+		t.Errorf("unexpected prompt template: %s", ctx.PromptTemplate)
+	}
+}
+
+func TestBuildTemplateContextOverrides(t *testing.T) {
+	d := draftAtConfirm()
+
+	// Set local overrides — they should take precedence.
+	d.commandOverride = "custom --cmd {{.Model}}"
+	d.promptOverride = "custom prompt {{.TicketID}}"
+
+	ctx := d.buildTemplateContext()
+
+	if ctx.CommandTemplate != "custom --cmd {{.Model}}" {
+		t.Errorf("expected command override, got %s", ctx.CommandTemplate)
+	}
+	if ctx.PromptTemplate != "custom prompt {{.TicketID}}" {
+		t.Errorf("expected prompt override, got %s", ctx.PromptTemplate)
+	}
+}
+
+func TestBuildTemplateContextNoAssistant(t *testing.T) {
+	cfg := draftConfig()
+	d := NewDraft(draftTicket("bmx-1", "Test"), draftWorkspace(), cfg, draftStyles())
+	d.SetSize(80, 24)
+
+	// Simulate a harness that doesn't exist in config.
+	d.harness = "nonexistent"
+	d.model = "default"
+	d.agent = "default"
+
+	ctx := d.buildTemplateContext()
+
+	// Should return zero value when harness has no config entry.
+	if ctx.CommandTemplate != "" || ctx.PromptTemplate != "" {
+		t.Error("expected empty templates for unknown harness")
+	}
+}
+
+func TestBuildTemplateContextNoWorkspace(t *testing.T) {
+	cfg := draftConfig()
+	d := NewDraft(draftTicket("bmx-1", "Test"), nil, cfg, draftStyles())
+	d.SetSize(80, 24)
+	d.confirmHarness("claude")
+	d.model = "sonnet"
+	d.agent = "auto-approve"
+
+	ctx := d.buildTemplateContext()
+
+	if ctx.WorkDir != "" {
+		t.Errorf("expected empty workDir without workspace, got %s", ctx.WorkDir)
+	}
+}
+
+func TestBuildTemplateContextNoTicket(t *testing.T) {
+	cfg := draftConfig()
+	d := NewDraft(nil, draftWorkspace(), cfg, draftStyles())
+	d.SetSize(80, 24)
+	d.confirmHarness("claude")
+	d.model = "sonnet"
+	d.agent = "auto-approve"
+
+	ctx := d.buildTemplateContext()
+
+	if ctx.Ticket.ID != "" || ctx.Ticket.Title != "" {
+		t.Error("expected empty ticket when nil")
+	}
+}
+
+func TestComputeTemplatePreview(t *testing.T) {
+	d := draftAtConfirm()
+	ctx := d.buildTemplateContext()
+	renderer := tickets.NewRenderer()
+
+	preview := computeTemplatePreview(renderer, ctx, 24, 4)
+
+	if preview.CommandError != nil {
+		t.Fatalf("unexpected command error: %v", preview.CommandError)
+	}
+	if preview.PromptError != nil {
+		t.Fatalf("unexpected prompt error: %v", preview.PromptError)
+	}
+	if len(preview.CommandLines) == 0 {
+		t.Error("expected command lines")
+	}
+	if len(preview.PromptLines) == 0 {
+		t.Error("expected prompt lines")
+	}
+
+	// Verify the rendered command content.
+	cmdStr := strings.Join(preview.CommandLines, "\n")
+	if !strings.Contains(cmdStr, "claude --model sonnet --agent auto-approve") {
+		t.Errorf("expected rendered command, got %s", cmdStr)
+	}
+
+	// Verify the rendered prompt content.
+	promptStr := strings.Join(preview.PromptLines, "\n")
+	if !strings.Contains(promptStr, "Work on bmx-42: My Ticket") {
+		t.Errorf("expected rendered prompt, got %s", promptStr)
+	}
+}
+
+func TestComputeTemplatePreviewEmptyTemplates(t *testing.T) {
+	renderer := tickets.NewRenderer()
+	ctx := tickets.TemplateContext{} // No templates set.
+
+	preview := computeTemplatePreview(renderer, ctx, 24, 4)
+
+	if preview.CommandLines != nil {
+		t.Error("expected no command lines for empty template")
+	}
+	if preview.PromptLines != nil {
+		t.Error("expected no prompt lines for empty template")
+	}
+	if preview.CommandError != nil {
+		t.Errorf("expected no error for empty template, got %v", preview.CommandError)
+	}
+	if preview.PromptError != nil {
+		t.Errorf("expected no error for empty template, got %v", preview.PromptError)
+	}
+}
+
+func TestComputeTemplatePreviewBadTemplate(t *testing.T) {
+	renderer := tickets.NewRenderer()
+	ctx := tickets.TemplateContext{
+		CommandTemplate: "{{.NonexistentField}}",
+		Selection: tickets.Selection{
+			Assistant: "test",
+		},
+	}
+
+	preview := computeTemplatePreview(renderer, ctx, 24, 4)
+
+	if preview.CommandError == nil {
+		t.Fatal("expected error for bad template")
+	}
+}
+
+func TestComputeTemplatePreviewLineCapping(t *testing.T) {
+	cfg := draftConfig()
+	// Create a config with a very long command template.
+	longCmd := strings.Repeat("line {{.TicketID}}\n", 50)
+	ac := cfg.Assistants["claude"]
+	ac.CommandTemplate = longCmd
+	cfg.Assistants["claude"] = ac
+
+	d := NewDraft(draftTicket("bmx-1", "Test"), draftWorkspace(), cfg, draftStyles())
+	d.SetSize(80, 8) // Very small terminal.
+	d.confirmHarness("claude")
+	d.model = "sonnet"
+	d.agent = "auto-approve"
+
+	ctx := d.buildTemplateContext()
+	renderer := tickets.NewRenderer()
+
+	preview := computeTemplatePreview(renderer, ctx, 8, 4)
+
+	if preview.CommandError != nil {
+		t.Fatalf("unexpected error: %v", preview.CommandError)
+	}
+	// With height=8 and 4 steps: reservedLines = 4+4+3 = 11, maxTemplateLines = 8-11 = -3 → clamped to 3.
+	// So command lines should be capped to 3.
+	if len(preview.CommandLines) > 3 {
+		t.Errorf("expected at most 3 command lines on small terminal, got %d", len(preview.CommandLines))
+	}
+	// Last line should contain truncation indicator.
+	if len(preview.CommandLines) == 3 {
+		if !strings.Contains(preview.CommandLines[2], "more lines") {
+			t.Errorf("expected truncation indicator in last line, got %q", preview.CommandLines[2])
+		}
 	}
 }
