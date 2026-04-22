@@ -45,17 +45,15 @@ type DraftComplete struct {
 // DraftCancelled is emitted when the user cancels the draft flow.
 type DraftCancelled struct{}
 
-// draftTemplateLoadedMsg carries template content loaded from a file.
 type draftTemplateLoadedMsg struct {
 	content string
 }
 
-// draftTemplateErrorMsg carries an error from loading a template file.
 type draftTemplateErrorMsg struct {
 	err error
 }
 
-// filePickerID is the dialog ID used for the template file picker.
+// filePickerID is the dialog ID for the template file picker.
 const filePickerID = "draft-template-picker"
 
 type Draft struct {
@@ -98,7 +96,7 @@ type Draft struct {
 	inlineEditMode   editMode
 	inlineEditError  string
 
-	// File picker state for template loading
+	// File picker state
 	filePickerActive bool
 	filePicker       *common.FilePicker
 }
@@ -320,90 +318,6 @@ func (d *Draft) currentOptions() []string {
 		return d.agentOptions
 	}
 	return nil
-}
-
-func (d *Draft) confirmSelection(idx int) (*Draft, tea.Cmd) {
-	switch d.activeSlot {
-	case SlotHarness:
-		if idx >= len(d.harnessOptions) {
-			return d, nil
-		}
-		name := d.harnessOptions[idx]
-		d.confirmHarness(name)
-		// confirmHarness may have auto-filled all slots via defaults.
-		// Safety net: if all defaults resolved, skip straight to confirm.
-		if d.activeSlot == SlotComplete {
-			d.activeSlot = SlotConfirm
-		}
-		return d, nil
-
-	case SlotModel:
-		if idx >= len(d.modelOptions) {
-			return d, nil
-		}
-		d.model = d.modelOptions[idx]
-		d.activeSlot = SlotAgent
-		d.resetFilter(d.agentOptions)
-		if d.config.Defaults != nil && d.config.Defaults.Agent != "" {
-			for _, a := range d.agentOptions {
-				if a == d.config.Defaults.Agent {
-					d.agent = a
-					d.activeSlot = SlotConfirm
-					return d, nil
-				}
-			}
-		}
-		return d, nil
-
-	case SlotAgent:
-		if idx >= len(d.agentOptions) {
-			return d, nil
-		}
-		d.agent = d.agentOptions[idx]
-		d.activeSlot = SlotConfirm
-		return d, nil
-	}
-	return d, nil
-}
-
-func (d *Draft) confirmHarness(name string) {
-	d.harness = name
-	harnessCfg, ok := d.config.Assistants[name]
-	if !ok {
-		d.modelOptions = []string{"default"}
-		d.agentOptions = []string{"default"}
-	} else {
-		if len(harnessCfg.SupportedModels) > 0 {
-			d.modelOptions = make([]string, len(harnessCfg.SupportedModels))
-			copy(d.modelOptions, harnessCfg.SupportedModels)
-		} else {
-			d.modelOptions = []string{"default"}
-		}
-		if len(harnessCfg.SupportedAgents) > 0 {
-			d.agentOptions = make([]string, len(harnessCfg.SupportedAgents))
-			copy(d.agentOptions, harnessCfg.SupportedAgents)
-		} else {
-			d.agentOptions = []string{"default"}
-		}
-	}
-
-	d.model = ""
-	d.agent = ""
-	d.activeSlot = SlotModel
-	d.resetFilter(d.modelOptions)
-
-	if d.config.Defaults != nil {
-		if d.config.Defaults.Model != "" {
-			for _, m := range d.modelOptions {
-				if m == d.config.Defaults.Model {
-					d.model = m
-					d.activeSlot = SlotAgent
-					d.resetFilter(d.agentOptions)
-					break
-				}
-			}
-		}
-	}
 }
 
 func (d *Draft) launchCmd() tea.Cmd {
