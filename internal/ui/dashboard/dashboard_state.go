@@ -59,68 +59,99 @@ func (m *Model) SetWorkspaceDeleting(root string, deleting bool) tea.Cmd {
 	return nil
 }
 
-// rebuildRows rebuilds the row list from projects
+// rebuildRows rebuilds the row list from projects.
 func (m *Model) rebuildRows() {
-	m.rows = []Row{
+	rows := []Row{
 		{Type: RowHome},
 		{Type: RowSpacer},
 	}
 
 	for i := range m.projects {
-		project := &m.projects[i]
-		mainWS := m.getMainWorkspace(project)
-		mainWSID := ""
-		if mainWS != nil {
-			mainWSID = string(mainWS.ID())
-		}
-
-		m.rows = append(m.rows, Row{
-			Type:                RowProject,
-			Project:             project,
-			ActivityWorkspaceID: mainWSID,
-			MainWorkspace:       mainWS,
-		})
-
-		for _, ws := range m.sortedWorkspaces(project) {
-			// Hide main branch - users access via project row
-			if ws.IsMainBranch() || ws.IsPrimaryCheckout() {
-				continue
-			}
-
-			m.rows = append(m.rows, Row{
-				Type:                RowWorkspace,
-				Project:             project,
-				Workspace:           ws,
-				ActivityWorkspaceID: string(ws.ID()),
-			})
-		}
-
-		// Tickets section: always show header, conditionally show ticket rows.
-		if cached, ok := m.ticketCache[project.Path]; ok && len(cached) > 0 {
-			m.rows = append(m.rows, Row{
-				Type:    RowTicketsHeader,
-				Project: project,
-			})
-			if !m.ticketsCollapsed[project.Path] {
-				for i := range cached {
-					m.rows = append(m.rows, Row{
-						Type:    RowTicket,
-						Project: project,
-						Ticket:  &cached[i],
-					})
-				}
-			}
-		}
-
-		m.rows = append(m.rows, Row{
-			Type:    RowCreate,
-			Project: project,
-		})
-
-		m.rows = append(m.rows, Row{Type: RowSpacer})
+		rows = m.appendProjectRows(rows, &m.projects[i])
+		rows = append(rows, Row{Type: RowSpacer})
 	}
 
-	// Clamp cursor
+	m.rows = rows
+	m.clampCursor()
+	m.clampScrollOffset()
+}
+
+// appendProjectRows appends all rows for a single project: header, workspaces,
+// tickets section, and create button.
+func (m *Model) appendProjectRows(rows []Row, project *data.Project) []Row {
+	mainWS := m.getMainWorkspace(project)
+	mainWSID := ""
+	if mainWS != nil {
+		mainWSID = string(mainWS.ID())
+	}
+
+	rows = append(rows, Row{
+		Type:                RowProject,
+		Project:             project,
+		ActivityWorkspaceID: mainWSID,
+		MainWorkspace:       mainWS,
+	})
+
+	rows = m.appendWorkspaceRows(rows, project)
+	rows = m.appendTicketRows(rows, project)
+
+	rows = append(rows, Row{
+		Type:    RowCreate,
+		Project: project,
+	})
+
+	return rows
+}
+
+// appendWorkspaceRows appends RowWorkspace entries for a project's non-main,
+// non-primary workspaces, sorted by creation date (descending).
+func (m *Model) appendWorkspaceRows(rows []Row, project *data.Project) []Row {
+	for _, ws := range m.sortedWorkspaces(project) {
+		// Hide main branch - users access via project row
+		if ws.IsMainBranch() || ws.IsPrimaryCheckout() {
+			continue
+		}
+
+		rows = append(rows, Row{
+			Type:                RowWorkspace,
+			Project:             project,
+			Workspace:           ws,
+			ActivityWorkspaceID: string(ws.ID()),
+		})
+	}
+	return rows
+}
+
+// appendTicketRows appends the tickets header and (if expanded) individual
+// ticket rows for a project. Returns rows unchanged if no tickets are cached.
+func (m *Model) appendTicketRows(rows []Row, project *data.Project) []Row {
+	cached, ok := m.ticketCache[project.Path]
+	if !ok || len(cached) == 0 {
+		return rows
+	}
+
+	rows = append(rows, Row{
+		Type:    RowTicketsHeader,
+		Project: project,
+	})
+
+	if m.ticketsCollapsed[project.Path] {
+		return rows
+	}
+
+	for i := range cached {
+		rows = append(rows, Row{
+			Type:    RowTicket,
+			Project: project,
+			Ticket:  &cached[i],
+		})
+	}
+
+	return rows
+}
+
+// clampCursor ensures the cursor is within bounds and on a selectable row.
+func (m *Model) clampCursor() {
 	if m.cursor >= len(m.rows) {
 		m.cursor = len(m.rows) - 1
 	}
@@ -135,8 +166,6 @@ func (m *Model) rebuildRows() {
 			m.cursor = prev
 		}
 	}
-
-	m.clampScrollOffset()
 }
 
 // clampScrollOffset ensures scrollOffset stays within valid bounds.
