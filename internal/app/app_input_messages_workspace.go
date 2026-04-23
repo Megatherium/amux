@@ -241,91 +241,15 @@ func canonicalPathForMatch(path string) string {
 // handleWorkspaceActivated processes the WorkspaceActivated message.
 func (a *App) handleWorkspaceActivated(msg messages.WorkspaceActivated) []tea.Cmd {
 	var cmds []tea.Cmd
-	centerFocusQueuedReattach := false
-	a.activeProject = msg.Project
-	a.activeWorkspace = msg.Workspace
-	a.showWelcome = false
-	a.centerBtnFocused = false
-	a.centerBtnIndex = 0
-	// Clear ticket preview when navigating to a workspace
-	a.previewTicket = nil
-	a.previewProject = nil
-	a.center.SetWorkspace(msg.Workspace)
-	a.center.SetHasTicketService(a.hasTicketService())
-	a.sidebar.SetWorkspace(msg.Workspace)
-	a.sidebar.SetPreviewTicket(nil)
-	a.sidebarTerminal.SetWorkspacePreview(msg.Workspace)
-	// Discover shared tmux tabs first; restore/sync happens below.
-	if discoverCmd := a.discoverWorkspaceTabsFromTmux(msg.Workspace); discoverCmd != nil {
-		cmds = append(cmds, discoverCmd)
-	}
-	if discoverTermCmd := a.discoverSidebarTerminalsFromTmux(msg.Workspace); discoverTermCmd != nil {
-		cmds = append(cmds, discoverTermCmd)
-	}
-	if syncCmd := a.syncWorkspaceTabsFromTmux(msg.Workspace); syncCmd != nil {
-		cmds = append(cmds, syncCmd)
-	}
-	if restoreCmd := a.center.RestoreTabsFromWorkspace(msg.Workspace); restoreCmd != nil {
-		cmds = append(cmds, restoreCmd)
-	}
-	// Focus routing: transfer focus only on explicit activation (Enter / click /
-	// dialog). Preview activations (cursor navigation) update workspace state
-	// above but leave focus on the current pane.
-	if msg.Workspace != nil && !msg.Preview {
-		wsID := string(msg.Workspace.ID())
-		centerVisible := a.layout != nil && a.layout.ShowCenter()
-		if centerVisible {
-			hasCenterTabs := false
-			// Existing in-memory tabs are available immediately for workspaces
-			// visited in this process (independent of async tmux discovery cmds).
-			if tabs, _ := a.center.GetTabsInfoForWorkspace(wsID); len(tabs) > 0 {
-				hasCenterTabs = true
-			}
-			// Also treat persisted tab metadata as a focus signal so this does
-			// not depend on synchronous tab hydration timing.
-			if !hasCenterTabs && len(msg.Workspace.OpenTabs) > 0 {
-				hasCenterTabs = true
-			}
-			// When no center-tab signal exists, keep the current focus instead of
-			// forcing a dashboard/center jump.
-			if hasCenterTabs {
-				// focusPane(PaneCenter) already performs the reattach attempt;
-				// mark it as queued regardless of returned command to avoid
-				// coupling deduplication to a nil/non-nil command shape.
-				focusCmd := a.focusPane(messages.PaneCenter)
-				centerFocusQueuedReattach = true
-				if focusCmd != nil {
-					cmds = append(cmds, focusCmd)
-				}
-			}
-		}
-		if !centerVisible {
-			// Keep keyboard routing on the visible pane in dashboard-only layouts.
-			if focusCmd := a.focusPane(messages.PaneDashboard); focusCmd != nil {
-				cmds = append(cmds, focusCmd)
-			}
-		}
-	}
+	a.setWorkspaceActivationState(msg)
+	cmds = append(cmds, a.discoverWorkspaceTmux(msg.Workspace)...)
+	centerFocusQueuedReattach := a.routeFocusOnActivation(msg, &cmds)
 	// Sync active workspaces to dashboard (fixes spinner race condition)
 	a.syncActiveWorkspacesToDashboard()
 	newDashboard, cmd := a.dashboard.Update(msg)
 	a.dashboard = newDashboard
 	cmds = append(cmds, cmd)
-
-	// Refresh git status for sidebar (full mode for line stats)
-	if msg.Workspace != nil {
-		cmds = append(cmds, a.requestGitStatusFull(msg.Workspace.Root))
-		// Set up file watching for this workspace
-		if a.fileWatcher != nil {
-			if err := a.fileWatcher.Watch(msg.Workspace.Root); err != nil {
-				logging.Warn("File watcher error: %v", err)
-				if errors.Is(err, git.ErrWatchLimit) && a.fileWatcherErr == nil {
-					a.fileWatcherErr = err
-					cmds = append(cmds, a.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
-				}
-			}
-		}
-	}
+	cmds = append(cmds, a.refreshWorkspaceResources(msg.Workspace)...)
 	// Ensure spinner starts if needed after sync
 	if startCmd := a.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
 		cmds = append(cmds, startCmd)
