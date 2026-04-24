@@ -13,8 +13,8 @@ import (
 
 func TestHandleCreateWorkspaceSkipsPendingTrackingWithoutService(t *testing.T) {
 	app := &App{
-		dashboard:            dashboard.New(),
-		creatingWorkspaceIDs: make(map[string]bool),
+		dashboard:        dashboard.New(),
+		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
 		// workspaceService intentionally nil
 	}
 
@@ -28,8 +28,8 @@ func TestHandleCreateWorkspaceSkipsPendingTrackingWithoutService(t *testing.T) {
 
 	cmds := app.handleCreateWorkspace(msg)
 	// Should not panic and should not track any pending IDs
-	if len(app.creatingWorkspaceIDs) != 0 {
-		t.Fatalf("expected no pending IDs without workspace service, got %d", len(app.creatingWorkspaceIDs))
+	if len(app.wm().creatingWorkspaceIDs) != 0 {
+		t.Fatalf("expected no pending IDs without workspace service, got %d", len(app.wm().creatingWorkspaceIDs))
 	}
 	// Should still return the createWorkspace cmd (which will be nil since service is nil)
 	_ = cmds
@@ -49,9 +49,9 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 	}
 
 	app := &App{
-		dashboard:            dashboard.New(),
-		creatingWorkspaceIDs: make(map[string]bool),
-		workspaceService:     svc,
+		dashboard:        dashboard.New(),
+		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
+		workspaceService: svc,
 	}
 
 	project := data.NewProject("/tmp/repo")
@@ -64,13 +64,13 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 
 	// Step 1: handleCreateWorkspace should track the pending ID
 	cmds := app.handleCreateWorkspace(msg)
-	if len(app.creatingWorkspaceIDs) != 1 {
-		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.creatingWorkspaceIDs))
+	if len(app.wm().creatingWorkspaceIDs) != 1 {
+		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.wm().creatingWorkspaceIDs))
 	}
 
 	// Capture the tracked ID
 	var trackedID string
-	for id := range app.creatingWorkspaceIDs {
+	for id := range app.wm().creatingWorkspaceIDs {
 		trackedID = id
 	}
 
@@ -99,8 +99,8 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 		if failed, ok := result.(messages.WorkspaceCreateFailed); ok {
 			// Step 3: handleWorkspaceCreateFailed should clear the pending ID
 			app.handleWorkspaceCreateFailed(failed)
-			if len(app.creatingWorkspaceIDs) != 0 {
-				t.Fatalf("expected 0 pending IDs after failure, got %d", len(app.creatingWorkspaceIDs))
+			if len(app.wm().creatingWorkspaceIDs) != 0 {
+				t.Fatalf("expected 0 pending IDs after failure, got %d", len(app.wm().creatingWorkspaceIDs))
 			}
 			// Verify the failure workspace ID matches what was tracked
 			if failed.Workspace != nil && string(failed.Workspace.ID()) != trackedID {
@@ -119,9 +119,9 @@ func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 	svc := newWorkspaceService(nil, store, nil, workspacesRoot)
 
 	app := &App{
-		dashboard:            dashboard.New(),
-		creatingWorkspaceIDs: make(map[string]bool),
-		workspaceService:     svc,
+		dashboard:        dashboard.New(),
+		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
+		workspaceService: svc,
 	}
 
 	project := data.NewProject("/tmp/repo")
@@ -133,8 +133,8 @@ func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 	}
 
 	cmds := app.handleCreateWorkspace(msg)
-	if len(app.creatingWorkspaceIDs) != 1 {
-		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.creatingWorkspaceIDs))
+	if len(app.wm().creatingWorkspaceIDs) != 1 {
+		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.wm().creatingWorkspaceIDs))
 	}
 
 	for _, cmd := range cmds {
@@ -150,8 +150,8 @@ func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 			t.Fatal("expected workspace in validation failure")
 		}
 		app.handleWorkspaceCreateFailed(failed)
-		if len(app.creatingWorkspaceIDs) != 0 {
-			t.Fatalf("expected 0 pending IDs after validation failure, got %d", len(app.creatingWorkspaceIDs))
+		if len(app.wm().creatingWorkspaceIDs) != 0 {
+			t.Fatalf("expected 0 pending IDs after validation failure, got %d", len(app.wm().creatingWorkspaceIDs))
 		}
 		return
 	}

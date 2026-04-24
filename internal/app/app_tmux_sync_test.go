@@ -74,9 +74,9 @@ func TestHandleTmuxTabsSyncResult_SaveAndDeleteMarkAreAtomic(t *testing.T) {
 	store := newBlockingWorkspaceStore()
 	svc := newWorkspaceService(nil, store, nil, "")
 	app := &App{
-		workspaceService:     svc,
-		projects:             []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
-		deletingWorkspaceIDs: make(map[string]bool),
+		workspaceService: svc,
+		projects:         []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
+		workspaceManager: &WorkspaceManager{deletingWorkspaceIDs: make(map[string]bool)},
 	}
 
 	cmds := app.handleTmuxTabsSyncResult(tmuxTabsSyncResult{

@@ -16,13 +16,15 @@ func TestMarkWorkspaceDeleteInFlightPreservesDirtyState(t *testing.T) {
 	wsID := string(ws.ID())
 
 	app := &App{
-		dirtyWorkspaces:      map[string]bool{wsID: true},
-		deletingWorkspaceIDs: make(map[string]bool),
+		workspaceManager: &WorkspaceManager{
+			dirtyWorkspaces:      map[string]bool{wsID: true},
+			deletingWorkspaceIDs: make(map[string]bool),
+		},
 	}
 
 	app.markWorkspaceDeleteInFlight(ws, true)
 
-	if !app.dirtyWorkspaces[wsID] {
+	if !app.wm().dirtyWorkspaces[wsID] {
 		t.Fatal("expected dirty workspace marker to be preserved when delete starts")
 	}
 	if !app.isWorkspaceDeleteInFlight(wsID) {
@@ -35,9 +37,11 @@ func TestHandleWorkspaceDeleteFailedRequeuesWorkspacePersistence(t *testing.T) {
 	wsID := string(ws.ID())
 
 	app := &App{
-		dashboard:            dashboard.New(),
-		dirtyWorkspaces:      make(map[string]bool),
-		deletingWorkspaceIDs: map[string]bool{wsID: true},
+		dashboard: dashboard.New(),
+		workspaceManager: &WorkspaceManager{
+			dirtyWorkspaces:      make(map[string]bool),
+			deletingWorkspaceIDs: map[string]bool{wsID: true},
+		},
 	}
 
 	cmd := app.handleWorkspaceDeleteFailed(messages.WorkspaceDeleteFailed{
@@ -50,7 +54,7 @@ func TestHandleWorkspaceDeleteFailedRequeuesWorkspacePersistence(t *testing.T) {
 	if app.isWorkspaceDeleteInFlight(wsID) {
 		t.Fatal("expected delete-in-flight marker to be cleared on delete failure")
 	}
-	if !app.dirtyWorkspaces[wsID] {
+	if !app.wm().dirtyWorkspaces[wsID] {
 		t.Fatal("expected workspace persistence to be re-queued on delete failure")
 	}
 }
@@ -60,7 +64,7 @@ func TestWorkspaceDeleteInFlightConcurrentAccess(t *testing.T) {
 	wsID := string(ws.ID())
 
 	app := &App{
-		deletingWorkspaceIDs: make(map[string]bool),
+		workspaceManager: &WorkspaceManager{deletingWorkspaceIDs: make(map[string]bool)},
 	}
 
 	const goroutines = 8
@@ -98,7 +102,7 @@ func TestWorkspaceDeleteInFlightConcurrentAccess(t *testing.T) {
 func TestRunUnlessWorkspaceDeleteInFlightSkipsWhenDeleting(t *testing.T) {
 	ws := data.NewWorkspace("feature", "feature", "main", "/repo", "/repo/feature")
 	wsID := string(ws.ID())
-	app := &App{deletingWorkspaceIDs: map[string]bool{wsID: true}}
+	app := &App{workspaceManager: &WorkspaceManager{deletingWorkspaceIDs: map[string]bool{wsID: true}}}
 
 	ran := false
 	ok := app.runUnlessWorkspaceDeleteInFlight(wsID, func() {
@@ -115,7 +119,7 @@ func TestRunUnlessWorkspaceDeleteInFlightSkipsWhenDeleting(t *testing.T) {
 func TestRunUnlessWorkspaceDeleteInFlightBlocksDeleteMarkUntilCallbackReturns(t *testing.T) {
 	ws := data.NewWorkspace("feature", "feature", "main", "/repo", "/repo/feature")
 	wsID := string(ws.ID())
-	app := &App{deletingWorkspaceIDs: make(map[string]bool)}
+	app := &App{workspaceManager: &WorkspaceManager{deletingWorkspaceIDs: make(map[string]bool)}}
 
 	entered := make(chan struct{})
 	release := make(chan struct{})

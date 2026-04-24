@@ -131,23 +131,25 @@ func TestHandleProjectsLoadedCanonicalRebindMigratesDirtyWorkspaceID(t *testing.
 		activeWorkspace:  activeOld,
 		activeProject:    oldProject,
 		showWelcome:      false,
-		dirtyWorkspaces: map[string]bool{
-			oldID: true,
+		workspaceManager: &WorkspaceManager{
+			dirtyWorkspaces: map[string]bool{
+				oldID: true,
+			},
+			persistToken: 1,
 		},
-		persistToken: 1,
 	}
 
 	msg := messages.ProjectsLoaded{Projects: []data.Project{*newProject}}
 	app.handleProjectsLoaded(msg)
 
-	if app.dirtyWorkspaces[oldID] {
+	if app.wm().dirtyWorkspaces[oldID] {
 		t.Fatalf("expected old dirty workspace key %q to be migrated", oldID)
 	}
-	if !app.dirtyWorkspaces[newID] {
+	if !app.wm().dirtyWorkspaces[newID] {
 		t.Fatalf("expected new dirty workspace key %q after migration", newID)
 	}
 
-	cmd := app.handlePersistDebounce(persistDebounceMsg{token: app.persistToken})
+	cmd := app.handlePersistDebounce(persistDebounceMsg{token: app.wm().currentPersistToken()})
 	if cmd == nil {
 		t.Fatal("expected persist debounce command for migrated dirty workspace")
 	}
@@ -285,12 +287,12 @@ func TestRebindActiveSelectionRewatchesActiveWorkspaceRootOnCanonicalIDChange(t 
 	}
 
 	app := &App{
-		projects:        []data.Project{*newProject},
-		activeWorkspace: &oldProject.Workspaces[0],
-		activeProject:   oldProject,
-		fileWatcher:     fileWatcher,
-		dashboard:       dashboard.New(),
-		dirtyWorkspaces: make(map[string]bool),
+		projects:         []data.Project{*newProject},
+		activeWorkspace:  &oldProject.Workspaces[0],
+		activeProject:    oldProject,
+		fileWatcher:      fileWatcher,
+		dashboard:        dashboard.New(),
+		workspaceManager: &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
 	}
 
 	app.rebindActiveSelection()

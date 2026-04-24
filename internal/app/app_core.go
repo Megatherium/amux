@@ -155,16 +155,8 @@ type App struct {
 	sessionActivityStates     map[string]*activity.SessionState // Per-session hysteresis state
 	instanceID                string                            // Immutable after init; safe for read-only access from Cmd goroutines.
 
-	// Workspace persistence debounce
-	dirtyWorkspaces       map[string]bool
-	deletingWorkspaceMu   sync.RWMutex
-	deletingWorkspaceIDs  map[string]bool
-	persistToken          int
-	localWorkspaceSaveMu  sync.Mutex
-	localWorkspaceSavesAt map[string]localWorkspaceSaveMarker
-
-	// Workspaces in creation flow (not yet loaded into projects list)
-	creatingWorkspaceIDs map[string]bool
+	// Workspace lifecycle manager
+	workspaceManager *WorkspaceManager
 
 	// Terminal capabilities
 	keyboardEnhancements tea.KeyboardEnhancementsMsg
@@ -197,4 +189,13 @@ type App struct {
 	externalCritical chan tea.Msg
 	externalSender   func(tea.Msg)
 	externalOnce     sync.Once
+}
+
+// wm returns the WorkspaceManager, lazily initializing it if nil.
+// This allows test code to construct App without explicitly setting workspaceManager.
+func (a *App) wm() *WorkspaceManager {
+	if a.workspaceManager == nil {
+		a.workspaceManager = newWorkspaceManager()
+	}
+	return a.workspaceManager
 }

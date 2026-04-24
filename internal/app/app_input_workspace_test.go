@@ -15,12 +15,14 @@ func TestHandleWorkspaceDeletedClearsDirtyWorkspaceMarker(t *testing.T) {
 	wsID := string(ws.ID())
 
 	app := &App{
-		dashboard:            dashboard.New(),
-		center:               center.New(nil),
-		sidebar:              sidebar.NewTabbedSidebar(),
-		sidebarTerminal:      sidebar.NewTerminalModel(),
-		dirtyWorkspaces:      map[string]bool{wsID: true},
-		deletingWorkspaceIDs: map[string]bool{wsID: true},
+		dashboard:       dashboard.New(),
+		center:          center.New(nil),
+		sidebar:         sidebar.NewTabbedSidebar(),
+		sidebarTerminal: sidebar.NewTerminalModel(),
+		workspaceManager: &WorkspaceManager{
+			dirtyWorkspaces:      map[string]bool{wsID: true},
+			deletingWorkspaceIDs: map[string]bool{wsID: true},
+		},
 	}
 
 	app.handleWorkspaceDeleted(messages.WorkspaceDeleted{Workspace: ws})
@@ -28,7 +30,7 @@ func TestHandleWorkspaceDeletedClearsDirtyWorkspaceMarker(t *testing.T) {
 	if app.isWorkspaceDeleteInFlight(wsID) {
 		t.Fatal("expected delete-in-flight marker to be cleared on delete success")
 	}
-	if app.dirtyWorkspaces[wsID] {
+	if app.wm().isWorkspaceDirty(wsID) {
 		t.Fatal("expected dirty workspace marker to be cleared on delete success")
 	}
 }

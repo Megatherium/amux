@@ -88,7 +88,7 @@ func (a *App) rebindActiveSelection() []tea.Cmd {
 			if shouldHydrateTabs && oldID != newID && hadPreviousWorkspaceState {
 				shouldHydrateTabs = false
 			}
-			if shouldHydrateTabs && a.dirtyWorkspaces != nil && a.dirtyWorkspaces[wsIDCurrent] {
+			if shouldHydrateTabs && a.wm().isWorkspaceDirty(wsIDCurrent) {
 				shouldHydrateTabs = false
 			}
 			if shouldHydrateTabs {
@@ -290,7 +290,7 @@ func (a *App) handleCreateWorkspace(msg messages.CreateWorkspace) []tea.Cmd {
 		pending := a.workspaceService.pendingWorkspace(msg.Project, name, base)
 		if pending != nil {
 			pending.Assistant = assistant
-			a.creatingWorkspaceIDs[string(pending.ID())] = true
+			a.wm().setCreatingWorkspace(string(pending.ID()))
 			if cmd := a.dashboard.SetWorkspaceCreating(pending, true); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
