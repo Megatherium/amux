@@ -287,12 +287,12 @@ func TestRebindActiveSelectionRewatchesActiveWorkspaceRootOnCanonicalIDChange(t 
 	}
 
 	app := &App{
-		projects:         []data.Project{*newProject},
-		activeWorkspace:  &oldProject.Workspaces[0],
-		activeProject:    oldProject,
-		fileWatcher:      fileWatcher,
-		dashboard:        dashboard.New(),
-		workspaceManager: &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
+		projects:            []data.Project{*newProject},
+		activeWorkspace:     &oldProject.Workspaces[0],
+		activeProject:       oldProject,
+		gitStatusController: &GitStatusController{fileWatcher: fileWatcher},
+		dashboard:           dashboard.New(),
+		workspaceManager:    &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
 	}
 
 	app.rebindActiveSelection()

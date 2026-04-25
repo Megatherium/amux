@@ -1,13 +1,9 @@
 package app
 
 import (
-	"errors"
-
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/data"
-	"github.com/andyrewlee/amux/internal/git"
-	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 )
 
@@ -92,11 +88,9 @@ func (a *App) refreshWorkspaceResources(ws *data.Workspace) []tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	cmds = append(cmds, a.requestGitStatusFull(ws.Root))
-	if a.fileWatcher != nil {
-		if err := a.fileWatcher.Watch(ws.Root); err != nil {
-			logging.Warn("File watcher error: %v", err)
-			if errors.Is(err, git.ErrWatchLimit) && a.fileWatcherErr == nil {
-				a.fileWatcherErr = err
+	if a.gitStatusController != nil {
+		if err := a.gitStatusController.watchRoot(ws.Root); err != nil {
+			if a.gitStatusController.isWatchLimitReached() {
 				cmds = append(cmds, a.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
 			}
 		}

@@ -138,6 +138,14 @@ func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, 
 			InstanceID:   m.instanceID,
 			SessionOwner: m.instanceID,
 			LeaseAtMS:    now.UnixMilli(),
+			// Ticket metadata — injected so tmux session options carry
+			// ticket context from the very first creation, not only on
+			// reattach. This makes tabs discoverable by other instances
+			// immediately after launch.
+			TicketID:    ticketID,
+			TicketTitle: ticketTitle,
+			Model:       model,
+			AgentMode:   agentMode,
 		}
 		agent, err := m.agentManager.CreateAgentWithTags(ws, appPty.AgentType(assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
 		if err != nil {

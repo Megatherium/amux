@@ -12,7 +12,6 @@ import (
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/discovery"
-	"github.com/andyrewlee/amux/internal/git"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/supervisor"
 	"github.com/andyrewlee/amux/internal/tickets"
@@ -111,12 +110,7 @@ type App struct {
 	previewProject *data.Project
 
 	// Git status management
-	fileWatcher     *git.FileWatcher
-	fileWatcherCh   chan messages.FileWatcherEvent
-	fileWatcherErr  error
-	stateWatcher    *stateWatcher
-	stateWatcherCh  chan messages.StateWatcherEvent
-	stateWatcherErr error
+	gitStatusController *GitStatusController
 
 	// Layout
 	width, height int

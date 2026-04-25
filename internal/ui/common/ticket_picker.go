@@ -15,6 +15,7 @@ type TicketPickerItem struct {
 	Status    string
 	IssueType string
 	Priority  int
+	ParentID  string
 }
 
 func NewTicketPicker(items []TicketPickerItem) *Dialog {
@@ -100,7 +101,12 @@ func (d *Dialog) renderTicketRow(cursorIdx int, item TicketPickerItem) string {
 	label := idStyle.Render(item.ID)
 	title := titleStyle.Render(truncate(item.Title, 30))
 
-	return cursor + statusStyle.Render(statusIcon) + " " + label + "  " + title + "  " + meta
+	indent := ""
+	if item.ParentID != "" {
+		indent = "  ↳ "
+	}
+
+	return cursor + indent + statusStyle.Render(statusIcon) + " " + label + "  " + title + "  " + meta
 }
 
 func (d *Dialog) renderNoTicketRow(cursorIdx int) string {

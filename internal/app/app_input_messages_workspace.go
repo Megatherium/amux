@@ -9,8 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/data"
-	"github.com/andyrewlee/amux/internal/git"
-	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/validation"
 )
@@ -119,12 +117,10 @@ func (a *App) rebindActiveWorkspaceWatch(previousRoot, currentRoot string) []tea
 		return cmds
 	}
 
-	if a.fileWatcher != nil {
-		a.fileWatcher.Unwatch(oldRoot)
-		if err := a.fileWatcher.Watch(newRoot); err != nil {
-			logging.Warn("File watcher error: %v", err)
-			if errors.Is(err, git.ErrWatchLimit) && a.fileWatcherErr == nil {
-				a.fileWatcherErr = err
+	if a.gitStatusController != nil {
+		a.gitStatusController.unwatchRoot(oldRoot)
+		if err := a.gitStatusController.watchRoot(newRoot); err != nil {
+			if a.gitStatusController.isWatchLimitReached() {
 				if a.toast != nil {
 					cmds = append(cmds, a.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
 				}

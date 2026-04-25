@@ -35,12 +35,12 @@ func TestStore_ListTickets_NoFilter(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 ORDER BY priority ASC, updated_at DESC`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 ORDER BY priority ASC, updated_at DESC`).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-001", "Test Ticket", "Description", "open", 1, "task", nil, time.Now(), time.Now()).
-			AddRow("bb-002", "Another Ticket", "Another desc", "open", 2, "feature", "user@example.com", time.Now(), time.Now()))
+			AddRow("bb-001", "Test Ticket", "Description", "open", 1, "task", nil, time.Now(), time.Now(), nil).
+			AddRow("bb-002", "Another Ticket", "Another desc", "open", 2, "feature", "user@example.com", time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{}
 	ticketList, err := store.ListTickets(context.Background(), filter)
@@ -65,12 +65,12 @@ func TestStore_ListTickets_WithStatusFilter(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND status = \? ORDER BY priority ASC, updated_at DESC`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND status = \? ORDER BY priority ASC, updated_at DESC`).
 		WithArgs("closed").
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-003", "Closed Ticket", "Done", "closed", 1, "task", nil, time.Now(), time.Now()))
+			AddRow("bb-003", "Closed Ticket", "Done", "closed", 1, "task", nil, time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{Status: "closed"}
 	ticketList, err := store.ListTickets(context.Background(), filter)
@@ -95,12 +95,12 @@ func TestStore_ListTickets_WithIssueTypeFilter(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND issue_type = \? ORDER BY priority ASC, updated_at DESC`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND issue_type = \? ORDER BY priority ASC, updated_at DESC`).
 		WithArgs("feature").
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-004", "Feature Ticket", "New feature", "open", 1, "feature", nil, time.Now(), time.Now()))
+			AddRow("bb-004", "Feature Ticket", "New feature", "open", 1, "feature", nil, time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{IssueType: "feature"}
 	ticketList, err := store.ListTickets(context.Background(), filter)
@@ -125,13 +125,13 @@ func TestStore_ListTickets_WithSearchFilter(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND title LIKE \? ORDER BY priority ASC, updated_at DESC`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND title LIKE \? ORDER BY priority ASC, updated_at DESC`).
 		WithArgs("%test%").
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-005", "Test Ticket", "A test", "open", 1, "task", nil, time.Now(), time.Now()).
-			AddRow("bb-006", "Testing Again", "Another test", "open", 2, "task", nil, time.Now(), time.Now()))
+			AddRow("bb-005", "Test Ticket", "A test", "open", 1, "task", nil, time.Now(), time.Now(), nil).
+			AddRow("bb-006", "Testing Again", "Another test", "open", 2, "task", nil, time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{Search: "test"}
 	ticketList, err := store.ListTickets(context.Background(), filter)
@@ -152,13 +152,13 @@ func TestStore_ListTickets_WithLimit(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 ORDER BY priority ASC, updated_at DESC LIMIT \?`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 ORDER BY priority ASC, updated_at DESC LIMIT \?`).
 		WithArgs(5).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-007", "Ticket 1", "Desc 1", "open", 1, "task", nil, time.Now(), time.Now()).
-			AddRow("bb-008", "Ticket 2", "Desc 2", "open", 2, "task", nil, time.Now(), time.Now()))
+			AddRow("bb-007", "Ticket 1", "Desc 1", "open", 1, "task", nil, time.Now(), time.Now(), nil).
+			AddRow("bb-008", "Ticket 2", "Desc 2", "open", 2, "task", nil, time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{Limit: 5}
 	ticketList, err := store.ListTickets(context.Background(), filter)
@@ -179,12 +179,12 @@ func TestStore_ListTickets_CombinedFilters(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND status = \? AND issue_type = \? AND title LIKE \? ORDER BY priority ASC, updated_at DESC LIMIT \?`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND status = \? AND issue_type = \? AND title LIKE \? ORDER BY priority ASC, updated_at DESC LIMIT \?`).
 		WithArgs("open", "bug", "%crash%", 10).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-009", "Crash bug", "It crashes", "open", 0, "bug", nil, time.Now(), time.Now()))
+			AddRow("bb-009", "Crash bug", "It crashes", "open", 0, "bug", nil, time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{
 		Status:    "open",
@@ -211,11 +211,11 @@ func TestStore_ListTickets_WithAssignee(t *testing.T) {
 	defer db.Close()
 
 	assignee := "user@example.com"
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 ORDER BY priority ASC, updated_at DESC`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 ORDER BY priority ASC, updated_at DESC`).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-010", "Assigned Ticket", "Work", "open", 1, "task", assignee, time.Now(), time.Now()))
+			AddRow("bb-010", "Assigned Ticket", "Work", "open", 1, "task", assignee, time.Now(), time.Now(), nil))
 
 	filter := tickets.TicketFilter{}
 	ticketList, err := store.ListTickets(context.Background(), filter)
@@ -240,9 +240,9 @@ func TestStore_ListTickets_EmptyResult(t *testing.T) {
 	store, mock, db := newMockStore(t)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 ORDER BY priority ASC, updated_at DESC`).
+	mock.ExpectQuery(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 ORDER BY priority ASC, updated_at DESC`).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}))
 
 	filter := tickets.TicketFilter{}
@@ -401,37 +401,37 @@ func TestBuildListTicketsQuery(t *testing.T) {
 		{
 			name:     "no filters",
 			filter:   tickets.TicketFilter{},
-			expected: "SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 ORDER BY priority ASC, updated_at DESC",
+			expected: "SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 ORDER BY priority ASC, updated_at DESC",
 			args:     nil,
 		},
 		{
 			name:     "status filter",
 			filter:   tickets.TicketFilter{Status: "open"},
-			expected: "SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND status = ? ORDER BY priority ASC, updated_at DESC",
+			expected: "SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND status = ? ORDER BY priority ASC, updated_at DESC",
 			args:     []any{"open"},
 		},
 		{
 			name:     "issue type filter",
 			filter:   tickets.TicketFilter{IssueType: "bug"},
-			expected: "SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND issue_type = ? ORDER BY priority ASC, updated_at DESC",
+			expected: "SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND issue_type = ? ORDER BY priority ASC, updated_at DESC",
 			args:     []any{"bug"},
 		},
 		{
 			name:     "search filter",
 			filter:   tickets.TicketFilter{Search: "test"},
-			expected: "SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND title LIKE ? ORDER BY priority ASC, updated_at DESC",
+			expected: "SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND title LIKE ? ORDER BY priority ASC, updated_at DESC",
 			args:     []any{"%test%"},
 		},
 		{
 			name:     "limit filter",
 			filter:   tickets.TicketFilter{Limit: 10},
-			expected: "SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 ORDER BY priority ASC, updated_at DESC LIMIT ?",
+			expected: "SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 ORDER BY priority ASC, updated_at DESC LIMIT ?",
 			args:     []any{10},
 		},
 		{
 			name:     "combined filters",
 			filter:   tickets.TicketFilter{Status: "open", IssueType: "feature", Search: "auth", Limit: 5},
-			expected: "SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1 AND status = ? AND issue_type = ? AND title LIKE ? ORDER BY priority ASC, updated_at DESC LIMIT ?",
+			expected: "SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1 AND status = ? AND issue_type = ? AND title LIKE ? ORDER BY priority ASC, updated_at DESC LIMIT ?",
 			args:     []any{"open", "feature", "%auth%", 5},
 		},
 	}
@@ -468,10 +468,10 @@ func TestScanTickets(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT`).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}).
-			AddRow("bb-001", "Test", "Description", "open", 1, "task", nil, now, now).
-			AddRow("bb-002", "Assigned", "Work", "in_progress", 2, "feature", "dev@example.com", now, now))
+			AddRow("bb-001", "Test", "Description", "open", 1, "task", nil, now, now, nil).
+			AddRow("bb-002", "Assigned", "Work", "in_progress", 2, "feature", "dev@example.com", now, now, nil))
 
 	rows, err := db.Query(`SELECT`)
 	if err != nil {
@@ -509,7 +509,7 @@ func TestScanTickets_EmptyResult(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT`).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at",
+			"id", "title", "description", "status", "priority", "issue_type", "assignee", "created_at", "updated_at", "parent_id",
 		}))
 
 	rows, err := db.Query(`SELECT`)

@@ -54,9 +54,10 @@ func TestHandleFileWatcherEvent_ActiveWorkspaceRequestsFullStatus(t *testing.T) 
 	}
 	stub := &fileWatcherGitStatusStub{}
 	app := &App{
-		gitStatus:       stub,
-		dashboard:       dashboard.New(),
-		activeWorkspace: active,
+		gitStatus:           stub,
+		gitStatusController: &GitStatusController{},
+		dashboard:           dashboard.New(),
+		activeWorkspace:     active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
@@ -97,9 +98,10 @@ func TestHandleFileWatcherEvent_InactiveWorkspaceRequestsFastStatus(t *testing.T
 	otherRoot := "/tmp/repo/ws-other"
 	stub := &fileWatcherGitStatusStub{}
 	app := &App{
-		gitStatus:       stub,
-		dashboard:       dashboard.New(),
-		activeWorkspace: active,
+		gitStatus:           stub,
+		gitStatusController: &GitStatusController{},
+		dashboard:           dashboard.New(),
+		activeWorkspace:     active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
@@ -139,9 +141,10 @@ func TestHandleGitStatusTick_ActiveWorkspaceCacheMissRequestsFullStatus(t *testi
 	}
 	stub := &fileWatcherGitStatusStub{}
 	app := &App{
-		gitStatus:       stub,
-		dashboard:       dashboard.New(),
-		activeWorkspace: active,
+		gitStatus:           stub,
+		gitStatusController: &GitStatusController{},
+		dashboard:           dashboard.New(),
+		activeWorkspace:     active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
@@ -185,9 +188,10 @@ func TestHandleGitStatusTick_ActiveWorkspaceCachedStatusSkipsRefresh(t *testing.
 		},
 	}
 	app := &App{
-		gitStatus:       stub,
-		dashboard:       dashboard.New(),
-		activeWorkspace: active,
+		gitStatus:           stub,
+		gitStatusController: &GitStatusController{},
+		dashboard:           dashboard.New(),
+		activeWorkspace:     active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),

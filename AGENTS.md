@@ -82,3 +82,10 @@ If the `vibe_run` tool is available to you think of it as a not so bright but fa
   - Template context changes: Document new fields and legacy compatibility behavior
   - Behavioral changes: Update AGENTS.md to inform agents
   - Always keep both files in sync
+
+
+## Agent Lessons Learned
+- **Format:** Run `make fmt` before committing to pass hooks.
+- **Skepticism:** Don't blindly implement prompt requests. Verify usage first; drop dead code.
+- **Context:** Use `git stash` or `git log` to investigate confusing/failing legacy code before modifying.
+- **Efficiency:** Optimize context window usage. Use targeted `rg` instead of broad sweeps or repeated reads.

@@ -16,6 +16,79 @@ func TestFormatTabID_StaysUniqueAcrossCounterReset(t *testing.T) {
 	}
 }
 
+func TestHandlePtyTabCreated_PreservesTicketMetadata(t *testing.T) {
+	m := newTestModel()
+	ws := newTestWorkspace("ws", "/repo/ws")
+	wsID := string(ws.ID())
+
+	_ = m.handlePtyTabCreated(ptyTabCreateResult{
+		Workspace:   ws,
+		Assistant:   "claude",
+		Agent:       &appPty.Agent{Session: "sess-ticket"},
+		TabID:       TabID("tab-ticket"),
+		Rows:        24,
+		Cols:        80,
+		Activate:    true,
+		TicketID:    "bmx-3hd",
+		TicketTitle: "Tab creation with ticket context injection",
+		Model:       "claude-sonnet-4-20250514",
+		AgentMode:   "code",
+	})
+
+	tabs := m.tabsByWorkspace[wsID]
+	if len(tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(tabs))
+	}
+	tab := tabs[0]
+	if tab.TicketID != "bmx-3hd" {
+		t.Errorf("TicketID: got %q, want %q", tab.TicketID, "bmx-3hd")
+	}
+	if tab.TicketTitle != "Tab creation with ticket context injection" {
+		t.Errorf("TicketTitle: got %q, want %q", tab.TicketTitle, "Tab creation with ticket context injection")
+	}
+	if tab.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model: got %q, want %q", tab.Model, "claude-sonnet-4-20250514")
+	}
+	if tab.AgentMode != "code" {
+		t.Errorf("AgentMode: got %q, want %q", tab.AgentMode, "code")
+	}
+}
+
+func TestHandlePtyTabCreated_PreservesEmptyTicketMetadata(t *testing.T) {
+	m := newTestModel()
+	ws := newTestWorkspace("ws", "/repo/ws")
+	wsID := string(ws.ID())
+
+	_ = m.handlePtyTabCreated(ptyTabCreateResult{
+		Workspace: ws,
+		Assistant: "claude",
+		Agent:     &appPty.Agent{Session: "sess-noticket"},
+		TabID:     TabID("tab-noticket"),
+		Rows:      24,
+		Cols:      80,
+		Activate:  true,
+		// No ticket metadata — all fields empty.
+	})
+
+	tabs := m.tabsByWorkspace[wsID]
+	if len(tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(tabs))
+	}
+	tab := tabs[0]
+	if tab.TicketID != "" {
+		t.Errorf("TicketID: got %q, want empty", tab.TicketID)
+	}
+	if tab.TicketTitle != "" {
+		t.Errorf("TicketTitle: got %q, want empty", tab.TicketTitle)
+	}
+	if tab.Model != "" {
+		t.Errorf("Model: got %q, want empty", tab.Model)
+	}
+	if tab.AgentMode != "" {
+		t.Errorf("AgentMode: got %q, want empty", tab.AgentMode)
+	}
+}
+
 func TestHandlePtyTabCreated_DoesNotRetargetExistingTabOnSessionReuse(t *testing.T) {
 	m := newTestModel()
 	ws := newTestWorkspace("ws", "/repo/ws")

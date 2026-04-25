@@ -207,7 +207,7 @@ func (s *ServerStore) LatestUpdate(ctx context.Context) (time.Time, error) {
 
 func buildListTicketsQuery(filter tickets.TicketFilter) (query string, args []any) {
 	var sb strings.Builder
-	sb.WriteString(`SELECT id, title, description, status, priority, issue_type, assignee, created_at, updated_at FROM ready_issues WHERE 1=1`)
+	sb.WriteString(`SELECT ready_issues.id, ready_issues.title, ready_issues.description, ready_issues.status, ready_issues.priority, ready_issues.issue_type, ready_issues.assignee, ready_issues.created_at, ready_issues.updated_at, d.depends_on_id AS parent_id FROM ready_issues LEFT JOIN dependencies d ON ready_issues.id = d.issue_id AND d.type = 'parent-child' WHERE 1=1`)
 
 	if filter.Status != "" {
 		sb.WriteString(" AND status = ?")
@@ -240,6 +240,7 @@ func scanTickets(rows *sql.Rows) ([]tickets.Ticket, error) {
 	for rows.Next() {
 		var t tickets.Ticket
 		var assignee sql.NullString
+		var parentID sql.NullString
 
 		err := rows.Scan(
 			&t.ID,
@@ -251,6 +252,7 @@ func scanTickets(rows *sql.Rows) ([]tickets.Ticket, error) {
 			&assignee,
 			&t.CreatedAt,
 			&t.UpdatedAt,
+			&parentID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan ticket row: %w", err)
@@ -258,6 +260,10 @@ func scanTickets(rows *sql.Rows) ([]tickets.Ticket, error) {
 
 		if assignee.Valid {
 			t.Assignee = assignee.String
+		}
+
+		if parentID.Valid {
+			t.ParentID = parentID.String
 		}
 
 		result = append(result, t)

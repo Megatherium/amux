@@ -19,6 +19,7 @@ import (
 // issue context when launching agent tabs.
 type Ticket struct {
 	ID          string    `json:"id"`
+	ParentID    string    `json:"parent_id,omitempty"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Status      string    `json:"status"`
@@ -231,6 +232,9 @@ func (t TemplateContext) TicketIssueType() string { return t.Ticket.IssueType }
 
 // TicketAssignee returns the ticket's assignee for template access as {{.TicketAssignee}}.
 func (t TemplateContext) TicketAssignee() string { return t.Ticket.Assignee }
+
+// TicketParentID returns the ticket's parent ID for template access as {{.TicketParentID}}.
+func (t TemplateContext) TicketParentID() string { return t.Ticket.ParentID }
 
 // TicketCreatedAt returns the ticket's creation timestamp as ISO 8601 for template access as {{.TicketCreatedAt}}.
 func (t TemplateContext) TicketCreatedAt() string {

@@ -169,6 +169,9 @@ func (m *Model) renderRow(row Row, selected bool) string {
 			icon = common.Icons.Idle // ○ (open)
 		}
 		text := icon + " " + ticket.ID + ": " + ticket.Title
+		if ticket.ParentID != "" {
+			unstyledPrefix = "   ↳ "
+		}
 		maxTextWidth := m.width - 4 - lipgloss.Width(unstyledPrefix)
 		if maxTextWidth > 0 && lipgloss.Width(text) > maxTextWidth {
 			runes := []rune(text)

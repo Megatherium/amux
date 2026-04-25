@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -113,17 +114,21 @@ type ticketsForPickerLoaded struct {
 }
 
 func (a *App) handleTicketsForPickerLoaded(msg ticketsForPickerLoaded) {
-	items := make([]common.TicketPickerItem, 0, len(msg.tickets))
-	for _, t := range msg.tickets {
+	// Sort tickets hierarchically: parents first, children after their parent
+	sorted := sortTicketsHierarchically(msg.tickets)
+
+	items := make([]common.TicketPickerItem, 0, len(sorted))
+	for _, t := range sorted {
 		items = append(items, common.TicketPickerItem{
 			ID:        t.ID,
 			Title:     t.Title,
 			Status:    t.Status,
 			IssueType: t.IssueType,
 			Priority:  t.Priority,
+			ParentID:  t.ParentID,
 		})
 	}
-	a.pendingTickets = msg.tickets
+	a.pendingTickets = sorted
 	a.dialog = common.NewTicketPicker(items)
 	a.dialog.SetSize(a.width, a.height)
 	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
@@ -274,4 +279,61 @@ func (a *App) handleTicketPreview(msg messages.TicketPreviewMsg) {
 	if a.sidebar != nil {
 		a.sidebar.SetPreviewTicket(msg.Ticket)
 	}
+}
+
+// sortTicketsHierarchically reorders tickets so that child tickets
+// (tickets with a non-empty ParentID) appear immediately after
+// their parent.
+func sortTicketsHierarchically(ts []tickets.Ticket) []tickets.Ticket {
+	if len(ts) == 0 {
+		return ts
+	}
+
+	// Build parent index map: ticket ID → position
+	parentPos := make(map[string]int, len(ts))
+	for i, t := range ts {
+		parentPos[t.ID] = i
+	}
+
+	// Separate children from parents
+	var ordered []tickets.Ticket
+	childrenOf := make(map[int][]tickets.Ticket) // parent position → children
+
+	for _, t := range ts {
+		if t.ParentID == "" {
+			// Parent or root ticket
+			ordered = append(ordered, t)
+		} else {
+			// Child ticket - defer placement
+			pidx, ok := parentPos[t.ParentID]
+			if ok {
+				childrenOf[pidx] = append(childrenOf[pidx], t)
+			} else {
+				// Parent not in this batch, treat as root
+				ordered = append(ordered, t)
+			}
+		}
+	}
+
+	// Insert children after their parents (iterate in reverse to preserve order)
+	for i := len(ordered) - 1; i >= 0; i-- {
+		// Find the original position of this parent to look up children
+		for pidx, children := range childrenOf {
+			if pidx < 0 || pidx >= len(ts) {
+				continue
+			}
+			if ts[pidx].ID == ordered[i].ID {
+				// Insert children directly after this parent
+				sort.Slice(children, func(a, b int) bool {
+					return children[a].CreatedAt.Before(children[b].CreatedAt)
+				})
+				insertAt := i + 1
+				ordered = append(ordered[:insertAt], append(children, ordered[insertAt:]...)...)
+				delete(childrenOf, pidx)
+				break
+			}
+		}
+	}
+
+	return ordered
 }

@@ -8,11 +8,8 @@ func (a *App) Shutdown() {
 		if a.supervisor != nil {
 			a.supervisor.Stop()
 		}
-		if a.fileWatcher != nil {
-			_ = a.fileWatcher.Close()
-		}
-		if a.stateWatcher != nil {
-			_ = a.stateWatcher.Close()
+		if a.gitStatusController != nil {
+			a.gitStatusController.Shutdown()
 		}
 		if a.center != nil {
 			a.center.Close()

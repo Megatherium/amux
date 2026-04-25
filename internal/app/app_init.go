@@ -61,38 +61,6 @@ func New(version, commit, date string) (*App, error) {
 	var tmuxSvc TmuxOps = tmuxOps{}
 	updateSvc := newUpdateService(version, commit, date)
 
-	// Create file watcher event channel
-	fileWatcherCh := make(chan messages.FileWatcherEvent, 10)
-
-	// Create file watcher with callback that sends to channel
-	fileWatcher, fileWatcherErr := git.NewFileWatcher(func(root string) {
-		select {
-		case fileWatcherCh <- messages.FileWatcherEvent{Root: root}:
-		default:
-			// Channel full, drop event (will catch on next change)
-		}
-	})
-	if fileWatcherErr != nil {
-		logging.Warn("File watcher disabled: %v", fileWatcherErr)
-		fileWatcher = nil
-	}
-
-	// Create state watcher event channel
-	stateWatcherCh := make(chan messages.StateWatcherEvent, 10)
-
-	// Create state watcher with callback that sends to channel
-	stateWatcher, stateWatcherErr := newStateWatcher(cfg.Paths.RegistryPath, cfg.Paths.MetadataRoot, func(reason string, paths []string) {
-		select {
-		case stateWatcherCh <- messages.StateWatcherEvent{Reason: reason, Paths: paths}:
-		default:
-			// Channel full, drop event (will catch on next change)
-		}
-	})
-	if stateWatcherErr != nil {
-		logging.Warn("State watcher disabled: %v", stateWatcherErr)
-		stateWatcher = nil
-	}
-
 	ctx := context.Background()
 	kmap := buildKeymapFromEnv()
 	app := &App{
@@ -103,12 +71,6 @@ func New(version, commit, date string) (*App, error) {
 		updateService:          updateSvc,
 		modelRegistry:          modelReg,
 		ticketRenderer:         ticketRenderer,
-		fileWatcher:            fileWatcher,
-		fileWatcherCh:          fileWatcherCh,
-		fileWatcherErr:         fileWatcherErr,
-		stateWatcher:           stateWatcher,
-		stateWatcherCh:         stateWatcherCh,
-		stateWatcherErr:        stateWatcherErr,
 		layout:                 layout.NewManager(),
 		dashboard:              dashboard.New(),
 		center:                 center.New(cfg),
@@ -138,6 +100,9 @@ func New(version, commit, date string) (*App, error) {
 	app.instanceID = newInstanceID()
 	app.supervisor = supervisor.New(ctx)
 	app.installSupervisorErrorHandler()
+
+	// Initialize the git status controller (file + state watchers).
+	app.gitStatusController = newGitStatusController(cfg.Paths.RegistryPath, cfg.Paths.MetadataRoot, app.supervisor)
 	// Route PTY messages through the app-level pump.
 	app.center.SetMsgSinkTry(app.tryEnqueueExternalMsg)
 	app.sidebarTerminal.SetMsgSink(app.enqueueExternalMsg)
@@ -164,12 +129,7 @@ func New(version, commit, date string) (*App, error) {
 	if app.gitStatus != nil {
 		app.supervisor.Start("git.status_manager", app.gitStatus.Run)
 	}
-	if fileWatcher != nil {
-		app.supervisor.Start("git.file_watcher", fileWatcher.Run, supervisor.WithBackoff(supervisorBackoff))
-	}
-	if stateWatcher != nil {
-		app.supervisor.Start("app.state_watcher", stateWatcher.Run, supervisor.WithBackoff(supervisorBackoff))
-	}
+	app.gitStatusController.startSupervisedTasks()
 	return app, nil
 }
 
@@ -188,15 +148,16 @@ func (a *App) Init() tea.Cmd {
 		a.triggerTmuxActivityScan(),
 		a.startTmuxSyncTicker(),
 		a.checkTmuxAvailable(),
-		a.startFileWatcher(),
-		a.startStateWatcher(),
 		a.checkForUpdates(),
 		a.loadDiscoveryRegistry(),
 	}
-	if a.fileWatcherErr != nil {
+	// Delegate watcher start commands to the controller.
+	cmds = append(cmds, a.gitStatusController.startFileWatcher())
+	cmds = append(cmds, a.gitStatusController.startStateWatcher())
+	if a.gitStatusController.fileWatcherInitErr() != nil {
 		cmds = append(cmds, a.toast.ShowWarning("File watching disabled; git status may be stale"))
 	}
-	if a.stateWatcherErr != nil {
+	if a.gitStatusController.stateWatcherInitErr() != nil {
 		cmds = append(cmds, a.toast.ShowWarning("Workspace sync disabled; other instances may be stale"))
 	}
 	return common.SafeBatch(cmds...)
@@ -297,26 +258,6 @@ func applyTmuxEnvFromConfig(cfg *config.Config, force bool) {
 	setEnvIfNonEmpty("AMUX_TMUX_SERVER", cfg.UI.TmuxServer)
 	setEnvIfNonEmpty("AMUX_TMUX_CONFIG", cfg.UI.TmuxConfigPath)
 	setEnvIfNonEmpty("AMUX_TMUX_SYNC_INTERVAL", cfg.UI.TmuxSyncInterval)
-}
-
-// startFileWatcher starts watching for file changes and returns events.
-func (a *App) startFileWatcher() tea.Cmd {
-	if a.fileWatcher == nil || a.fileWatcherCh == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		return <-a.fileWatcherCh
-	}
-}
-
-// startStateWatcher waits for state change notifications.
-func (a *App) startStateWatcher() tea.Cmd {
-	if a.stateWatcher == nil || a.stateWatcherCh == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		return <-a.stateWatcherCh
-	}
 }
 
 // ticketStoreResult is sent when a per-project ticket store initialization completes.

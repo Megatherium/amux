@@ -58,7 +58,7 @@ func (a *App) handleFileWatcherEvent(msg messages.FileWatcherEvent) []tea.Cmd {
 	}
 	return []tea.Cmd{
 		statusCmd,
-		a.startFileWatcher(),
+		a.gitStatusController.startFileWatcher(),
 	}
 }
 
@@ -66,12 +66,12 @@ func (a *App) handleFileWatcherEvent(msg messages.FileWatcherEvent) []tea.Cmd {
 func (a *App) handleStateWatcherEvent(msg messages.StateWatcherEvent) []tea.Cmd {
 	if msg.Reason == "workspaces" && a.shouldSuppressWorkspaceReload(msg.Paths, time.Now()) {
 		return []tea.Cmd{
-			a.startStateWatcher(),
+			a.gitStatusController.startStateWatcher(),
 		}
 	}
 	return []tea.Cmd{
 		a.loadProjects(),
-		a.startStateWatcher(),
+		a.gitStatusController.startStateWatcher(),
 	}
 }
 

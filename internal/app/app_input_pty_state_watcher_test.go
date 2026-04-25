@@ -19,9 +19,8 @@ func TestHandleStateWatcherEvent_SuppressesSelfOriginatedWorkspaceReload(t *test
 		t.Fatalf("WriteFile(localPath): %v", err)
 	}
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
-		stateWatcher:     &stateWatcher{},
-		stateWatcherCh:   make(chan messages.StateWatcherEvent, 1),
+		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
+		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
@@ -51,9 +50,8 @@ func TestHandleStateWatcherEvent_DoesNotSuppressExternalWorkspaceReload(t *testi
 		t.Fatalf("WriteFile(localPath): %v", err)
 	}
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
-		stateWatcher:     &stateWatcher{},
-		stateWatcherCh:   make(chan messages.StateWatcherEvent, 1),
+		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
+		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
@@ -86,9 +84,8 @@ func TestHandleStateWatcherEvent_DoesNotSuppressSamePathWhenFileChanged(t *testi
 	}
 
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
-		stateWatcher:     &stateWatcher{},
-		stateWatcherCh:   make(chan messages.StateWatcherEvent, 1),
+		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
+		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
@@ -116,9 +113,8 @@ func TestHandleStateWatcherEvent_DoesNotSuppressSamePathWhenFileChanged(t *testi
 
 func TestHandleStateWatcherEvent_LoadsProjectsWithoutRecentLocalSave(t *testing.T) {
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
-		stateWatcher:     &stateWatcher{},
-		stateWatcherCh:   make(chan messages.StateWatcherEvent, 1),
+		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
+		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
 	}
 
 	cmds := app.handleStateWatcherEvent(messages.StateWatcherEvent{Reason: "workspaces"})

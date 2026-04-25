@@ -139,13 +139,18 @@ func (m *Model) appendTicketRows(rows []Row, project *data.Project) []Row {
 		return rows
 	}
 
+	ticketRows := make([]Row, 0, len(cached))
 	for i := range cached {
-		rows = append(rows, Row{
+		ticketRows = append(ticketRows, Row{
 			Type:    RowTicket,
 			Project: project,
 			Ticket:  &cached[i],
 		})
 	}
+
+	// Reorder to place children under parents
+	ticketRows = reorderTicketRows(ticketRows)
+	rows = append(rows, ticketRows...)
 
 	return rows
 }
@@ -257,4 +262,67 @@ func (m *Model) Projects() []data.Project {
 // ClearActiveRoot resets the active workspace selection to "Home".
 func (m *Model) ClearActiveRoot() {
 	m.activeRoot = ""
+}
+
+// reorderTicketRows reorders ticket rows so that child tickets
+// (tickets with a non-empty ParentID) appear immediately after
+// their parent.
+func reorderTicketRows(rows []Row) []Row {
+	if len(rows) == 0 {
+		return rows
+	}
+
+	// Build parent index map: ticket ID → position
+	parentPos := make(map[string]int, len(rows))
+	for i, r := range rows {
+		if r.Ticket != nil {
+			parentPos[r.Ticket.ID] = i
+		}
+	}
+
+	// Separate children from parents
+	var ordered []Row
+	childrenOf := make(map[int][]Row) // parent position → children
+
+	for _, r := range rows {
+		if r.Ticket == nil || r.Ticket.ParentID == "" {
+			// Parent or root ticket
+			ordered = append(ordered, r)
+		} else {
+			// Child ticket - defer placement
+			pidx, ok := parentPos[r.Ticket.ParentID]
+			if ok {
+				childrenOf[pidx] = append(childrenOf[pidx], r)
+			} else {
+				// Parent not in this batch, treat as root
+				ordered = append(ordered, r)
+			}
+		}
+	}
+
+	// Insert children after their parents (iterate in reverse to preserve order)
+	for i := len(ordered) - 1; i >= 0; i-- {
+		r := ordered[i]
+		if r.Ticket == nil {
+			continue
+		}
+		// Find the original position of this parent to look up children
+		for pidx, children := range childrenOf {
+			if pidx < 0 || pidx >= len(rows) {
+				continue
+			}
+			if rows[pidx].Ticket != nil && rows[pidx].Ticket.ID == r.Ticket.ID {
+				// Insert children directly after this parent
+				sort.Slice(children, func(a, b int) bool {
+					return children[a].Ticket.CreatedAt.Before(children[b].Ticket.CreatedAt)
+				})
+				insertAt := i + 1
+				ordered = append(ordered[:insertAt], append(children, ordered[insertAt:]...)...)
+				delete(childrenOf, pidx)
+				break
+			}
+		}
+	}
+
+	return ordered
 }
