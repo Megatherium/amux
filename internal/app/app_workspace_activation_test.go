@@ -28,9 +28,11 @@ func TestSetWorkspaceActivationState_SetsActiveWorkspace(t *testing.T) {
 		showWelcome:      true,
 		centerBtnFocused: true,
 		centerBtnIndex:   3,
-		center:           center.New(nil),
-		sidebar:          sidebar.NewTabbedSidebar(),
-		sidebarTerminal:  sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			center:          center.New(nil),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 
 	app.setWorkspaceActivationState(messages.WorkspaceActivated{
@@ -63,10 +65,12 @@ func TestSetWorkspaceActivationState_SetsActiveWorkspace(t *testing.T) {
 
 func TestSetWorkspaceActivationState_ClearsWelcomeOnNilWorkspace(t *testing.T) {
 	app := &App{
-		showWelcome:     true,
-		center:          center.New(nil),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		showWelcome: true,
+		ui: &UICompositor{
+			center:          center.New(nil),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 
 	app.setWorkspaceActivationState(messages.WorkspaceActivated{
@@ -88,7 +92,9 @@ func TestDiscoverWorkspaceTmux_ReturnsRestoreCmd(t *testing.T) {
 	centerModel.SetWorkspace(ws)
 
 	app := &App{
-		center: centerModel,
+		ui: &UICompositor{
+			center: centerModel,
+		},
 	}
 
 	cmds := app.discoverWorkspaceTmux(ws)
@@ -100,7 +106,9 @@ func TestDiscoverWorkspaceTmux_ReturnsRestoreCmd(t *testing.T) {
 
 func TestDiscoverWorkspaceTmux_NilWorkspace(t *testing.T) {
 	app := &App{
-		center: center.New(nil),
+		ui: &UICompositor{
+			center: center.New(nil),
+		},
 	}
 
 	cmds := app.discoverWorkspaceTmux(nil)
@@ -128,8 +136,10 @@ func TestRouteFocusOnActivation_CenterVisibleWithTabs(t *testing.T) {
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:      layoutManager,
-		center:      centerModel,
+		ui: &UICompositor{
+			layout: layoutManager,
+			center: centerModel,
+		},
 		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
@@ -154,8 +164,10 @@ func TestRouteFocusOnActivation_PreviewReturnsFalse(t *testing.T) {
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:      layoutManager,
-		center:      center.New(nil),
+		ui: &UICompositor{
+			layout: layoutManager,
+			center: center.New(nil),
+		},
 		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
@@ -198,8 +210,10 @@ func TestRouteFocusOnActivation_DashboardOnlyFocusesDashboard(t *testing.T) {
 	layoutManager.Resize(40, 24)
 
 	app := &App{
-		layout:      layoutManager,
-		center:      center.New(nil),
+		ui: &UICompositor{
+			layout: layoutManager,
+			center: center.New(nil),
+		},
 		focusedPane: messages.PaneSidebar,
 	}
 	app.syncPaneFocusFlags()
@@ -228,8 +242,10 @@ func TestRouteFocusOnActivation_CenterVisibleNoTabs(t *testing.T) {
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:      layoutManager,
-		center:      centerModel,
+		ui: &UICompositor{
+			layout: layoutManager,
+			center: centerModel,
+		},
 		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
@@ -263,8 +279,10 @@ func TestRouteFocusOnActivation_CenterVisibleWithPersistedTabs(t *testing.T) {
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:      layoutManager,
-		center:      centerModel,
+		ui: &UICompositor{
+			layout: layoutManager,
+			center: centerModel,
+		},
 		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
@@ -285,7 +303,7 @@ func TestRouteFocusOnActivation_CenterVisibleWithPersistedTabs(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRefreshWorkspaceResources_NilWorkspaceReturnsNil(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 
 	cmds := app.refreshWorkspaceResources(nil)
 	if cmds != nil {
@@ -344,11 +362,13 @@ func TestHandleWorkspaceActivated_StillProducesReattachToast(t *testing.T) {
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:          layoutManager,
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          layoutManager,
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 
 	cmds := app.handleWorkspaceActivated(messages.WorkspaceActivated{

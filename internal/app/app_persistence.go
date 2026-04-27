@@ -15,7 +15,7 @@ import (
 // This intentionally includes delete-in-flight workspaces. If a delete fails or
 // races with shutdown, preserving UI tab state is preferred over dropping it.
 func (a *App) persistAllWorkspacesNow() {
-	if a.workspaceService == nil || a.center == nil {
+	if a.workspaceService == nil || a.ui.center == nil {
 		return
 	}
 	wm := a.wm()
@@ -23,8 +23,8 @@ func (a *App) persistAllWorkspacesNow() {
 		for i := range project.Workspaces {
 			ws := &project.Workspaces[i]
 			wsID := string(ws.ID())
-			tabs, activeIdx := a.center.GetTabsInfoForWorkspace(wsID)
-			if len(tabs) == 0 && !a.center.HasWorkspaceState(wsID) {
+			tabs, activeIdx := a.ui.center.GetTabsInfoForWorkspace(wsID)
+			if len(tabs) == 0 && !a.ui.center.HasWorkspaceState(wsID) {
 				continue
 			}
 			ws.OpenTabs = tabs
@@ -80,7 +80,7 @@ func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
 	if msg.token != wm.currentPersistToken() {
 		return nil
 	}
-	if a.center == nil || a.workspaceService == nil {
+	if a.ui.center == nil || a.workspaceService == nil {
 		return nil
 	}
 	if wm.dirtyWorkspaceCount() == 0 {
@@ -103,7 +103,7 @@ func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
 			continue
 		}
 		// Update in-memory state from center tabs
-		tabs, activeIdx := a.center.GetTabsInfoForWorkspace(wsID)
+		tabs, activeIdx := a.ui.center.GetTabsInfoForWorkspace(wsID)
 		ws.OpenTabs = tabs
 		ws.ActiveTabIndex = activeIdx
 		snapshots = append(snapshots, snapshotWorkspaceForSave(ws))

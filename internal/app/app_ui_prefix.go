@@ -111,7 +111,7 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 			return a.requireWorkspaceSelection("create agent tab")
 		}
 		if !a.tmuxAvailable {
-			return a.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
+			return a.ui.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
 		}
 		return func() tea.Msg { return messages.ShowSelectTicketDialog{} }
 	case "new_agent_tab_direct":
@@ -119,7 +119,7 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 			return a.requireWorkspaceSelection("create agent tab")
 		}
 		if !a.tmuxAvailable {
-			return a.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
+			return a.ui.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
 		}
 		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
 	case "new_terminal_tab":
@@ -127,27 +127,27 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 			return a.requireWorkspaceSelection("create terminal tab")
 		}
 		if !a.tmuxAvailable {
-			return a.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
+			return a.ui.toast.ShowError("tmux required to create tabs. " + a.tmuxInstallHint)
 		}
-		return a.sidebarTerminal.CreateNewTab()
+		return a.ui.sidebarTerminal.CreateNewTab()
 	case "next_tab":
-		return a.cycleTab(a.sidebar.NextTab, a.sidebarTerminal.NextTab, a.center.NextTab)
+		return a.cycleTab(a.ui.sidebar.NextTab, a.ui.sidebarTerminal.NextTab, a.ui.center.NextTab)
 	case "prev_tab":
-		return a.cycleTab(a.sidebar.PrevTab, a.sidebarTerminal.PrevTab, a.center.PrevTab)
+		return a.cycleTab(a.ui.sidebar.PrevTab, a.ui.sidebarTerminal.PrevTab, a.ui.center.PrevTab)
 	case "close_tab":
 		if a.focusedPane == messages.PaneSidebarTerminal {
-			return a.sidebarTerminal.CloseActiveTab()
+			return a.ui.sidebarTerminal.CloseActiveTab()
 		}
-		return a.center.CloseActiveTab()
+		return a.ui.center.CloseActiveTab()
 	case "detach_tab":
 		return a.dispatchTabAction(
-			func() tea.Cmd { return common.SafeBatch(a.center.DetachActiveTab(), a.persistActiveWorkspaceTabs()) },
-			a.sidebarTerminal.DetachActiveTab,
+			func() tea.Cmd { return common.SafeBatch(a.ui.center.DetachActiveTab(), a.persistActiveWorkspaceTabs()) },
+			a.ui.sidebarTerminal.DetachActiveTab,
 		)
 	case "reattach_tab":
-		return a.dispatchTabAction(a.center.ReattachActiveTab, a.sidebarTerminal.ReattachActiveTab)
+		return a.dispatchTabAction(a.ui.center.ReattachActiveTab, a.ui.sidebarTerminal.ReattachActiveTab)
 	case "restart_tab":
-		return a.dispatchTabAction(a.center.RestartActiveTab, a.sidebarTerminal.RestartActiveTab)
+		return a.dispatchTabAction(a.ui.center.RestartActiveTab, a.ui.sidebarTerminal.RestartActiveTab)
 	default:
 		return nil
 	}

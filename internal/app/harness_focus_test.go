@@ -11,11 +11,11 @@ func TestHarnessRender_SyncsFocusedPaneFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("center harness init: %v", err)
 	}
-	if centerHarness.app.center.Focused() {
+	if centerHarness.app.ui.center.Focused() {
 		t.Fatalf("expected center to start unfocused before render")
 	}
 	_ = centerHarness.Render()
-	if !centerHarness.app.center.Focused() {
+	if !centerHarness.app.ui.center.Focused() {
 		t.Fatalf("expected center focused after render sync")
 	}
 
@@ -27,11 +27,11 @@ func TestHarnessRender_SyncsFocusedPaneFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sidebar harness init: %v", err)
 	}
-	if sidebarHarness.app.sidebarTerminal.Focused() {
+	if sidebarHarness.app.ui.sidebarTerminal.Focused() {
 		t.Fatalf("expected sidebar terminal to start unfocused before render")
 	}
 	_ = sidebarHarness.Render()
-	if !sidebarHarness.app.sidebarTerminal.Focused() {
+	if !sidebarHarness.app.ui.sidebarTerminal.Focused() {
 		t.Fatalf("expected sidebar terminal focused after render sync")
 	}
 }

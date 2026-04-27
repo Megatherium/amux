@@ -21,7 +21,7 @@ func (a *App) handleDeleteWorkspace(msg messages.DeleteWorkspace) []tea.Cmd {
 	if cleanup := a.cleanupWorkspaceTmuxSessions(msg.Workspace); cleanup != nil {
 		cmds = append(cmds, cleanup)
 	}
-	if cmd := a.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, true); cmd != nil {
+	if cmd := a.ui.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, true); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
 	cmds = append(cmds, a.deleteWorkspace(msg.Project, msg.Workspace))
@@ -34,7 +34,7 @@ func (a *App) handleWorkspaceCreatedWithWarning(msg messages.WorkspaceCreatedWit
 	a.err = fmt.Errorf("workspace created with warning: %s", msg.Warning)
 	if msg.Workspace != nil {
 		a.wm().clearCreatingWorkspace(string(msg.Workspace.ID()))
-		if cmd := a.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
+		if cmd := a.ui.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -47,7 +47,7 @@ func (a *App) handleWorkspaceCreated(msg messages.WorkspaceCreated) []tea.Cmd {
 	var cmds []tea.Cmd
 	if msg.Workspace != nil {
 		a.wm().clearCreatingWorkspace(string(msg.Workspace.ID()))
-		if cmd := a.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
+		if cmd := a.ui.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 		cmds = append(cmds, a.runSetupAsync(msg.Workspace))
@@ -59,7 +59,7 @@ func (a *App) handleWorkspaceCreated(msg messages.WorkspaceCreated) []tea.Cmd {
 // handleWorkspaceSetupComplete handles the WorkspaceSetupComplete message.
 func (a *App) handleWorkspaceSetupComplete(msg messages.WorkspaceSetupComplete) tea.Cmd {
 	if msg.Err != nil {
-		return a.toast.ShowWarning(fmt.Sprintf("Setup failed for %s: %v", msg.Workspace.Name, msg.Err))
+		return a.ui.toast.ShowWarning(fmt.Sprintf("Setup failed for %s: %v", msg.Workspace.Name, msg.Err))
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func (a *App) handleWorkspaceCreateFailed(msg messages.WorkspaceCreateFailed) te
 	var cmds []tea.Cmd
 	if msg.Workspace != nil {
 		a.wm().clearCreatingWorkspace(string(msg.Workspace.ID()))
-		if cmd := a.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
+		if cmd := a.ui.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -88,19 +88,19 @@ func (a *App) handleWorkspaceDeleted(msg messages.WorkspaceDeleted) []tea.Cmd {
 		if cleanup := a.cleanupWorkspaceTmuxSessions(msg.Workspace); cleanup != nil {
 			cmds = append(cmds, cleanup)
 		}
-		if cmd := a.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, false); cmd != nil {
+		if cmd := a.ui.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, false); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 		if a.gitStatus != nil {
 			a.gitStatus.Invalidate(msg.Workspace.Root)
 		}
-		newCenter, cmd := a.center.Update(msg)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(msg)
+		a.ui.center = newCenter
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-		newTerminal, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newTerminal
+		newTerminal, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newTerminal
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -116,7 +116,7 @@ func (a *App) handleWorkspaceDeleteFailed(msg messages.WorkspaceDeleteFailed) te
 		// Ordering is intentional: clear delete-in-flight first so the
 		// persistence requeue below is not suppressed.
 		a.markWorkspaceDeleteInFlight(msg.Workspace, false)
-		if cmd := a.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, false); cmd != nil {
+		if cmd := a.ui.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, false); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 		if cmd := a.persistWorkspaceTabs(string(msg.Workspace.ID())); cmd != nil {

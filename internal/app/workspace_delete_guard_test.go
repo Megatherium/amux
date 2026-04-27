@@ -37,7 +37,9 @@ func TestHandleWorkspaceDeleteFailedRequeuesWorkspacePersistence(t *testing.T) {
 	wsID := string(ws.ID())
 
 	app := &App{
-		dashboard: dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			deletingWorkspaceIDs: map[string]bool{wsID: true},

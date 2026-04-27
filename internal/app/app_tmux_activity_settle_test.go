@@ -22,7 +22,9 @@ func TestHandleTmuxActivityResult_SettlesAfterTwoSuccessfulScans(t *testing.T) {
 		tmuxActivityScanInFlight: true,
 		sessionActivityStates:    make(map[string]*activity.SessionState),
 		tmuxActiveWorkspaceIDs:   make(map[string]bool),
-		dashboard:                dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 	}
 
 	app.handleTmuxActivityResult(tmuxActivityResult{
@@ -60,8 +62,10 @@ func TestHandleTmuxAvailableResult_ResetsActivitySettlement(t *testing.T) {
 		tmuxActivitySettled:      true,
 		tmuxActivitySettledScans: 5,
 		tmuxActiveWorkspaceIDs:   map[string]bool{"ws-old": true},
-		dashboard:                dash,
-		toast:                    common.NewToastModel(),
+		ui: &UICompositor{
+			dashboard: dash,
+			toast:     common.NewToastModel(),
+		},
 	}
 
 	_ = app.handleTmuxAvailableResult(tmuxAvailableResult{available: true})

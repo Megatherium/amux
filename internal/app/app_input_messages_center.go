@@ -10,24 +10,24 @@ import (
 // handleOpenDiff handles the OpenDiff message.
 func (a *App) handleOpenDiff(msg messages.OpenDiff) tea.Cmd {
 	logging.Info("Opening diff: change=%v", msg.Change)
-	newCenter, cmd := a.center.Update(msg)
-	a.center = newCenter
+	newCenter, cmd := a.ui.center.Update(msg)
+	a.ui.center = newCenter
 	return tea.Batch(cmd, a.focusPane(messages.PaneCenter))
 }
 
 // handleLaunchAgent handles the LaunchAgent message.
 func (a *App) handleLaunchAgent(msg messages.LaunchAgent) tea.Cmd {
 	logging.Info("Launching agent: %s", msg.Assistant)
-	newCenter, cmd := a.center.Update(msg)
-	a.center = newCenter
+	newCenter, cmd := a.ui.center.Update(msg)
+	a.ui.center = newCenter
 	return cmd
 }
 
 // handleTabCreated handles the TabCreated message.
 func (a *App) handleTabCreated(msg messages.TabCreated) tea.Cmd {
 	logging.Info("Tab created: %s", msg.Name)
-	cmd := a.center.StartPTYReaders()
-	if a.center != nil && a.center.HasDiffViewer() {
+	cmd := a.ui.center.StartPTYReaders()
+	if a.ui.center != nil && a.ui.center.HasDiffViewer() {
 		a.setFocusedPane(messages.PaneCenter)
 		return cmd
 	}

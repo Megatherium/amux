@@ -67,13 +67,13 @@ func TestHandleTicketsForPickerLoaded(t *testing.T) {
 	}
 	h.app.handleTicketsForPickerLoaded(ticketsForPickerLoaded{tickets: ts})
 
-	if h.app.dialog == nil {
+	if h.app.ui.dialog == nil {
 		t.Fatal("expected dialog to be created")
 	}
-	if !h.app.dialog.Visible() {
+	if !h.app.ui.dialog.Visible() {
 		t.Fatal("expected dialog to be visible")
 	}
-	view := h.app.dialog.View()
+	view := h.app.ui.dialog.View()
 	if !strings.Contains(view, "Select Ticket") {
 		t.Fatalf("expected dialog view to contain 'Select Ticket', got:\n%s", view)
 	}

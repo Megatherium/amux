@@ -12,15 +12,15 @@ import (
 
 // handlePTYMessages handles PTY-related messages for center pane.
 func (a *App) handlePTYMessages(msg tea.Msg) tea.Cmd {
-	newCenter, cmd := a.center.Update(msg)
-	a.center = newCenter
+	newCenter, cmd := a.ui.center.Update(msg)
+	a.ui.center = newCenter
 	return cmd
 }
 
 // handleSidebarPTYMessages handles PTY-related messages for sidebar terminal.
 func (a *App) handleSidebarPTYMessages(msg tea.Msg) tea.Cmd {
-	newSidebarTerminal, cmd := a.sidebarTerminal.Update(msg)
-	a.sidebarTerminal = newSidebarTerminal
+	newSidebarTerminal, cmd := a.ui.sidebarTerminal.Update(msg)
+	a.ui.sidebarTerminal = newSidebarTerminal
 	return cmd
 }
 
@@ -43,14 +43,14 @@ func (a *App) handleFileWatcherEvent(msg messages.FileWatcherEvent) []tea.Cmd {
 	if a.gitStatus != nil {
 		a.gitStatus.Invalidate(msg.Root)
 	}
-	a.dashboard.InvalidateStatus(msg.Root)
+	a.ui.dashboard.InvalidateStatus(msg.Root)
 	if a.activeWorkspace != nil && rootsReferToSameWorkspace(msg.Root, a.activeWorkspace.Root) {
 		requestRoot = a.activeWorkspace.Root
 		requestFull = true
 		if a.gitStatus != nil {
 			a.gitStatus.Invalidate(requestRoot)
 		}
-		a.dashboard.InvalidateStatus(requestRoot)
+		a.ui.dashboard.InvalidateStatus(requestRoot)
 	}
 	statusCmd := a.requestGitStatus(requestRoot)
 	if requestFull {
@@ -78,9 +78,9 @@ func (a *App) handleStateWatcherEvent(msg messages.StateWatcherEvent) []tea.Cmd 
 // handleTabInputFailed handles the TabInputFailed message.
 func (a *App) handleTabInputFailed(msg center.TabInputFailed) []tea.Cmd {
 	var cmds []tea.Cmd
-	cmds = append(cmds, a.toast.ShowWarning("Session disconnected - scroll history preserved"))
+	cmds = append(cmds, a.ui.toast.ShowWarning("Session disconnected - scroll history preserved"))
 	if msg.WorkspaceID != "" {
-		if cmd := a.center.DetachTabByID(msg.WorkspaceID, msg.TabID); cmd != nil {
+		if cmd := a.ui.center.DetachTabByID(msg.WorkspaceID, msg.TabID); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -94,13 +94,13 @@ func (a *App) handleTabInputFailed(msg center.TabInputFailed) []tea.Cmd {
 func (a *App) handleSpinnerTick(msg dashboard.SpinnerTickMsg) []tea.Cmd {
 	var cmds []tea.Cmd
 	a.syncActiveWorkspacesToDashboard()
-	a.center.TickSpinner()
-	newDashboard, cmd := a.dashboard.Update(msg)
-	a.dashboard = newDashboard
+	a.ui.center.TickSpinner()
+	newDashboard, cmd := a.ui.dashboard.Update(msg)
+	a.ui.dashboard = newDashboard
 	if cmd != nil {
 		cmds = append(cmds, cmd)
 	}
-	if startCmd := a.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
+	if startCmd := a.ui.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
 		cmds = append(cmds, startCmd)
 	}
 	return cmds
@@ -109,13 +109,13 @@ func (a *App) handleSpinnerTick(msg dashboard.SpinnerTickMsg) []tea.Cmd {
 // handlePTYWatchdogTick handles the PTYWatchdogTick message.
 func (a *App) handlePTYWatchdogTick() []tea.Cmd {
 	var cmds []tea.Cmd
-	if a.center != nil {
-		if cmd := a.center.StartPTYReaders(); cmd != nil {
+	if a.ui.center != nil {
+		if cmd := a.ui.center.StartPTYReaders(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
-	if a.sidebarTerminal != nil {
-		if cmd := a.sidebarTerminal.StartPTYReaders(); cmd != nil {
+	if a.ui.sidebarTerminal != nil {
+		if cmd := a.ui.sidebarTerminal.StartPTYReaders(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}

@@ -24,13 +24,13 @@ func (a *App) focusPane(pane messages.PaneType) tea.Cmd {
 	switch pane {
 	case messages.PaneCenter:
 		// Seamless UX: when center regains focus, attempt reattach for detached active tab.
-		if a.center != nil {
-			return a.center.ReattachActiveTabIfDetached()
+		if a.ui.center != nil {
+			return a.ui.center.ReattachActiveTabIfDetached()
 		}
 	case messages.PaneSidebarTerminal:
 		// Lazy initialization: create terminal on focus if none exists.
-		if a.sidebarTerminal != nil {
-			return a.sidebarTerminal.EnsureTerminalTab()
+		if a.ui.sidebarTerminal != nil {
+			return a.ui.sidebarTerminal.EnsureTerminalTab()
 		}
 	}
 	return nil
@@ -41,8 +41,8 @@ func (a *App) focusPane(pane messages.PaneType) tea.Cmd {
 // focus-time side effects such as lazy sidebar terminal creation.
 func (a *App) focusPaneOnWheel(pane messages.PaneType) tea.Cmd {
 	a.setFocusedPane(pane)
-	if pane == messages.PaneCenter && a.center != nil {
-		return a.center.ReattachActiveTabIfDetached()
+	if pane == messages.PaneCenter && a.ui.center != nil {
+		return a.ui.center.ReattachActiveTabIfDetached()
 	}
 	return nil
 }
@@ -51,12 +51,12 @@ func (a *App) focusPaneOnWheel(pane messages.PaneType) tea.Cmd {
 func (a *App) focusPaneLeft() tea.Cmd {
 	switch a.focusedPane {
 	case messages.PaneSidebarTerminal, messages.PaneSidebar:
-		if a.layout != nil && a.layout.ShowCenter() {
+		if a.ui.layout != nil && a.ui.layout.ShowCenter() {
 			return a.focusPane(messages.PaneCenter)
 		}
 		return a.focusPane(messages.PaneDashboard)
 	case messages.PaneCenter:
-		if a.layout == nil || a.layout.ShowDashboard() {
+		if a.ui == nil || a.ui.layout == nil || a.ui.layout.ShowDashboard() {
 			return a.focusPane(messages.PaneDashboard)
 		}
 	}
@@ -67,14 +67,14 @@ func (a *App) focusPaneLeft() tea.Cmd {
 func (a *App) focusPaneRight() tea.Cmd {
 	switch a.focusedPane {
 	case messages.PaneDashboard:
-		if a.layout != nil && a.layout.ShowCenter() {
+		if a.ui.layout != nil && a.ui.layout.ShowCenter() {
 			return a.focusPane(messages.PaneCenter)
 		}
-		if a.layout != nil && a.layout.ShowSidebar() {
+		if a.ui.layout != nil && a.ui.layout.ShowSidebar() {
 			return a.focusPane(messages.PaneSidebar)
 		}
 	case messages.PaneCenter:
-		if a.layout != nil && a.layout.ShowSidebar() {
+		if a.ui.layout != nil && a.ui.layout.ShowSidebar() {
 			return a.focusPane(messages.PaneSidebar)
 		}
 	}
@@ -191,9 +191,9 @@ func (a *App) cycleTab(sidebarFn, sidebarTermFn func(), centerFn func() tea.Cmd)
 	case messages.PaneSidebar:
 		sidebarFn()
 	default:
-		_, before := a.center.GetTabsInfo()
+		_, before := a.ui.center.GetTabsInfo()
 		cmd := centerFn()
-		_, after := a.center.GetTabsInfo()
+		_, after := a.ui.center.GetTabsInfo()
 		if after == before {
 			return nil
 		}
@@ -217,33 +217,33 @@ func (a *App) requireWorkspaceSelection(action string) tea.Cmd {
 	if a.activeWorkspace != nil && a.activeProject != nil {
 		return nil
 	}
-	if a.toast != nil {
-		return a.toast.ShowWarning("Select a workspace before " + action)
+	if a.ui.toast != nil {
+		return a.ui.toast.ShowWarning("Select a workspace before " + action)
 	}
 	return nil
 }
 
 func (a *App) prefixSelectTab(index int) tea.Cmd {
-	tabs, activeIdx := a.center.GetTabsInfo()
+	tabs, activeIdx := a.ui.center.GetTabsInfo()
 	if index < 0 || index >= len(tabs) || index == activeIdx {
 		return nil
 	}
-	cmd := a.center.SelectTab(index)
+	cmd := a.ui.center.SelectTab(index)
 	return common.SafeBatch(cmd, a.persistActiveWorkspaceTabs())
 }
 
 // togglePaneCollapse toggles a pane's collapse state and relocates focus if needed.
 func (a *App) togglePaneCollapse(pane string) tea.Cmd {
-	if a.layout == nil {
+	if a.ui == nil || a.ui.layout == nil {
 		return nil
 	}
 	switch pane {
 	case "both":
-		a.layout.ToggleBoth()
+		a.ui.layout.ToggleBoth()
 	case "dashboard":
-		a.layout.ToggleDashboard()
+		a.ui.layout.ToggleDashboard()
 	case "sidebar":
-		a.layout.ToggleSidebar()
+		a.ui.layout.ToggleSidebar()
 	default:
 		return nil
 	}
@@ -252,9 +252,9 @@ func (a *App) togglePaneCollapse(pane string) tea.Cmd {
 	needsRelocate := false
 	switch a.focusedPane {
 	case messages.PaneDashboard:
-		needsRelocate = !a.layout.ShowDashboard()
+		needsRelocate = !a.ui.layout.ShowDashboard()
 	case messages.PaneSidebar, messages.PaneSidebarTerminal:
-		needsRelocate = !a.layout.ShowSidebar()
+		needsRelocate = !a.ui.layout.ShowSidebar()
 	}
 	if needsRelocate {
 		a.focusPane(messages.PaneCenter)
@@ -280,33 +280,33 @@ func (a *App) sendPrefixToTerminal() {
 	raw := string([]byte{byte(b)})
 	switch a.focusedPane {
 	case messages.PaneCenter:
-		a.center.SendToTerminal(raw)
+		a.ui.center.SendToTerminal(raw)
 	case messages.PaneSidebarTerminal:
-		a.sidebarTerminal.SendToTerminal(raw)
+		a.ui.sidebarTerminal.SendToTerminal(raw)
 	}
 }
 
 // updateLayout updates component sizes based on window size
 func (a *App) updateLayout() {
-	a.dashboard.SetSize(a.layout.DashboardWidth(), a.layout.Height())
+	a.ui.dashboard.SetSize(a.ui.layout.DashboardWidth(), a.ui.layout.Height())
 
-	centerWidth := a.layout.CenterWidth()
-	a.center.SetSize(centerWidth, a.layout.Height())
-	leftGutter := a.layout.LeftGutter()
-	topGutter := a.layout.TopGutter()
+	centerWidth := a.ui.layout.CenterWidth()
+	a.ui.center.SetSize(centerWidth, a.ui.layout.Height())
+	leftGutter := a.ui.layout.LeftGutter()
+	topGutter := a.ui.layout.TopGutter()
 	gapX := 0
-	if a.layout.ShowCenter() && a.layout.ShowDashboard() {
-		gapX = a.layout.GapX()
+	if a.ui.layout.ShowCenter() && a.ui.layout.ShowDashboard() {
+		gapX = a.ui.layout.GapX()
 	}
-	a.center.SetOffset(
-		leftGutter + a.layout.DashboardWidth() + gapX,
+	a.ui.center.SetOffset(
+		leftGutter + a.ui.layout.DashboardWidth() + gapX,
 	)
-	a.center.SetCanFocusRight(a.layout.ShowSidebar())
-	a.dashboard.SetCanFocusRight(a.layout.ShowCenter())
+	a.ui.center.SetCanFocusRight(a.ui.layout.ShowSidebar())
+	a.ui.dashboard.SetCanFocusRight(a.ui.layout.ShowCenter())
 
 	// New two-pane sidebar structure: each pane has its own border
-	sidebarWidth := a.layout.SidebarWidth()
-	sidebarHeight := a.layout.Height()
+	sidebarWidth := a.ui.layout.SidebarWidth()
+	sidebarHeight := a.ui.layout.Height()
 
 	// Each pane gets half the height (borders touch)
 	topPaneHeight, bottomPaneHeight := sidebarPaneHeights(sidebarHeight)
@@ -321,33 +321,33 @@ func (a *App) updateLayout() {
 		topPaneHeight-2, 1)
 	bottomContentHeight := max(bottomPaneHeight-2, 1)
 
-	a.sidebar.SetSize(contentWidth, topContentHeight)
-	a.sidebarTerminal.SetSize(contentWidth, bottomContentHeight)
+	a.ui.sidebar.SetSize(contentWidth, topContentHeight)
+	a.ui.sidebarTerminal.SetSize(contentWidth, bottomContentHeight)
 
 	// Calculate and set offsets for sidebar mouse handling
 	// X: Dashboard + Center + Border(1) + Padding(1)
-	sidebarX := leftGutter + a.layout.DashboardWidth()
-	if a.layout.ShowDashboard() && a.layout.ShowCenter() {
-		sidebarX += a.layout.GapX()
+	sidebarX := leftGutter + a.ui.layout.DashboardWidth()
+	if a.ui.layout.ShowDashboard() && a.ui.layout.ShowCenter() {
+		sidebarX += a.ui.layout.GapX()
 	}
-	if a.layout.ShowCenter() {
-		sidebarX += a.layout.CenterWidth()
+	if a.ui.layout.ShowCenter() {
+		sidebarX += a.ui.layout.CenterWidth()
 	}
-	sidebarX += a.layout.GapX()
+	sidebarX += a.ui.layout.GapX()
 	sidebarContentOffsetX := sidebarX + 2 // +2 for border and padding
 
 	// Y: Top pane height (including its border) + Bottom pane border(1)
 	termOffsetY := topGutter + topPaneHeight + 1
-	a.sidebarTerminal.SetOffset(sidebarContentOffsetX, termOffsetY)
+	a.ui.sidebarTerminal.SetOffset(sidebarContentOffsetX, termOffsetY)
 
-	if a.dialog != nil {
-		a.dialog.SetSize(a.width, a.height)
+	if a.ui.dialog != nil {
+		a.ui.dialog.SetSize(a.width, a.height)
 	}
-	if a.filePicker != nil {
-		a.filePicker.SetSize(a.width, a.height)
+	if a.ui.filePicker != nil {
+		a.ui.filePicker.SetSize(a.width, a.height)
 	}
-	if a.settingsDialog != nil {
-		a.settingsDialog.SetSize(a.width, a.height)
+	if a.ui.settingsDialog != nil {
+		a.ui.settingsDialog.SetSize(a.width, a.height)
 	}
 }
 
@@ -355,15 +355,15 @@ func (a *App) setKeymapHintsEnabled(enabled bool) {
 	if a.config != nil {
 		a.config.UI.ShowKeymapHints = enabled
 	}
-	a.dashboard.SetShowKeymapHints(enabled)
-	a.center.SetShowKeymapHints(enabled)
-	a.sidebar.SetShowKeymapHints(enabled)
-	a.sidebarTerminal.SetShowKeymapHints(enabled)
-	if a.dialog != nil {
-		a.dialog.SetShowKeymapHints(enabled)
+	a.ui.dashboard.SetShowKeymapHints(enabled)
+	a.ui.center.SetShowKeymapHints(enabled)
+	a.ui.sidebar.SetShowKeymapHints(enabled)
+	a.ui.sidebarTerminal.SetShowKeymapHints(enabled)
+	if a.ui.dialog != nil {
+		a.ui.dialog.SetShowKeymapHints(enabled)
 	}
-	if a.filePicker != nil {
-		a.filePicker.SetShowKeymapHints(enabled)
+	if a.ui.filePicker != nil {
+		a.ui.filePicker.SetShowKeymapHints(enabled)
 	}
 }
 

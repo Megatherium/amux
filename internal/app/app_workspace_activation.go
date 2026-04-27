@@ -17,11 +17,11 @@ func (a *App) setWorkspaceActivationState(msg messages.WorkspaceActivated) {
 	a.centerBtnIndex = 0
 	a.previewTicket = nil
 	a.previewProject = nil
-	a.center.SetWorkspace(msg.Workspace)
-	a.center.SetHasTicketService(a.hasTicketService())
-	a.sidebar.SetWorkspace(msg.Workspace)
-	a.sidebar.SetPreviewTicket(nil)
-	a.sidebarTerminal.SetWorkspacePreview(msg.Workspace)
+	a.ui.center.SetWorkspace(msg.Workspace)
+	a.ui.center.SetHasTicketService(a.hasTicketService())
+	a.ui.sidebar.SetWorkspace(msg.Workspace)
+	a.ui.sidebar.SetPreviewTicket(nil)
+	a.ui.sidebarTerminal.SetWorkspacePreview(msg.Workspace)
 }
 
 // discoverWorkspaceTmux returns commands for tmux tab discovery, sidebar
@@ -38,7 +38,7 @@ func (a *App) discoverWorkspaceTmux(ws *data.Workspace) []tea.Cmd {
 	if syncCmd := a.syncWorkspaceTabsFromTmux(ws); syncCmd != nil {
 		cmds = append(cmds, syncCmd)
 	}
-	if restoreCmd := a.center.RestoreTabsFromWorkspace(ws); restoreCmd != nil {
+	if restoreCmd := a.ui.center.RestoreTabsFromWorkspace(ws); restoreCmd != nil {
 		cmds = append(cmds, restoreCmd)
 	}
 	return cmds
@@ -52,10 +52,10 @@ func (a *App) routeFocusOnActivation(msg messages.WorkspaceActivated, cmds *[]te
 		return false
 	}
 	wsID := string(msg.Workspace.ID())
-	centerVisible := a.layout != nil && a.layout.ShowCenter()
+	centerVisible := a.ui.layout != nil && a.ui.layout.ShowCenter()
 	if centerVisible {
 		hasCenterTabs := false
-		if tabs, _ := a.center.GetTabsInfoForWorkspace(wsID); len(tabs) > 0 {
+		if tabs, _ := a.ui.center.GetTabsInfoForWorkspace(wsID); len(tabs) > 0 {
 			hasCenterTabs = true
 		}
 		if !hasCenterTabs && len(msg.Workspace.OpenTabs) > 0 {
@@ -91,7 +91,7 @@ func (a *App) refreshWorkspaceResources(ws *data.Workspace) []tea.Cmd {
 	if a.gitStatusController != nil {
 		if err := a.gitStatusController.watchRoot(ws.Root); err != nil {
 			if a.gitStatusController.isWatchLimitReached() {
-				cmds = append(cmds, a.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
+				cmds = append(cmds, a.ui.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
 			}
 		}
 	}

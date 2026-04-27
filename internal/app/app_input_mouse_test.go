@@ -19,7 +19,7 @@ import (
 )
 
 func TestPaneForPoint_NoLayoutReturnsNoMatch(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	pane, ok := app.paneForPoint(10, 10)
 	if ok {
 		t.Fatalf("expected no match when layout is nil")
@@ -36,7 +36,7 @@ func TestPaneForPoint_ThreePaneGeometry(t *testing.T) {
 		t.Fatalf("expected three-pane layout at 140x40")
 	}
 
-	app := &App{layout: l}
+	app := &App{ui: &UICompositor{layout: l}}
 	left := l.LeftGutter()
 	top := l.TopGutter()
 	height := l.Height()
@@ -72,7 +72,7 @@ func TestPaneForPoint_TwoPaneNoSidebar(t *testing.T) {
 		t.Fatalf("expected two-pane layout at 100x30")
 	}
 
-	app := &App{layout: l}
+	app := &App{ui: &UICompositor{layout: l}}
 	left := l.LeftGutter()
 	top := l.TopGutter()
 	dashWidth := l.DashboardWidth()
@@ -112,15 +112,17 @@ func TestRouteMouseClick_PrefixPaletteConsumesClicks(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		prefixActive:    true,
-		width:           140,
-		height:          40,
-		layout:          l,
-		focusedPane:     messages.PaneDashboard,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		prefixActive: true,
+		width:        140,
+		height:       40,
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
+		focusedPane: messages.PaneDashboard,
 	}
 
 	_, paletteHeight := viewDimensions(app.renderPrefixPalette())
@@ -147,15 +149,17 @@ func TestRouteMouseWheel_PrefixPaletteConsumesWheel(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		prefixActive:    true,
-		width:           140,
-		height:          40,
-		layout:          l,
-		focusedPane:     messages.PaneDashboard,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		prefixActive: true,
+		width:        140,
+		height:       40,
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
+		focusedPane: messages.PaneDashboard,
 	}
 
 	sidebarStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX() + l.CenterWidth() + l.GapX()
@@ -186,16 +190,18 @@ func TestRouteMouseWheel_FocusesHoveredSidebarAndScrollsChanges(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 	app.updateLayout()
 
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo", "/tmp/repo/feature")
-	app.sidebar.SetWorkspace(ws)
+	app.ui.sidebar.SetWorkspace(ws)
 	status := &git.StatusResult{Clean: false}
 	for i := 0; i < 40; i++ {
 		status.Unstaged = append(status.Unstaged, git.Change{
@@ -203,11 +209,11 @@ func TestRouteMouseWheel_FocusesHoveredSidebarAndScrollsChanges(t *testing.T) {
 			Kind: git.ChangeModified,
 		})
 	}
-	app.sidebar.SetGitStatus(status)
+	app.ui.sidebar.SetGitStatus(status)
 
 	app.focusPane(messages.PaneCenter)
 
-	before := app.sidebar.ContentView()
+	before := app.ui.sidebar.ContentView()
 	if strings.Contains(before, "file-20.txt") {
 		t.Fatalf("expected file-20.txt to start off-screen")
 	}
@@ -222,7 +228,7 @@ func TestRouteMouseWheel_FocusesHoveredSidebarAndScrollsChanges(t *testing.T) {
 		app.routeMouseWheel(wheel)
 	}
 
-	after := app.sidebar.ContentView()
+	after := app.ui.sidebar.ContentView()
 	if app.focusedPane != messages.PaneSidebar {
 		t.Fatalf("expected wheel to focus sidebar, got %v", app.focusedPane)
 	}
@@ -236,16 +242,18 @@ func TestRouteMouseWheel_HoverSidebarTerminalSkipsFocusSideEffects(t *testing.T)
 	l.Resize(140, 40)
 
 	app := &App{
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 	app.updateLayout()
 
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo", "/tmp/repo/feature")
-	app.sidebarTerminal.SetWorkspacePreview(ws)
+	app.ui.sidebarTerminal.SetWorkspacePreview(ws)
 	app.focusPane(messages.PaneCenter)
 
 	sidebarStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX() + l.CenterWidth() + l.GapX()
@@ -274,11 +282,13 @@ func TestRouteMouseWheel_HoverCenterPreservesDetachedReattach(t *testing.T) {
 	}
 	centerModel := center.New(cfg)
 	app := &App{
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 	app.updateLayout()
 
@@ -314,11 +324,13 @@ func TestRouteMouseWheel_HoverDashboardDoesNotRetargetFromFocusedPane(t *testing
 	l.Resize(140, 40)
 
 	app := &App{
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 	app.updateLayout()
 	app.focusPane(messages.PaneCenter)
@@ -341,11 +353,13 @@ func TestRouteMouseWheel_HoverEmptyCenterDoesNotStealFocus(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 	app.updateLayout()
 	app.focusPane(messages.PaneDashboard)
@@ -366,14 +380,16 @@ func TestRouteMouseWheel_DialogOverlayPreventsRetarget(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          center.New(&config.Config{}),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
-		dialog:          common.NewConfirmDialog("quit", "Quit", "Confirm?"),
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          center.New(&config.Config{}),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+			dialog:          common.NewConfirmDialog("quit", "Quit", "Confirm?"),
+		},
 	}
-	app.dialog.Show()
+	app.ui.dialog.Show()
 	app.updateLayout()
 	app.focusPane(messages.PaneDashboard)
 
@@ -399,14 +415,16 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 	}
 	centerModel := center.New(cfg)
 	app := &App{
-		width:           140,
-		height:          40,
-		layout:          l,
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
-		toast:           common.NewToastModel(),
+		width:  140,
+		height: 40,
+		ui: &UICompositor{
+			layout:          l,
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+			toast:           common.NewToastModel(),
+		},
 	}
 	app.updateLayout()
 
@@ -423,8 +441,8 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 	}
 	app.focusPane(messages.PaneDashboard)
 
-	_ = app.toast.ShowInfo(strings.Repeat("toast ", 12))
-	toastView := app.toast.View()
+	_ = app.ui.toast.ShowInfo(strings.Repeat("toast ", 12))
+	toastView := app.ui.toast.View()
 	if toastView == "" {
 		t.Fatal("expected visible toast")
 	}

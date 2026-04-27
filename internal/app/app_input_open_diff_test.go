@@ -37,8 +37,10 @@ func TestOpenDiff_ReusesExistingChangedFileTab(t *testing.T) {
 
 	app := &App{
 		activeWorkspace: ws,
-		center:          centerModel,
-		focusedPane:     messages.PaneSidebar,
+		ui: &UICompositor{
+			center: centerModel,
+		},
+		focusedPane: messages.PaneSidebar,
 	}
 
 	_, cmd := app.Update(messages.OpenDiff{
@@ -50,7 +52,7 @@ func TestOpenDiff_ReusesExistingChangedFileTab(t *testing.T) {
 		t.Fatal("expected command when opening an already-open changed file")
 	}
 
-	tabs, activeIdx := app.center.GetTabsInfoForWorkspace(wsID)
+	tabs, activeIdx := app.ui.center.GetTabsInfoForWorkspace(wsID)
 	if len(tabs) != 2 {
 		t.Fatalf("expected changed-file click to reuse existing diff tab, got %d tabs", len(tabs))
 	}
@@ -82,7 +84,7 @@ func TestOpenDiff_ReusesExistingChangedFileTab(t *testing.T) {
 		}
 	}
 
-	tabs, activeIdx = app.center.GetTabsInfoForWorkspace(wsID)
+	tabs, activeIdx = app.ui.center.GetTabsInfoForWorkspace(wsID)
 	if len(tabs) != 2 {
 		t.Fatalf("expected no duplicate diff tab after follow-up updates, got %d tabs", len(tabs))
 	}

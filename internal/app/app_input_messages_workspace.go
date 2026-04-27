@@ -18,8 +18,8 @@ func (a *App) handleProjectsLoaded(msg messages.ProjectsLoaded) []tea.Cmd {
 	a.projects = msg.Projects
 	a.projectsLoaded = true
 	var cmds []tea.Cmd
-	if a.dashboard != nil {
-		a.dashboard.SetProjects(a.projects)
+	if a.ui.dashboard != nil {
+		a.ui.dashboard.SetProjects(a.projects)
 	}
 	cmds = append(cmds, a.rebindActiveSelection()...)
 	// Request git status for all workspaces
@@ -57,30 +57,30 @@ func (a *App) rebindActiveSelection() []tea.Cmd {
 		oldID := string(previous.ID())
 		newID := string(ws.ID())
 		hadPreviousWorkspaceState := false
-		if a.center != nil {
-			hadPreviousWorkspaceState = a.center.HasWorkspaceState(oldID)
+		if a.ui.center != nil {
+			hadPreviousWorkspaceState = a.ui.center.HasWorkspaceState(oldID)
 		}
 		if oldID != newID {
 			a.migrateDirtyWorkspaceID(oldID, newID)
 			cmds = append(cmds, a.rebindActiveWorkspaceWatch(previous.Root, ws.Root)...)
-			if a.center != nil {
-				if cmd := a.center.RebindWorkspaceID(previous, ws); cmd != nil {
+			if a.ui.center != nil {
+				if cmd := a.ui.center.RebindWorkspaceID(previous, ws); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 			}
-			if a.sidebarTerminal != nil {
-				if cmd := a.sidebarTerminal.RebindWorkspaceID(previous, ws); cmd != nil {
+			if a.ui.sidebarTerminal != nil {
+				if cmd := a.ui.sidebarTerminal.RebindWorkspaceID(previous, ws); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 			}
 		}
 		a.activeWorkspace = ws
 		a.activeProject = project
-		if a.center != nil {
-			a.center.SetWorkspace(ws)
+		if a.ui.center != nil {
+			a.ui.center.SetWorkspace(ws)
 			wsIDCurrent := string(ws.ID())
-			hasWorkspaceState := a.center.HasWorkspaceState(wsIDCurrent)
-			existingTabs, _ := a.center.GetTabsInfoForWorkspace(wsIDCurrent)
+			hasWorkspaceState := a.ui.center.HasWorkspaceState(wsIDCurrent)
+			existingTabs, _ := a.ui.center.GetTabsInfoForWorkspace(wsIDCurrent)
 			hasLiveWorkspaceTabs := len(existingTabs) > 0
 			shouldHydrateTabs := !hasWorkspaceState || hasLiveWorkspaceTabs
 			if shouldHydrateTabs && oldID != newID && hadPreviousWorkspaceState {
@@ -90,16 +90,16 @@ func (a *App) rebindActiveSelection() []tea.Cmd {
 				shouldHydrateTabs = false
 			}
 			if shouldHydrateTabs {
-				if cmd := a.center.AddTabsFromWorkspace(ws, ws.OpenTabs); cmd != nil {
+				if cmd := a.ui.center.AddTabsFromWorkspace(ws, ws.OpenTabs); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 			}
 		}
-		if a.sidebar != nil {
-			a.sidebar.SetWorkspace(ws)
+		if a.ui.sidebar != nil {
+			a.ui.sidebar.SetWorkspace(ws)
 		}
-		if a.sidebarTerminal != nil {
-			a.sidebarTerminal.SetWorkspacePreview(ws)
+		if a.ui.sidebarTerminal != nil {
+			a.ui.sidebarTerminal.SetWorkspacePreview(ws)
 		}
 		return cmds
 	}
@@ -121,8 +121,8 @@ func (a *App) rebindActiveWorkspaceWatch(previousRoot, currentRoot string) []tea
 		a.gitStatusController.unwatchRoot(oldRoot)
 		if err := a.gitStatusController.watchRoot(newRoot); err != nil {
 			if a.gitStatusController.isWatchLimitReached() {
-				if a.toast != nil {
-					cmds = append(cmds, a.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
+				if a.ui.toast != nil {
+					cmds = append(cmds, a.ui.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))
 				}
 			}
 		}
@@ -132,9 +132,9 @@ func (a *App) rebindActiveWorkspaceWatch(previousRoot, currentRoot string) []tea
 		a.gitStatus.Invalidate(oldRoot)
 		a.gitStatus.Invalidate(newRoot)
 	}
-	if a.dashboard != nil {
-		a.dashboard.InvalidateStatus(oldRoot)
-		a.dashboard.InvalidateStatus(newRoot)
+	if a.ui.dashboard != nil {
+		a.ui.dashboard.InvalidateStatus(oldRoot)
+		a.ui.dashboard.InvalidateStatus(newRoot)
 	}
 
 	return cmds
@@ -242,17 +242,17 @@ func (a *App) handleWorkspaceActivated(msg messages.WorkspaceActivated) []tea.Cm
 	centerFocusQueuedReattach := a.routeFocusOnActivation(msg, &cmds)
 	// Sync active workspaces to dashboard (fixes spinner race condition)
 	a.syncActiveWorkspacesToDashboard()
-	newDashboard, cmd := a.dashboard.Update(msg)
-	a.dashboard = newDashboard
+	newDashboard, cmd := a.ui.dashboard.Update(msg)
+	a.ui.dashboard = newDashboard
 	cmds = append(cmds, cmd)
 	cmds = append(cmds, a.refreshWorkspaceResources(msg.Workspace)...)
 	// Ensure spinner starts if needed after sync
-	if startCmd := a.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
+	if startCmd := a.ui.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
 		cmds = append(cmds, startCmd)
 	}
 	// Seamless UX: if restored active tab is detached, auto-reattach on workspace activation.
 	if !centerFocusQueuedReattach {
-		cmds = append(cmds, a.center.ReattachActiveTabIfDetached())
+		cmds = append(cmds, a.ui.center.ReattachActiveTabIfDetached())
 	}
 	cmds = append(cmds, a.enforceAttachedAgentTabLimit()...)
 	return cmds
@@ -287,7 +287,7 @@ func (a *App) handleCreateWorkspace(msg messages.CreateWorkspace) []tea.Cmd {
 		if pending != nil {
 			pending.Assistant = assistant
 			a.wm().setCreatingWorkspace(string(pending.ID()))
-			if cmd := a.dashboard.SetWorkspaceCreating(pending, true); cmd != nil {
+			if cmd := a.ui.dashboard.SetWorkspaceCreating(pending, true); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -298,10 +298,10 @@ func (a *App) handleCreateWorkspace(msg messages.CreateWorkspace) []tea.Cmd {
 
 // handleGitStatusResult handles the GitStatusResult message.
 func (a *App) handleGitStatusResult(msg messages.GitStatusResult) tea.Cmd {
-	newDashboard, cmd := a.dashboard.Update(msg)
-	a.dashboard = newDashboard
+	newDashboard, cmd := a.ui.dashboard.Update(msg)
+	a.ui.dashboard = newDashboard
 	if a.activeWorkspace != nil && rootsReferToSameWorkspace(msg.Root, a.activeWorkspace.Root) {
-		a.sidebar.SetGitStatus(msg.Status)
+		a.ui.sidebar.SetGitStatus(msg.Status)
 	}
 	return cmd
 }

@@ -22,19 +22,19 @@ func (a *App) handleShowAddProjectDialog() {
 	if err != nil {
 		home = "/"
 	}
-	a.filePicker = common.NewFilePicker(DialogAddProject, home, true)
-	a.filePicker.SetTitle("Add Project")
-	a.filePicker.SetPrimaryActionLabel("Add as project")
-	a.filePicker.SetSize(a.width, a.height)
-	a.filePicker.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.filePicker.Show()
+	a.ui.filePicker = common.NewFilePicker(DialogAddProject, home, true)
+	a.ui.filePicker.SetTitle("Add Project")
+	a.ui.filePicker.SetPrimaryActionLabel("Add as project")
+	a.ui.filePicker.SetSize(a.width, a.height)
+	a.ui.filePicker.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.filePicker.Show()
 }
 
 // handleShowCreateWorkspaceDialog shows the create workspace dialog.
 func (a *App) handleShowCreateWorkspaceDialog(msg messages.ShowCreateWorkspaceDialog) {
 	a.dialogProject = msg.Project
-	a.dialog = common.NewInputDialog(DialogCreateWorkspace, "Create Workspace", "Enter workspace name...")
-	a.dialog.SetInputValidate(func(s string) string {
+	a.ui.dialog = common.NewInputDialog(DialogCreateWorkspace, "Create Workspace", "Enter workspace name...")
+	a.ui.dialog.SetInputValidate(func(s string) string {
 		s = validation.SanitizeInput(s)
 		if s == "" {
 			return "" // Don't show error for empty input
@@ -44,23 +44,23 @@ func (a *App) handleShowCreateWorkspaceDialog(msg messages.ShowCreateWorkspaceDi
 		}
 		return ""
 	})
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleShowDeleteWorkspaceDialog shows the delete workspace dialog.
 func (a *App) handleShowDeleteWorkspaceDialog(msg messages.ShowDeleteWorkspaceDialog) {
 	a.dialogProject = msg.Project
 	a.dialogWorkspace = msg.Workspace
-	a.dialog = common.NewConfirmDialog(
+	a.ui.dialog = common.NewConfirmDialog(
 		DialogDeleteWorkspace,
 		"Delete Workspace",
 		fmt.Sprintf("Delete workspace '%s' and its branch?", msg.Workspace.Name),
 	)
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleShowRemoveProjectDialog shows the remove project dialog.
@@ -70,14 +70,14 @@ func (a *App) handleShowRemoveProjectDialog(msg messages.ShowRemoveProjectDialog
 	if msg.Project != nil {
 		projectName = msg.Project.Name
 	}
-	a.dialog = common.NewConfirmDialog(
+	a.ui.dialog = common.NewConfirmDialog(
 		DialogRemoveProject,
 		"Remove Project",
 		fmt.Sprintf("Remove project '%s' from AMUX? This won't delete any files.", projectName),
 	)
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleShowSelectAssistantDialog shows the select assistant dialog.
@@ -85,10 +85,10 @@ func (a *App) handleShowSelectAssistantDialog() {
 	if a.activeWorkspace == nil && a.pendingWorkspaceProject == nil {
 		return
 	}
-	a.dialog = common.NewAgentPicker(a.assistantNames())
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog = common.NewAgentPicker(a.assistantNames())
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleShowSelectTicketDialog shows the ticket picker dialog.
@@ -129,25 +129,25 @@ func (a *App) handleTicketsForPickerLoaded(msg ticketsForPickerLoaded) {
 		})
 	}
 	a.pendingTickets = sorted
-	a.dialog = common.NewTicketPicker(items)
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog = common.NewTicketPicker(items)
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleShowCleanupTmuxDialog shows the tmux cleanup dialog.
 func (a *App) handleShowCleanupTmuxDialog() {
-	if a.dialog != nil && a.dialog.Visible() {
+	if a.ui.dialog != nil && a.ui.dialog.Visible() {
 		return
 	}
-	a.dialog = common.NewConfirmDialog(
+	a.ui.dialog = common.NewConfirmDialog(
 		DialogCleanupTmux,
 		"Cleanup tmux sessions",
 		fmt.Sprintf("Kill all amux-* tmux sessions on server %q?", a.tmuxOptions.ServerName),
 	)
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleShowSettingsDialog shows the settings dialog.
@@ -156,27 +156,27 @@ func (a *App) handleShowSettingsDialog() {
 	a.settingsThemePersistedTheme = common.ThemeID(persistedUI.Theme)
 	a.settingsThemeDirty = common.ThemeID(a.config.UI.Theme) != a.settingsThemePersistedTheme
 	a.settingsDialogSession++
-	a.settingsDialog = common.NewSettingsDialog(
+	a.ui.settingsDialog = common.NewSettingsDialog(
 		common.ThemeID(a.config.UI.Theme),
 	)
-	a.settingsDialog.SetSession(a.settingsDialogSession)
-	a.settingsDialog.SetSize(a.width, a.height)
+	a.ui.settingsDialog.SetSession(a.settingsDialogSession)
+	a.ui.settingsDialog.SetSize(a.width, a.height)
 
 	// Set update state
 	if a.updateAvailable != nil {
-		a.settingsDialog.SetUpdateInfo(
+		a.ui.settingsDialog.SetUpdateInfo(
 			a.updateAvailable.CurrentVersion,
 			a.updateAvailable.LatestVersion,
 			a.updateAvailable.UpdateAvailable,
 		)
 	} else {
-		a.settingsDialog.SetUpdateInfo(a.version, "", false)
+		a.ui.settingsDialog.SetUpdateInfo(a.version, "", false)
 	}
 	if a.updateService != nil && a.updateService.IsHomebrewBuild() {
-		a.settingsDialog.SetUpdateHint("Installed via Homebrew - update with brew upgrade amux")
+		a.ui.settingsDialog.SetUpdateHint("Installed via Homebrew - update with brew upgrade amux")
 	}
 
-	a.settingsDialog.Show()
+	a.ui.settingsDialog.Show()
 }
 
 func (a *App) applyTheme(theme common.ThemeID) {
@@ -185,13 +185,13 @@ func (a *App) applyTheme(theme common.ThemeID) {
 	a.settingsThemeDirty = theme != a.settingsThemePersistedTheme
 	a.styles = common.DefaultStyles()
 	// Propagate styles to all components
-	a.dashboard.SetStyles(a.styles)
-	a.sidebar.SetStyles(a.styles)
-	a.sidebarTerminal.SetStyles(a.styles)
-	a.center.SetStyles(a.styles)
-	a.toast.SetStyles(a.styles)
-	if a.filePicker != nil {
-		a.filePicker.SetStyles(a.styles)
+	a.ui.dashboard.SetStyles(a.styles)
+	a.ui.sidebar.SetStyles(a.styles)
+	a.ui.sidebarTerminal.SetStyles(a.styles)
+	a.ui.center.SetStyles(a.styles)
+	a.ui.toast.SetStyles(a.styles)
+	if a.ui.filePicker != nil {
+		a.ui.filePicker.SetStyles(a.styles)
 	}
 }
 
@@ -200,8 +200,8 @@ func (a *App) handleThemePreview(msg common.ThemePreview) tea.Cmd {
 	if msg.Session != a.settingsDialogSession {
 		return nil
 	}
-	if a.settingsDialog != nil {
-		a.settingsDialog.SetSelectedTheme(msg.Theme)
+	if a.ui.settingsDialog != nil {
+		a.ui.settingsDialog.SetSelectedTheme(msg.Theme)
 	}
 	a.applyTheme(msg.Theme)
 	return nil
@@ -213,7 +213,7 @@ func (a *App) persistSettingsThemeIfDirty() tea.Cmd {
 	}
 	if err := a.config.SaveUISettings(); err != nil {
 		logging.Warn("Failed to save theme setting: %v", err)
-		return a.toast.ShowWarning("Failed to save theme setting")
+		return a.ui.toast.ShowWarning("Failed to save theme setting")
 	}
 	a.settingsThemePersistedTheme = common.ThemeID(a.config.UI.Theme)
 	a.settingsThemeDirty = false
@@ -222,10 +222,10 @@ func (a *App) persistSettingsThemeIfDirty() tea.Cmd {
 
 // handleSettingsResult handles settings dialog close.
 func (a *App) handleSettingsResult(_ common.SettingsResult) tea.Cmd {
-	if a.settingsDialog != nil {
-		a.applyTheme(a.settingsDialog.SelectedTheme())
+	if a.ui.settingsDialog != nil {
+		a.applyTheme(a.ui.settingsDialog.SelectedTheme())
 	}
-	a.settingsDialog = nil
+	a.ui.settingsDialog = nil
 	a.settingsDialogSession++
 	return a.persistSettingsThemeIfDirty()
 }
@@ -239,7 +239,7 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 
 	project := msg.Project
 	if project == nil {
-		return []tea.Cmd{a.toast.ShowError("No project associated with this ticket")}
+		return []tea.Cmd{a.ui.toast.ShowError("No project associated with this ticket")}
 	}
 
 	var mainWS *data.Workspace
@@ -251,7 +251,7 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 		}
 	}
 	if mainWS == nil {
-		return []tea.Cmd{a.toast.ShowError("No workspace found for project " + project.Name)}
+		return []tea.Cmd{a.ui.toast.ShowError("No workspace found for project " + project.Name)}
 	}
 
 	var cmds []tea.Cmd
@@ -262,7 +262,7 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 		})...)
 	}
 
-	a.center.StartDraft(msg.Ticket, mainWS)
+	a.ui.center.StartDraft(msg.Ticket, mainWS)
 	cmds = append(cmds, a.focusPane(messages.PaneCenter))
 	return cmds
 }
@@ -276,8 +276,8 @@ func (a *App) handleTicketPreview(msg messages.TicketPreviewMsg) {
 	a.previewProject = msg.Project
 
 	// Forward the preview to the sidebar for the ticket tab
-	if a.sidebar != nil {
-		a.sidebar.SetPreviewTicket(msg.Ticket)
+	if a.ui.sidebar != nil {
+		a.ui.sidebar.SetPreviewTicket(msg.Ticket)
 	}
 }
 

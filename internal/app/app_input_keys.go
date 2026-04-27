@@ -11,18 +11,18 @@ import (
 // syncActiveWorkspacesToDashboard syncs the active workspace state from center to dashboard.
 // This ensures the dashboard has current data for spinner state decisions.
 func (a *App) syncActiveWorkspacesToDashboard() {
-	if a.dashboard == nil {
+	if a.ui.dashboard == nil {
 		return
 	}
 	activeWorkspaces := make(map[string]bool)
 	if !a.tmuxActivitySettled {
-		a.dashboard.SetActiveWorkspaces(activeWorkspaces)
+		a.ui.dashboard.SetActiveWorkspaces(activeWorkspaces)
 		return
 	}
 	for wsID := range a.tmuxActiveWorkspaceIDs {
 		activeWorkspaces[wsID] = true
 	}
-	a.dashboard.SetActiveWorkspaces(activeWorkspaces)
+	a.ui.dashboard.SetActiveWorkspaces(activeWorkspaces)
 }
 
 // handleKeyPress handles keyboard input
@@ -75,7 +75,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 
 	// 3. Passthrough mode - route keys to focused pane
 	// Handle button navigation when center pane is focused and showing welcome/workspace info (no tabs, no draft)
-	if a.focusedPane == messages.PaneCenter && !a.center.HasTabs() && !a.center.HasDraft() {
+	if a.focusedPane == messages.PaneCenter && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
 		maxIndex := a.centerButtonCount() - 1
 		switch {
 		case key.Matches(msg, a.keymap.Left), key.Matches(msg, a.keymap.Up):
@@ -114,20 +114,20 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 	// Route to focused pane
 	switch a.focusedPane {
 	case messages.PaneDashboard:
-		newDashboard, cmd := a.dashboard.Update(msg)
-		a.dashboard = newDashboard
+		newDashboard, cmd := a.ui.dashboard.Update(msg)
+		a.ui.dashboard = newDashboard
 		return cmd
 	case messages.PaneCenter:
-		newCenter, cmd := a.center.Update(msg)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(msg)
+		a.ui.center = newCenter
 		return cmd
 	case messages.PaneSidebar:
-		newSidebar, cmd := a.sidebar.Update(msg)
-		a.sidebar = newSidebar
+		newSidebar, cmd := a.ui.sidebar.Update(msg)
+		a.ui.sidebar = newSidebar
 		return cmd
 	case messages.PaneSidebarTerminal:
-		newSidebarTerminal, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newSidebarTerminal
+		newSidebarTerminal, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newSidebarTerminal
 		return cmd
 	}
 	return nil
@@ -142,19 +142,19 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) {
 	a.width = msg.Width
 	a.height = msg.Height
 	a.ready = true
-	a.layout.Resize(msg.Width, msg.Height)
+	a.ui.layout.Resize(msg.Width, msg.Height)
 	a.updateLayout()
 }
 
 func (a *App) handlePaste(msg tea.PasteMsg) tea.Cmd {
 	switch a.focusedPane {
 	case messages.PaneCenter:
-		newCenter, cmd := a.center.Update(msg)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(msg)
+		a.ui.center = newCenter
 		return cmd
 	case messages.PaneSidebarTerminal:
-		newTerm, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newTerm
+		newTerm, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newTerm
 		return cmd
 	}
 	return nil

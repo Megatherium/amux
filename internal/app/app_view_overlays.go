@@ -17,8 +17,8 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 	prefixOverlayHeight := 0
 
 	// Dialog overlay
-	if a.dialog != nil && a.dialog.Visible() {
-		dialogView := a.dialog.View()
+	if a.ui.dialog != nil && a.ui.dialog.Visible() {
+		dialogView := a.ui.dialog.View()
 		dialogWidth, dialogHeight := viewDimensions(dialogView)
 		x, y := a.centeredPosition(dialogWidth, dialogHeight)
 		dialogDrawable := compositor.NewStringDrawable(dialogView, x, y)
@@ -26,8 +26,8 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 	}
 
 	// File picker overlay
-	if a.filePicker != nil && a.filePicker.Visible() {
-		pickerView := a.filePicker.View()
+	if a.ui.filePicker != nil && a.ui.filePicker.Visible() {
+		pickerView := a.ui.filePicker.View()
 		pickerWidth, pickerHeight := viewDimensions(pickerView)
 		x, y := a.centeredPosition(pickerWidth, pickerHeight)
 		pickerDrawable := compositor.NewStringDrawable(pickerView, x, y)
@@ -35,8 +35,8 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 	}
 
 	// Settings dialog overlay
-	if a.settingsDialog != nil && a.settingsDialog.Visible() {
-		settingsView := a.settingsDialog.View()
+	if a.ui.settingsDialog != nil && a.ui.settingsDialog.Visible() {
+		settingsView := a.ui.settingsDialog.View()
 		settingsWidth, settingsHeight := viewDimensions(settingsView)
 		x, y := a.centeredPosition(settingsWidth, settingsHeight)
 		settingsDrawable := compositor.NewStringDrawable(settingsView, x, y)
@@ -58,8 +58,8 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 	}
 
 	// Toast notification
-	if a.toast != nil && a.toast.Visible() {
-		toastView := a.toast.View()
+	if a.ui.toast != nil && a.ui.toast.Visible() {
+		toastView := a.ui.toast.View()
 		if toastView != "" {
 			toastWidth := lipgloss.Width(toastView)
 			x := (a.width - toastWidth) / 2
@@ -158,28 +158,28 @@ func (a *App) centeredPosition(width, height int) (x, y int) {
 }
 
 func (a *App) adjustSidebarMouseXY(x, y int) (int, int) {
-	if a.layout == nil {
+	if a.ui == nil || a.ui.layout == nil {
 		return x, y
 	}
 	// Calculate sidebar X position
-	sidebarX := a.layout.LeftGutter() + a.layout.DashboardWidth()
-	if a.layout.ShowCenter() {
-		sidebarX += a.layout.GapX() + a.layout.CenterWidth()
+	sidebarX := a.ui.layout.LeftGutter() + a.ui.layout.DashboardWidth()
+	if a.ui.layout.ShowCenter() {
+		sidebarX += a.ui.layout.GapX() + a.ui.layout.CenterWidth()
 	}
-	if a.layout.ShowSidebar() {
-		sidebarX += a.layout.GapX()
+	if a.ui.layout.ShowSidebar() {
+		sidebarX += a.ui.layout.GapX()
 	}
 	// Sidebar content starts 2 columns in (border + padding)
 	adjustedX := x - sidebarX - 2
 	// Sidebar content starts one row below the top border.
-	adjustedY := y - a.layout.TopGutter() - 1
+	adjustedY := y - a.ui.layout.TopGutter() - 1
 	return adjustedX, adjustedY
 }
 
 func (a *App) overlayCursor() *tea.Cursor {
-	if a.dialog != nil && a.dialog.Visible() {
-		if c := a.dialog.Cursor(); c != nil {
-			dialogView := a.dialog.View()
+	if a.ui.dialog != nil && a.ui.dialog.Visible() {
+		if c := a.ui.dialog.Cursor(); c != nil {
+			dialogView := a.ui.dialog.View()
 			dialogWidth, dialogHeight := viewDimensions(dialogView)
 			x, y := a.centeredPosition(dialogWidth, dialogHeight)
 			cursor := *c
@@ -190,9 +190,9 @@ func (a *App) overlayCursor() *tea.Cursor {
 		return nil
 	}
 
-	if a.filePicker != nil && a.filePicker.Visible() {
-		if c := a.filePicker.Cursor(); c != nil {
-			pickerView := a.filePicker.View()
+	if a.ui.filePicker != nil && a.ui.filePicker.Visible() {
+		if c := a.ui.filePicker.Cursor(); c != nil {
+			pickerView := a.ui.filePicker.View()
 			pickerWidth, pickerHeight := viewDimensions(pickerView)
 			x, y := a.centeredPosition(pickerWidth, pickerHeight)
 			cursor := *c
@@ -206,18 +206,18 @@ func (a *App) overlayCursor() *tea.Cursor {
 }
 
 func (a *App) overlayVisible() bool {
-	return (a.dialog != nil && a.dialog.Visible()) ||
-		(a.filePicker != nil && a.filePicker.Visible()) ||
-		(a.settingsDialog != nil && a.settingsDialog.Visible()) ||
+	return (a.ui.dialog != nil && a.ui.dialog.Visible()) ||
+		(a.ui.filePicker != nil && a.ui.filePicker.Visible()) ||
+		(a.ui.settingsDialog != nil && a.ui.settingsDialog.Visible()) ||
 		a.prefixActive ||
 		a.err != nil
 }
 
 func (a *App) toastCoversPoint(x, y int) bool {
-	if a == nil || a.toast == nil || !a.toast.Visible() {
+	if a == nil || a.ui.toast == nil || !a.ui.toast.Visible() {
 		return false
 	}
-	toastView := a.toast.View()
+	toastView := a.ui.toast.View()
 	if toastView == "" {
 		return false
 	}

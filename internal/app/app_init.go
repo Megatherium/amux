@@ -21,12 +21,8 @@ import (
 	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
-	"github.com/andyrewlee/amux/internal/ui/center"
 	"github.com/andyrewlee/amux/internal/ui/common"
 	"github.com/andyrewlee/amux/internal/ui/compositor"
-	"github.com/andyrewlee/amux/internal/ui/dashboard"
-	"github.com/andyrewlee/amux/internal/ui/layout"
-	"github.com/andyrewlee/amux/internal/ui/sidebar"
 )
 
 // New creates a new App instance.
@@ -71,12 +67,7 @@ func New(version, commit, date string) (*App, error) {
 		updateService:          updateSvc,
 		modelRegistry:          modelReg,
 		ticketRenderer:         ticketRenderer,
-		layout:                 layout.NewManager(),
-		dashboard:              dashboard.New(),
-		center:                 center.New(cfg),
-		sidebar:                sidebar.NewTabbedSidebar(),
-		sidebarTerminal:        sidebar.NewTerminalModel(),
-		toast:                  common.NewToastModel(),
+		ui:                     newUICompositor(cfg),
 		focusedPane:            messages.PaneDashboard,
 		showWelcome:            true,
 		keymap:                 kmap,
@@ -104,28 +95,28 @@ func New(version, commit, date string) (*App, error) {
 	// Initialize the git status controller (file + state watchers).
 	app.gitStatusController = newGitStatusController(cfg.Paths.RegistryPath, cfg.Paths.MetadataRoot, app.supervisor)
 	// Route PTY messages through the app-level pump.
-	app.center.SetMsgSinkTry(app.tryEnqueueExternalMsg)
-	app.sidebarTerminal.SetMsgSink(app.enqueueExternalMsg)
-	app.center.SetInstanceID(app.instanceID)
-	app.sidebarTerminal.SetInstanceID(app.instanceID)
+	app.ui.center.SetMsgSinkTry(app.tryEnqueueExternalMsg)
+	app.ui.sidebarTerminal.SetMsgSink(app.enqueueExternalMsg)
+	app.ui.center.SetInstanceID(app.instanceID)
+	app.ui.sidebarTerminal.SetInstanceID(app.instanceID)
 	// Apply saved theme before creating styles
 	common.SetCurrentTheme(common.ThemeID(cfg.UI.Theme))
 	app.styles = common.DefaultStyles()
 	// Propagate styles to all components (they were created with default theme)
-	app.dashboard.SetStyles(app.styles)
-	app.sidebar.SetStyles(app.styles)
-	app.sidebarTerminal.SetStyles(app.styles)
-	app.center.SetStyles(app.styles)
-	app.toast.SetStyles(app.styles)
+	app.ui.dashboard.SetStyles(app.styles)
+	app.ui.sidebar.SetStyles(app.styles)
+	app.ui.sidebarTerminal.SetStyles(app.styles)
+	app.ui.center.SetStyles(app.styles)
+	app.ui.toast.SetStyles(app.styles)
 	app.setKeymapHintsEnabled(cfg.UI.ShowKeymapHints)
 	// Propagate prefix key label to components for help bars
-	app.dashboard.SetPrefixHelpLabel(app.prefixHelpLabel)
-	app.center.SetPrefixHelpLabel(app.prefixHelpLabel)
-	app.sidebarTerminal.SetPrefixHelpLabel(app.prefixHelpLabel)
+	app.ui.dashboard.SetPrefixHelpLabel(app.prefixHelpLabel)
+	app.ui.center.SetPrefixHelpLabel(app.prefixHelpLabel)
+	app.ui.sidebarTerminal.SetPrefixHelpLabel(app.prefixHelpLabel)
 	// Propagate tmux config to components
-	app.center.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
-	app.sidebarTerminal.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
-	app.supervisor.Start("center.tab_actor", app.center.RunTabActor, supervisor.WithRestartPolicy(supervisor.RestartAlways))
+	app.ui.center.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
+	app.ui.sidebarTerminal.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
+	app.supervisor.Start("center.tab_actor", app.ui.center.RunTabActor, supervisor.WithRestartPolicy(supervisor.RestartAlways))
 	if app.gitStatus != nil {
 		app.supervisor.Start("git.status_manager", app.gitStatus.Run)
 	}
@@ -137,10 +128,10 @@ func New(version, commit, date string) (*App, error) {
 func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		a.loadProjects(),
-		a.dashboard.Init(),
-		a.center.Init(),
-		a.sidebar.Init(),
-		a.sidebarTerminal.Init(),
+		a.ui.dashboard.Init(),
+		a.ui.center.Init(),
+		a.ui.sidebar.Init(),
+		a.ui.sidebarTerminal.Init(),
 		a.startGitStatusTicker(),
 		a.startPTYWatchdog(),
 		a.startOrphanGCTicker(),
@@ -155,10 +146,10 @@ func (a *App) Init() tea.Cmd {
 	cmds = append(cmds, a.gitStatusController.startFileWatcher())
 	cmds = append(cmds, a.gitStatusController.startStateWatcher())
 	if a.gitStatusController.fileWatcherInitErr() != nil {
-		cmds = append(cmds, a.toast.ShowWarning("File watching disabled; git status may be stale"))
+		cmds = append(cmds, a.ui.toast.ShowWarning("File watching disabled; git status may be stale"))
 	}
 	if a.gitStatusController.stateWatcherInitErr() != nil {
-		cmds = append(cmds, a.toast.ShowWarning("Workspace sync disabled; other instances may be stale"))
+		cmds = append(cmds, a.ui.toast.ShowWarning("Workspace sync disabled; other instances may be stale"))
 	}
 	return common.SafeBatch(cmds...)
 }

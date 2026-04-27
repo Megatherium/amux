@@ -87,7 +87,9 @@ func TestHandleTmuxActivityResult_ConsumesPendingRescan(t *testing.T) {
 		tmuxActivityRescanPending: true,
 		sessionActivityStates:     make(map[string]*activity.SessionState),
 		tmuxActiveWorkspaceIDs:    make(map[string]bool),
-		dashboard:                 dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 	}
 	cmds := app.handleTmuxActivityResult(tmuxActivityResult{
 		Token:              2,
@@ -426,9 +428,11 @@ func newActivityTestAppWithScriptedTmux(contentByScan []string) (*App, string) {
 		tmuxService:            tmuxOps,
 		tmuxOptions:            tmux.Options{},
 		tmuxAvailable:          true,
-		dashboard:              dashboard.New(),
 		sessionActivityStates:  make(map[string]*activity.SessionState),
 		tmuxActiveWorkspaceIDs: make(map[string]bool),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 	}
 	return app, wsID
 }

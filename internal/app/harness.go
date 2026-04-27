@@ -134,23 +134,25 @@ func newCenterHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 	tabbedSidebar.SetShowKeymapHints(opts.ShowKeymapHints)
 
 	app := &App{
-		config:          cfg,
-		layout:          layoutMgr,
-		dashboard:       dash,
-		center:          centerModel,
-		sidebar:         tabbedSidebar,
-		sidebarTerminal: sideTerm,
+		config: cfg,
+		ui: &UICompositor{
+			layout:          layoutMgr,
+			dashboard:       dash,
+			center:          centerModel,
+			sidebar:         tabbedSidebar,
+			sidebarTerminal: sideTerm,
+			toast:           common.NewToastModel(),
+		},
 		styles:          common.DefaultStyles(),
 		width:           opts.Width,
 		height:          opts.Height,
-		toast:           common.NewToastModel(),
 		focusedPane:     messages.PaneCenter,
 		dashboardChrome: &compositor.ChromeCache{},
 		centerChrome:    &compositor.ChromeCache{},
 		sidebarChrome:   &compositor.ChromeCache{},
 	}
 
-	app.layout.Resize(opts.Width, opts.Height)
+	app.ui.layout.Resize(opts.Width, opts.Height)
 	app.updateLayout()
 
 	return &Harness{
@@ -189,23 +191,25 @@ func newSidebarHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 	dash.SetProjects([]data.Project{project})
 
 	app := &App{
-		config:          cfg,
-		layout:          layoutMgr,
-		dashboard:       dash,
-		center:          centerModel,
-		sidebar:         side,
-		sidebarTerminal: sideTerm,
+		config: cfg,
+		ui: &UICompositor{
+			layout:          layoutMgr,
+			dashboard:       dash,
+			center:          centerModel,
+			sidebar:         side,
+			sidebarTerminal: sideTerm,
+			toast:           common.NewToastModel(),
+		},
 		styles:          common.DefaultStyles(),
 		width:           opts.Width,
 		height:          opts.Height,
-		toast:           common.NewToastModel(),
 		focusedPane:     messages.PaneSidebarTerminal,
 		dashboardChrome: &compositor.ChromeCache{},
 		centerChrome:    &compositor.ChromeCache{},
 		sidebarChrome:   &compositor.ChromeCache{},
 	}
 
-	app.layout.Resize(opts.Width, opts.Height)
+	app.ui.layout.Resize(opts.Width, opts.Height)
 	app.updateLayout()
 
 	sideTerm.AddTerminalForHarness(ws)

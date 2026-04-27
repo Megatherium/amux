@@ -254,7 +254,7 @@ func (a *App) handleTmuxTabsDiscoverResult(msg tmuxTabsDiscoverResult) []tea.Cmd
 	}
 	cmds := []tea.Cmd{a.persistWorkspaceTabs(msg.WorkspaceID)}
 	if a.activeWorkspace != nil && string(a.activeWorkspace.ID()) == msg.WorkspaceID {
-		if restoreCmd := a.center.AddTabsFromWorkspace(ws, addedTabs); restoreCmd != nil {
+		if restoreCmd := a.ui.center.AddTabsFromWorkspace(ws, addedTabs); restoreCmd != nil {
 			cmds = append(cmds, restoreCmd)
 		}
 	}
@@ -271,11 +271,11 @@ func (a *App) handleTmuxSidebarDiscoverResult(msg tmuxSidebarDiscoverResult) []t
 	}
 	if len(msg.Sessions) == 0 {
 		if a.activeWorkspace != nil && string(a.activeWorkspace.ID()) == msg.WorkspaceID {
-			if cmd := a.sidebarTerminal.SetWorkspace(ws); cmd != nil {
+			if cmd := a.ui.sidebarTerminal.SetWorkspace(ws); cmd != nil {
 				return []tea.Cmd{cmd}
 			}
 		}
 		return nil
 	}
-	return a.sidebarTerminal.AddTabsFromSessionInfos(ws, msg.Sessions)
+	return a.ui.sidebarTerminal.AddTabsFromSessionInfos(ws, msg.Sessions)
 }

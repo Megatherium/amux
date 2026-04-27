@@ -9,10 +9,10 @@ import (
 )
 
 func TestHandleTmuxSidebarDiscoverResultCreatesTerminalWhenEmpty(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	ws := data.NewWorkspace("ws", "main", "main", "/repo/ws", "/repo/ws")
 	app.projects = []data.Project{{Name: "p", Path: ws.Repo, Workspaces: []data.Workspace{*ws}}}
-	app.sidebarTerminal = sidebar.NewTerminalModel()
+	app.ui.sidebarTerminal = sidebar.NewTerminalModel()
 	app.activeWorkspace = ws
 
 	cmds := app.handleTmuxSidebarDiscoverResult(tmuxSidebarDiscoverResult{

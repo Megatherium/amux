@@ -54,7 +54,7 @@ func TestNew_DiscoveryNotReadyInitially(t *testing.T) {
 }
 
 func TestShutdown_NilDoltStores_NoPanic(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	app.Shutdown()
 }
 
@@ -64,7 +64,7 @@ func TestShutdown_EmptyDoltStoresMap_NoPanic(t *testing.T) {
 }
 
 func TestHandleDiscoveryLoaded_SetsDiscoveryReady(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	cmds := app.handleDiscoveryLoaded(messages.DiscoveryLoadedMsg{})
 	if !app.discoveryReady {
 		t.Fatal("expected discoveryReady to be true after DiscoveryLoadedMsg")
@@ -130,7 +130,7 @@ func TestInitTicketStoresForLoadedProjects_SkipsExistingStore(t *testing.T) {
 }
 
 func TestHandleTicketStoreResult_Error(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	result := ticketStoreResult{projectPath: "/test", err: errTestTicketStoreFailed}
 	cmds := app.handleTicketStoreResult(result)
 	if len(cmds) != 0 {
@@ -146,7 +146,7 @@ func TestHandleTicketStoreResult_Error(t *testing.T) {
 
 func TestHandleTicketStoreResult_Success_SetsPerProjectFields(t *testing.T) {
 	reg, _ := discovery.NewRegistry(t.TempDir())
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	result := ticketStoreResult{
 		projectPath: "/test",
 		service:     tickets.NewTicketService(nil, reg, tickets.NewRenderer()),
@@ -164,7 +164,7 @@ func TestHandleTicketStoreResult_Success_SetsPerProjectFields(t *testing.T) {
 }
 
 func TestHandleTicketStoreResult_Success_NilService(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	result := ticketStoreResult{
 		projectPath: "/test",
 		service:     nil,

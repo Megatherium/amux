@@ -4,7 +4,7 @@ import "github.com/andyrewlee/amux/internal/messages"
 
 func (a *App) prefixActionVisible(action string) bool {
 	// Keep behavior permissive in lightweight tests that don't fully initialize App state.
-	if a == nil || a.layout == nil || a.center == nil || a.sidebarTerminal == nil {
+	if a == nil || a.ui == nil || a.ui.layout == nil || a.ui.center == nil || a.ui.sidebarTerminal == nil {
 		return true
 	}
 
@@ -16,12 +16,12 @@ func (a *App) prefixActionVisible(action string) bool {
 		case messages.PaneSidebar, messages.PaneSidebarTerminal:
 			return false
 		case messages.PaneCenter:
-			return a.layout != nil && a.layout.ShowSidebar()
+			return a.ui.layout != nil && a.ui.layout.ShowSidebar()
 		default:
-			return (a.layout != nil && a.layout.ShowCenter()) || (a.layout != nil && a.layout.ShowSidebar())
+			return (a.ui.layout != nil && a.ui.layout.ShowCenter()) || (a.ui.layout != nil && a.ui.layout.ShowSidebar())
 		}
 	case "toggle_both_sidebars", "toggle_dashboard", "toggle_sidebar":
-		return a.layout != nil && a.layout.ShowCenter()
+		return a.ui.layout != nil && a.ui.layout.ShowCenter()
 	case "new_agent_tab", "new_agent_tab_direct", "new_terminal_tab":
 		if a.activeWorkspace == nil || a.activeProject == nil {
 			return false
@@ -32,26 +32,26 @@ func (a *App) prefixActionVisible(action string) bool {
 	case "next_tab", "prev_tab":
 		switch a.focusedPane {
 		case messages.PaneSidebarTerminal:
-			return a.sidebarTerminal.HasMultipleTabs()
+			return a.ui.sidebarTerminal.HasMultipleTabs()
 		case messages.PaneSidebar:
 			return true
 		default:
-			return a.center.HasTabs()
+			return a.ui.center.HasTabs()
 		}
 	case "close_tab", "detach_tab", "reattach_tab", "restart_tab":
 		if a.focusedPane == messages.PaneSidebarTerminal {
 			return true
 		}
-		return a.center.HasTabs()
+		return a.ui.center.HasTabs()
 	default:
 		return true
 	}
 }
 
 func (a *App) showNumericTabJump() bool {
-	if a == nil || a.center == nil {
+	if a == nil || a.ui == nil || a.ui.center == nil {
 		return true
 	}
-	tabs, _ := a.center.GetTabsInfo()
+	tabs, _ := a.ui.center.GetTabsInfo()
 	return len(tabs) > 1
 }

@@ -66,8 +66,8 @@ func resizeHarness(t *testing.T, h *Harness, width, height int) {
 	}
 	h.app.width = width
 	h.app.height = height
-	if h.app.layout != nil {
-		h.app.layout.Resize(width, height)
+	if h.app.ui.layout != nil {
+		h.app.ui.layout.Resize(width, height)
 	}
 	h.app.updateLayout()
 }

@@ -17,7 +17,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestCollectKnownWorkspaceIDs_Empty(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	ids := app.collectKnownWorkspaceIDs()
 	if len(ids) != 0 {
 		t.Fatalf("expected empty map, got %v", ids)
@@ -114,7 +114,7 @@ func TestGcReturnsCmdWhenReady(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleOrphanGCResult(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 
 	// Should not panic for any of these cases.
 	app.handleOrphanGCResult(orphanGCResult{Killed: 5})

@@ -13,7 +13,9 @@ import (
 
 func TestHandleCreateWorkspaceSkipsPendingTrackingWithoutService(t *testing.T) {
 	app := &App{
-		dashboard:        dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
 		// workspaceService intentionally nil
 	}
@@ -49,7 +51,9 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 	}
 
 	app := &App{
-		dashboard:        dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
 		workspaceService: svc,
 	}
@@ -119,7 +123,9 @@ func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 	svc := newWorkspaceService(nil, store, nil, workspacesRoot)
 
 	app := &App{
-		dashboard:        dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
 		workspaceService: svc,
 	}

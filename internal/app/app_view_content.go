@@ -12,8 +12,8 @@ import (
 )
 
 func (a *App) centerPaneStyle() lipgloss.Style {
-	width := a.layout.CenterWidth()
-	height := a.layout.Height()
+	width := a.ui.layout.CenterWidth()
+	height := a.ui.layout.Height()
 
 	return lipgloss.NewStyle().
 		Width(width-2).
@@ -31,7 +31,7 @@ func (a *App) renderCenterPaneContent() string {
 
 	// Ticket preview takes priority when no workspace is active or when the
 	// active workspace has no tabs (the center is showing the info screen).
-	if a.previewTicket != nil && !a.center.HasTabs() && !a.center.HasDraft() {
+	if a.previewTicket != nil && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
 		return a.renderTicketPreview()
 	}
 
@@ -43,32 +43,32 @@ func (a *App) renderCenterPaneContent() string {
 }
 
 func (a *App) centerPaneContentOrigin() (x, y int) {
-	if a.layout == nil {
+	if a.ui == nil || a.ui.layout == nil {
 		return 0, 0
 	}
 	frameX, frameY := a.centerPaneStyle().GetFrameSize()
 	gapX := 0
-	if a.layout.ShowCenter() {
-		gapX = a.layout.GapX()
+	if a.ui.layout.ShowCenter() {
+		gapX = a.ui.layout.GapX()
 	}
-	return a.layout.LeftGutter() + a.layout.DashboardWidth() + gapX + frameX/2, a.layout.TopGutter() + frameY/2
+	return a.ui.layout.LeftGutter() + a.ui.layout.DashboardWidth() + gapX + frameX/2, a.ui.layout.TopGutter() + frameY/2
 }
 
 func (a *App) goHome() {
 	a.showWelcome = true
 	a.activeWorkspace = nil
-	if a.center != nil {
-		a.center.SetWorkspace(nil)
+	if a.ui.center != nil {
+		a.ui.center.SetWorkspace(nil)
 	}
-	if a.sidebar != nil {
-		a.sidebar.SetWorkspace(nil)
-		a.sidebar.SetGitStatus(nil)
+	if a.ui.sidebar != nil {
+		a.ui.sidebar.SetWorkspace(nil)
+		a.ui.sidebar.SetGitStatus(nil)
 	}
-	if a.sidebarTerminal != nil {
-		_ = a.sidebarTerminal.SetWorkspace(nil)
+	if a.ui.sidebarTerminal != nil {
+		_ = a.ui.sidebarTerminal.SetWorkspace(nil)
 	}
-	if a.dashboard != nil {
-		a.dashboard.ClearActiveRoot()
+	if a.ui.dashboard != nil {
+		a.ui.dashboard.ClearActiveRoot()
 	}
 	a.centerBtnFocused = false
 	a.centerBtnIndex = 0
@@ -137,8 +137,8 @@ func (a *App) renderWelcome() string {
 	content := a.welcomeContent()
 
 	// Center the content in the pane
-	width := a.layout.CenterWidth() - 4 // Account for borders/padding
-	height := a.layout.Height() - 2
+	width := a.ui.layout.CenterWidth() - 4 // Account for borders/padding
+	height := a.ui.layout.Height() - 2
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
 }
@@ -236,7 +236,7 @@ func (a *App) renderTicketPreview() string {
 	if t.Description != "" {
 		b.WriteString("\n")
 		// Word-wrap the description to fit the pane
-		descWidth := a.layout.CenterWidth() - 6
+		descWidth := a.ui.layout.CenterWidth() - 6
 		if descWidth < 20 {
 			descWidth = 20
 		}

@@ -38,24 +38,24 @@ func (a *App) routeMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 	switch targetPane {
 	case messages.PaneDashboard:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.X -= a.layout.LeftGutter()
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.X -= a.ui.layout.LeftGutter()
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newDashboard, cmd := a.dashboard.Update(adjusted)
-		a.dashboard = newDashboard
+		newDashboard, cmd := a.ui.dashboard.Update(adjusted)
+		a.ui.dashboard = newDashboard
 		return common.SafeBatch(focusCmd, cmd)
 	case messages.PaneCenter:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newCenter, cmd := a.center.Update(adjusted)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(adjusted)
+		a.ui.center = newCenter
 		return common.SafeBatch(focusCmd, cmd)
 	case messages.PaneSidebarTerminal:
-		newTerm, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newTerm
+		newTerm, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newTerm
 		// If the click returned a command (e.g., CreateNewTab from "+ New" button),
 		// skip focusCmd to avoid double terminal creation.
 		if cmd != nil {
@@ -64,11 +64,11 @@ func (a *App) routeMouseClick(msg tea.MouseClickMsg) tea.Cmd {
 		return focusCmd
 	case messages.PaneSidebar:
 		adjusted := msg
-		if a.layout != nil {
+		if a.ui.layout != nil {
 			adjusted.X, adjusted.Y = a.adjustSidebarMouseXY(adjusted.X, adjusted.Y)
 		}
-		newSidebar, cmd := a.sidebar.Update(adjusted)
-		a.sidebar = newSidebar
+		newSidebar, cmd := a.ui.sidebar.Update(adjusted)
+		a.ui.sidebar = newSidebar
 		return common.SafeBatch(focusCmd, cmd)
 	}
 	return focusCmd
@@ -124,32 +124,32 @@ func (a *App) routeMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	switch targetPane {
 	case messages.PaneDashboard:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.X -= a.layout.LeftGutter()
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.X -= a.ui.layout.LeftGutter()
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newDashboard, cmd := a.dashboard.Update(adjusted)
-		a.dashboard = newDashboard
+		newDashboard, cmd := a.ui.dashboard.Update(adjusted)
+		a.ui.dashboard = newDashboard
 		return common.SafeBatch(focusCmd, cmd)
 	case messages.PaneCenter:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newCenter, cmd := a.center.Update(adjusted)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(adjusted)
+		a.ui.center = newCenter
 		return common.SafeBatch(focusCmd, cmd)
 	case messages.PaneSidebarTerminal:
-		newTerm, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newTerm
+		newTerm, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newTerm
 		return common.SafeBatch(focusCmd, cmd)
 	case messages.PaneSidebar:
 		adjusted := msg
-		if a.layout != nil {
+		if a.ui.layout != nil {
 			adjusted.X, adjusted.Y = a.adjustSidebarMouseXY(adjusted.X, adjusted.Y)
 		}
-		newSidebar, cmd := a.sidebar.Update(adjusted)
-		a.sidebar = newSidebar
+		newSidebar, cmd := a.ui.sidebar.Update(adjusted)
+		a.ui.sidebar = newSidebar
 		return common.SafeBatch(focusCmd, cmd)
 	}
 	return nil
@@ -158,11 +158,11 @@ func (a *App) routeMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 func (a *App) canRetargetWheelToPane(pane messages.PaneType) bool {
 	switch pane {
 	case messages.PaneCenter:
-		return a.center != nil && a.center.CanConsumeWheel()
+		return a.ui.center != nil && a.ui.center.CanConsumeWheel()
 	case messages.PaneSidebar:
-		return a.sidebar != nil && a.sidebar.CanConsumeWheel()
+		return a.ui.sidebar != nil && a.ui.sidebar.CanConsumeWheel()
 	case messages.PaneSidebarTerminal:
-		return a.sidebarTerminal != nil && a.sidebarTerminal.CanConsumeWheel()
+		return a.ui.sidebarTerminal != nil && a.ui.sidebarTerminal.CanConsumeWheel()
 	default:
 		return false
 	}
@@ -183,32 +183,32 @@ func (a *App) routeMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
 	switch targetPane {
 	case messages.PaneDashboard:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.X -= a.layout.LeftGutter()
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.X -= a.ui.layout.LeftGutter()
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newDashboard, cmd := a.dashboard.Update(adjusted)
-		a.dashboard = newDashboard
+		newDashboard, cmd := a.ui.dashboard.Update(adjusted)
+		a.ui.dashboard = newDashboard
 		return cmd
 	case messages.PaneCenter:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newCenter, cmd := a.center.Update(adjusted)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(adjusted)
+		a.ui.center = newCenter
 		return cmd
 	case messages.PaneSidebarTerminal:
-		newTerm, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newTerm
+		newTerm, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newTerm
 		return cmd
 	case messages.PaneSidebar:
 		adjusted := msg
-		if a.layout != nil {
+		if a.ui.layout != nil {
 			adjusted.X, adjusted.Y = a.adjustSidebarMouseXY(adjusted.X, adjusted.Y)
 		}
-		newSidebar, cmd := a.sidebar.Update(adjusted)
-		a.sidebar = newSidebar
+		newSidebar, cmd := a.ui.sidebar.Update(adjusted)
+		a.ui.sidebar = newSidebar
 		return cmd
 	}
 	return nil
@@ -229,54 +229,54 @@ func (a *App) routeMouseRelease(msg tea.MouseReleaseMsg) tea.Cmd {
 	switch targetPane {
 	case messages.PaneDashboard:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.X -= a.layout.LeftGutter()
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.X -= a.ui.layout.LeftGutter()
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newDashboard, cmd := a.dashboard.Update(adjusted)
-		a.dashboard = newDashboard
+		newDashboard, cmd := a.ui.dashboard.Update(adjusted)
+		a.ui.dashboard = newDashboard
 		return cmd
 	case messages.PaneCenter:
 		adjusted := msg
-		if a.layout != nil {
-			adjusted.Y -= a.layout.TopGutter()
+		if a.ui.layout != nil {
+			adjusted.Y -= a.ui.layout.TopGutter()
 		}
-		newCenter, cmd := a.center.Update(adjusted)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(adjusted)
+		a.ui.center = newCenter
 		return cmd
 	case messages.PaneSidebarTerminal:
-		newTerm, cmd := a.sidebarTerminal.Update(msg)
-		a.sidebarTerminal = newTerm
+		newTerm, cmd := a.ui.sidebarTerminal.Update(msg)
+		a.ui.sidebarTerminal = newTerm
 		return cmd
 	case messages.PaneSidebar:
 		adjusted := msg
-		if a.layout != nil {
+		if a.ui.layout != nil {
 			adjusted.X, adjusted.Y = a.adjustSidebarMouseXY(adjusted.X, adjusted.Y)
 		}
-		newSidebar, cmd := a.sidebar.Update(adjusted)
-		a.sidebar = newSidebar
+		newSidebar, cmd := a.ui.sidebar.Update(adjusted)
+		a.ui.sidebar = newSidebar
 		return cmd
 	}
 	return nil
 }
 
 func (a *App) paneForPoint(x, y int) (messages.PaneType, bool) {
-	if a.layout == nil {
+	if a.ui == nil || a.ui.layout == nil {
 		return paneNone, false
 	}
-	topGutter := a.layout.TopGutter()
-	height := a.layout.Height()
+	topGutter := a.ui.layout.TopGutter()
+	height := a.ui.layout.Height()
 	if y < topGutter || y >= topGutter+height {
 		return paneNone, false
 	}
 
-	leftGutter := a.layout.LeftGutter()
+	leftGutter := a.ui.layout.LeftGutter()
 	if x < leftGutter {
 		// Outer gutter is intentionally non-interactive; do not retarget focus.
 		return paneNone, false
 	}
 
-	dashWidth := a.layout.DashboardWidth()
+	dashWidth := a.ui.layout.DashboardWidth()
 	if x < leftGutter+dashWidth {
 		return messages.PaneDashboard, true
 	}
@@ -284,20 +284,20 @@ func (a *App) paneForPoint(x, y int) (messages.PaneType, bool) {
 	// Keep hit-testing geometry in lockstep with app_view.go layout math:
 	// dashboard, optional center (after gap), optional sidebar (after gap).
 	centerStart := leftGutter + dashWidth
-	if a.layout.ShowCenter() {
-		centerStart += a.layout.GapX()
-		centerEnd := centerStart + a.layout.CenterWidth()
+	if a.ui.layout.ShowCenter() {
+		centerStart += a.ui.layout.GapX()
+		centerEnd := centerStart + a.ui.layout.CenterWidth()
 		if x >= centerStart && x < centerEnd {
 			return messages.PaneCenter, true
 		}
 		centerStart = centerEnd
 	}
 
-	if !a.layout.ShowSidebar() {
+	if !a.ui.layout.ShowSidebar() {
 		return paneNone, false
 	}
-	sidebarStart := centerStart + a.layout.GapX()
-	sidebarEnd := sidebarStart + a.layout.SidebarWidth()
+	sidebarStart := centerStart + a.ui.layout.GapX()
+	sidebarEnd := sidebarStart + a.ui.layout.SidebarWidth()
 	// Inter-pane gaps are intentionally non-interactive.
 	if x < sidebarStart || x >= sidebarEnd {
 		return paneNone, false

@@ -15,10 +15,12 @@ func TestHandleWorkspaceDeletedClearsDirtyWorkspaceMarker(t *testing.T) {
 	wsID := string(ws.ID())
 
 	app := &App{
-		dashboard:       dashboard.New(),
-		center:          center.New(nil),
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			dashboard:       dashboard.New(),
+			center:          center.New(nil),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      map[string]bool{wsID: true},
 			deletingWorkspaceIDs: map[string]bool{wsID: true},

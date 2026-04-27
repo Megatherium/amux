@@ -51,8 +51,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle toast updates
 	if _, ok := msg.(common.ToastDismissed); ok {
-		newToast, cmd := a.toast.Update(msg)
-		a.toast = newToast
+		newToast, cmd := a.ui.toast.Update(msg)
+		a.ui.toast = newToast
 		cmds = append(cmds, cmd)
 	}
 
@@ -108,7 +108,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.ToggleKeymapHints:
 		a.setKeymapHintsEnabled(!a.config.UI.ShowKeymapHints)
 		if err := a.config.SaveUISettings(); err != nil {
-			cmds = append(cmds, a.toast.ShowWarning("Failed to save keymap setting"))
+			cmds = append(cmds, a.ui.toast.ShowWarning("Failed to save keymap setting"))
 		}
 
 	case messages.ShowQuitDialog:
@@ -209,7 +209,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case messages.CloseTab:
-		cmd := a.center.CloseActiveTab()
+		cmd := a.ui.center.CloseActiveTab()
 		cmds = append(cmds, cmd)
 
 	case messages.LaunchAgent:
@@ -257,7 +257,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Sync active agents state to dashboard (show spinner only when actively outputting)
 		a.syncActiveWorkspacesToDashboard()
-		if startCmd := a.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
+		if startCmd := a.ui.dashboard.StartSpinnerIfNeeded(); startCmd != nil {
 			cmds = append(cmds, startCmd)
 		}
 
@@ -267,13 +267,13 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.Toast:
 		switch msg.Level {
 		case messages.ToastSuccess:
-			cmds = append(cmds, a.toast.ShowSuccess(msg.Message))
+			cmds = append(cmds, a.ui.toast.ShowSuccess(msg.Message))
 		case messages.ToastError:
-			cmds = append(cmds, a.toast.ShowError(msg.Message))
+			cmds = append(cmds, a.ui.toast.ShowError(msg.Message))
 		case messages.ToastWarning:
-			cmds = append(cmds, a.toast.ShowWarning(msg.Message))
+			cmds = append(cmds, a.ui.toast.ShowWarning(msg.Message))
 		default:
-			cmds = append(cmds, a.toast.ShowInfo(msg.Message))
+			cmds = append(cmds, a.ui.toast.ShowInfo(msg.Message))
 		}
 
 	case messages.SidebarPTYOutput, messages.SidebarPTYTick, messages.SidebarPTYFlush, messages.SidebarPTYStopped, messages.SidebarPTYRestart, sidebar.SidebarTerminalCreated, sidebar.SidebarTerminalCreateFailed, sidebar.SidebarTerminalReattachResult, sidebar.SidebarTerminalReattachFailed, sidebar.SidebarSelectionScrollTick:
@@ -329,7 +329,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, a.handleWorkspaceDeleted(msg)...)
 
 	case messages.ProjectRemoved:
-		cmds = append(cmds, a.toast.ShowSuccess("Project removed"))
+		cmds = append(cmds, a.ui.toast.ShowSuccess("Project removed"))
 		cmds = append(cmds, a.loadProjects())
 
 	case messages.WorkspaceDeleteFailed:
@@ -349,9 +349,9 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, a.handleTicketStoreResult(msg)...)
 
 	case messages.TicketsLoadedMsg:
-		if a.dashboard != nil {
-			newDashboard, cmd := a.dashboard.Update(msg)
-			a.dashboard = newDashboard
+		if a.ui.dashboard != nil {
+			newDashboard, cmd := a.ui.dashboard.Update(msg)
+			a.ui.dashboard = newDashboard
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
@@ -374,8 +374,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	default:
 		// Forward unknown messages to center pane (e.g., commit viewer internal messages)
-		newCenter, cmd := a.center.Update(msg)
-		a.center = newCenter
+		newCenter, cmd := a.ui.center.Update(msg)
+		a.ui.center = newCenter
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

@@ -29,9 +29,9 @@ func TestViewHidesTerminalCursorWhenSettingsOverlayIsVisible(t *testing.T) {
 		t.Fatal("expected visible terminal cursor before overlay")
 	}
 
-	h.app.settingsDialog = common.NewSettingsDialog(common.ThemeTokyoNight)
-	h.app.settingsDialog.Show()
-	h.app.settingsDialog.SetSize(h.app.width, h.app.height)
+	h.app.ui.settingsDialog = common.NewSettingsDialog(common.ThemeTokyoNight)
+	h.app.ui.settingsDialog.Show()
+	h.app.ui.settingsDialog.SetSize(h.app.width, h.app.height)
 
 	overlay := h.Render()
 	if overlay.Cursor != nil {
@@ -60,7 +60,7 @@ func TestViewKeepsTerminalCursorWhenOnlyToastIsVisible(t *testing.T) {
 		t.Fatal("expected visible terminal cursor before toast")
 	}
 
-	_ = h.app.toast.ShowInfo("copy complete")
+	_ = h.app.ui.toast.ShowInfo("copy complete")
 
 	toastView := h.Render()
 	if toastView.Cursor == nil {
@@ -82,14 +82,14 @@ func TestViewHidesTerminalCursorWhenToastCoversIt(t *testing.T) {
 		t.Fatal("expected center harness terminal")
 	}
 
-	_ = h.app.toast.Show("copy complete", common.ToastInfo, time.Minute)
+	_ = h.app.ui.toast.Show("copy complete", common.ToastInfo, time.Minute)
 
-	termOffsetX, termOffsetY, termW, termH := h.app.center.TerminalViewport()
-	centerX := h.app.layout.LeftGutter() + h.app.layout.DashboardWidth() + h.app.layout.GapX()
+	termOffsetX, termOffsetY, termW, termH := h.app.ui.center.TerminalViewport()
+	centerX := h.app.ui.layout.LeftGutter() + h.app.ui.layout.DashboardWidth() + h.app.ui.layout.GapX()
 	termX := centerX + termOffsetX
-	termY := h.app.layout.TopGutter() + termOffsetY
+	termY := h.app.ui.layout.TopGutter() + termOffsetY
 
-	toastView := h.app.toast.View()
+	toastView := h.app.ui.toast.View()
 	if toastView == "" {
 		t.Fatal("expected visible toast")
 	}
@@ -147,7 +147,7 @@ func TestViewHardwareCursorDelegationDoesNotMutateCachedSnapshot(t *testing.T) {
 		t.Fatal("expected hardware cursor delegation during render")
 	}
 
-	layer := h.app.center.TerminalLayerWithCursorOwner(true)
+	layer := h.app.ui.center.TerminalLayerWithCursorOwner(true)
 	if layer == nil || layer.Snap == nil {
 		t.Fatal("expected cached terminal layer snapshot after render")
 	}
@@ -169,14 +169,14 @@ func TestViewHidesOverlayCursorWhenToastCoversIt(t *testing.T) {
 
 	dialog := common.NewInputDialog("rename", "Rename", "file name")
 	dialog.Show()
-	h.app.dialog = dialog
+	h.app.ui.dialog = dialog
 
-	_ = h.app.toast.ShowInfo(strings.Repeat("toast ", 12))
+	_ = h.app.ui.toast.ShowInfo(strings.Repeat("toast ", 12))
 
 	covered := false
 	for height := 4; height <= 24; height++ {
 		h.app.height = height
-		h.app.layout.Resize(h.app.width, h.app.height)
+		h.app.ui.layout.Resize(h.app.width, h.app.height)
 		h.app.updateLayout()
 		dialog.SetSize(h.app.width, h.app.height)
 

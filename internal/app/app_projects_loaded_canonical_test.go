@@ -57,10 +57,12 @@ func TestHandleProjectsLoadedCanonicalRebindMigratesCenterAndSidebarTerminalTabs
 	sidebarTerminal.AddTerminalForHarness(activeOld)
 
 	app := &App{
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebarTerminal,
+		ui: &UICompositor{
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebarTerminal,
+		},
 		projects:        []data.Project{*oldProject},
 		activeWorkspace: activeOld,
 		activeProject:   oldProject,
@@ -76,10 +78,10 @@ func TestHandleProjectsLoadedCanonicalRebindMigratesCenterAndSidebarTerminalTabs
 	if app.activeWorkspace.ID() != newWS.ID() {
 		t.Fatalf("expected active workspace ID %q, got %q", newWS.ID(), app.activeWorkspace.ID())
 	}
-	if !app.center.HasTabs() {
+	if !app.ui.center.HasTabs() {
 		t.Fatal("expected center tabs to remain visible after workspace ID migration")
 	}
-	if cmd := app.sidebarTerminal.EnsureTerminalTab(); cmd != nil {
+	if cmd := app.ui.sidebarTerminal.EnsureTerminalTab(); cmd != nil {
 		t.Fatal("expected sidebar terminal tab to be migrated; got create command")
 	}
 }
@@ -122,10 +124,12 @@ func TestHandleProjectsLoadedCanonicalRebindMigratesDirtyWorkspaceID(t *testing.
 	}
 
 	app := &App{
-		dashboard:        dashboard.New(),
-		center:           center.New(nil),
-		sidebar:          sidebar.NewTabbedSidebar(),
-		sidebarTerminal:  sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			dashboard:       dashboard.New(),
+			center:          center.New(nil),
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 		workspaceService: newWorkspaceService(nil, nil, nil, ""),
 		projects:         []data.Project{*oldProject},
 		activeWorkspace:  activeOld,
@@ -214,10 +218,12 @@ func TestRebindActiveSelection_DoesNotRehydratePersistedTabsOnCanonicalIDMigrati
 	}
 
 	app := &App{
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 		projects:        []data.Project{*oldProject},
 		activeWorkspace: oldWS,
 		activeProject:   oldProject,
@@ -226,17 +232,17 @@ func TestRebindActiveSelection_DoesNotRehydratePersistedTabsOnCanonicalIDMigrati
 
 	app.handleProjectsLoaded(messages.ProjectsLoaded{Projects: []data.Project{*reloadedProject}})
 
-	if app.center.HasTabs() {
+	if app.ui.center.HasTabs() {
 		t.Fatal("expected stale persisted tabs to remain hidden after canonical workspace ID migration")
 	}
-	if !app.center.HasWorkspaceState(string(reloadedWS.ID())) {
+	if !app.ui.center.HasWorkspaceState(string(reloadedWS.ID())) {
 		t.Fatal("expected new canonical workspace ID to keep explicit empty tab state")
 	}
 
 	// A subsequent reload should still preserve explicit empty state and avoid
 	// stale persisted tab rehydration.
 	app.handleProjectsLoaded(messages.ProjectsLoaded{Projects: []data.Project{*reloadedProject}})
-	if app.center.HasTabs() {
+	if app.ui.center.HasTabs() {
 		t.Fatal("expected stale persisted tabs to remain hidden on subsequent reloads")
 	}
 }
@@ -291,8 +297,10 @@ func TestRebindActiveSelectionRewatchesActiveWorkspaceRootOnCanonicalIDChange(t 
 		activeWorkspace:     &oldProject.Workspaces[0],
 		activeProject:       oldProject,
 		gitStatusController: &GitStatusController{fileWatcher: fileWatcher},
-		dashboard:           dashboard.New(),
-		workspaceManager:    &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
+		workspaceManager: &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
 	}
 
 	app.rebindActiveSelection()

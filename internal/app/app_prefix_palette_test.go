@@ -11,7 +11,7 @@ import (
 )
 
 func TestRenderChoiceColumns_RespectsSeparatorGutterInFitLoop(t *testing.T) {
-	app := &App{}
+	app := &App{ui: &UICompositor{}}
 	choices := []prefixPaletteChoice{
 		{Key: "a", Desc: "first"},
 		{Key: "b", Desc: "second"},

@@ -35,10 +35,10 @@ func maxAttachedAgentTabsFromEnv() int {
 
 func (a *App) enforceAttachedAgentTabLimit() []tea.Cmd {
 	// 0 means disabled (unlimited attached chat tabs).
-	if a == nil || a.center == nil || a.maxAttachedAgentTabs <= 0 {
+	if a == nil || a.ui.center == nil || a.maxAttachedAgentTabs <= 0 {
 		return nil
 	}
-	detached, detachCmds := a.center.EnforceAttachedAgentTabLimit(a.maxAttachedAgentTabs)
+	detached, detachCmds := a.ui.center.EnforceAttachedAgentTabLimit(a.maxAttachedAgentTabs)
 	if len(detached) == 0 && len(detachCmds) == 0 {
 		return nil
 	}

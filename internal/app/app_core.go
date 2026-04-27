@@ -17,12 +17,8 @@ import (
 	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
-	"github.com/andyrewlee/amux/internal/ui/center"
 	"github.com/andyrewlee/amux/internal/ui/common"
 	"github.com/andyrewlee/amux/internal/ui/compositor"
-	"github.com/andyrewlee/amux/internal/ui/dashboard"
-	"github.com/andyrewlee/amux/internal/ui/layout"
-	"github.com/andyrewlee/amux/internal/ui/sidebar"
 	"github.com/andyrewlee/amux/internal/update"
 )
 
@@ -78,22 +74,12 @@ type App struct {
 	centerBtnFocused bool
 	centerBtnIndex   int
 
-	// UI Components
-	layout                *layout.Manager
-	dashboard             *dashboard.Model
-	center                *center.Model
-	sidebar               *sidebar.TabbedSidebar
-	sidebarTerminal       *sidebar.TerminalModel
-	dialog                *common.Dialog
-	filePicker            *common.FilePicker
-	settingsDialog        *common.SettingsDialog
-	settingsDialogSession int
-	// Theme persistence state for settings dialog exits.
+	// UI Components (extracted to UICompositor)
+	ui *UICompositor
+	// Auxiliary settings state (travels with UICompositor.ui.settingsDialog)
+	settingsDialogSession       int
 	settingsThemePersistedTheme common.ThemeID
 	settingsThemeDirty          bool
-
-	// Overlays
-	toast *common.ToastModel
 
 	// Dialog context
 	dialogProject   *data.Project

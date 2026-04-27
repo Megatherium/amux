@@ -31,11 +31,13 @@ func TestHandleWorkspaceActivated_AutoFocusCenterQueuesSingleReattach(t *testing
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:          layoutManager,
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			layout:          layoutManager,
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 	}
 
 	cmds := app.handleWorkspaceActivated(messages.WorkspaceActivated{
@@ -78,12 +80,14 @@ func TestHandleWorkspaceActivated_PreviewSkipsFocusTransfer(t *testing.T) {
 	layoutManager.Resize(140, 40)
 
 	app := &App{
-		layout:          layoutManager,
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
-		focusedPane:     messages.PaneDashboard,
+		ui: &UICompositor{
+			layout:          layoutManager,
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
+		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
 

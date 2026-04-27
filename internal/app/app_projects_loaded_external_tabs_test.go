@@ -56,10 +56,12 @@ func TestRebindActiveSelection_MergesExternalTabsForStatefulWorkspace(t *testing
 	}
 
 	app := &App{
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 		projects:        []data.Project{*oldProject},
 		activeWorkspace: oldWS,
 		activeProject:   oldProject,
@@ -68,7 +70,7 @@ func TestRebindActiveSelection_MergesExternalTabsForStatefulWorkspace(t *testing
 
 	app.handleProjectsLoaded(messages.ProjectsLoaded{Projects: []data.Project{*reloadedProject}})
 
-	tabs, _ := app.center.GetTabsInfoForWorkspace(string(reloadedWS.ID()))
+	tabs, _ := app.ui.center.GetTabsInfoForWorkspace(string(reloadedWS.ID()))
 	if len(tabs) != 2 {
 		t.Fatalf("expected 2 tabs after merge, got %d", len(tabs))
 	}
@@ -125,10 +127,12 @@ func TestRebindActiveSelection_DoesNotRehydratePersistedTabsWhenWorkspaceStateEx
 	}
 
 	app := &App{
-		dashboard:       dashboard.New(),
-		center:          centerModel,
-		sidebar:         sidebar.NewTabbedSidebar(),
-		sidebarTerminal: sidebar.NewTerminalModel(),
+		ui: &UICompositor{
+			dashboard:       dashboard.New(),
+			center:          centerModel,
+			sidebar:         sidebar.NewTabbedSidebar(),
+			sidebarTerminal: sidebar.NewTerminalModel(),
+		},
 		projects:        []data.Project{*oldProject},
 		activeWorkspace: oldWS,
 		activeProject:   oldProject,
@@ -137,7 +141,7 @@ func TestRebindActiveSelection_DoesNotRehydratePersistedTabsWhenWorkspaceStateEx
 
 	app.handleProjectsLoaded(messages.ProjectsLoaded{Projects: []data.Project{*reloadedProject}})
 
-	if app.center.HasTabs() {
+	if app.ui.center.HasTabs() {
 		t.Fatal("expected stale persisted tabs to not be rehydrated when workspace state already exists")
 	}
 }

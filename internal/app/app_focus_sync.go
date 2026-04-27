@@ -6,43 +6,43 @@ import "github.com/andyrewlee/amux/internal/messages"
 // This is a defensive invariant to prevent stale multi-cursor states.
 func (a *App) syncPaneFocusFlags() {
 	focusDashboard := func() {
-		if a.dashboard != nil {
-			a.dashboard.Focus()
+		if a.ui.dashboard != nil {
+			a.ui.dashboard.Focus()
 		}
 	}
 	blurDashboard := func() {
-		if a.dashboard != nil {
-			a.dashboard.Blur()
+		if a.ui.dashboard != nil {
+			a.ui.dashboard.Blur()
 		}
 	}
 	focusCenter := func() {
-		if a.center != nil {
-			a.center.Focus()
+		if a.ui.center != nil {
+			a.ui.center.Focus()
 		}
 	}
 	blurCenter := func() {
-		if a.center != nil {
-			a.center.Blur()
+		if a.ui.center != nil {
+			a.ui.center.Blur()
 		}
 	}
 	focusSidebar := func() {
-		if a.sidebar != nil {
-			a.sidebar.Focus()
+		if a.ui.sidebar != nil {
+			a.ui.sidebar.Focus()
 		}
 	}
 	blurSidebar := func() {
-		if a.sidebar != nil {
-			a.sidebar.Blur()
+		if a.ui.sidebar != nil {
+			a.ui.sidebar.Blur()
 		}
 	}
 	focusSidebarTerminal := func() {
-		if a.sidebarTerminal != nil {
-			a.sidebarTerminal.Focus()
+		if a.ui.sidebarTerminal != nil {
+			a.ui.sidebarTerminal.Focus()
 		}
 	}
 	blurSidebarTerminal := func() {
-		if a.sidebarTerminal != nil {
-			a.sidebarTerminal.Blur()
+		if a.ui.sidebarTerminal != nil {
+			a.ui.sidebarTerminal.Blur()
 		}
 	}
 

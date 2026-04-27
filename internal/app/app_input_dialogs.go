@@ -26,8 +26,8 @@ func (a *App) handleDialogResultMsg(msg tea.Msg) (bool, tea.Cmd) {
 		return true, common.SafeCmd(a.handleDialogResult(result))
 	}
 	// If not an App-level dialog, let it fall through to components.
-	newCenter, cmd := a.center.Update(msg)
-	a.center = newCenter
+	newCenter, cmd := a.ui.center.Update(msg)
+	a.ui.center = newCenter
 	return true, common.SafeCmd(cmd)
 }
 
@@ -80,19 +80,19 @@ func isNilOverlay[T any](overlay T) bool {
 
 func (a *App) handleDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
 	var consumed bool
-	a.dialog, consumed = handleOverlayInput(a.dialog, msg, cmds, true)
+	a.ui.dialog, consumed = handleOverlayInput(a.ui.dialog, msg, cmds, true)
 	return consumed
 }
 
 func (a *App) handleFilePickerInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
 	var consumed bool
-	a.filePicker, consumed = handleOverlayInput(a.filePicker, msg, cmds, true)
+	a.ui.filePicker, consumed = handleOverlayInput(a.ui.filePicker, msg, cmds, true)
 	return consumed
 }
 
 func (a *App) handleSettingsDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
 	var consumed bool
-	a.settingsDialog, consumed = handleOverlayInput(a.settingsDialog, msg, cmds, false)
+	a.ui.settingsDialog, consumed = handleOverlayInput(a.ui.settingsDialog, msg, cmds, false)
 	return consumed
 }
 
@@ -100,7 +100,7 @@ func (a *App) handleSettingsDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
 func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 	project := a.dialogProject
 	workspace := a.dialogWorkspace
-	a.dialog = nil
+	a.ui.dialog = nil
 	a.dialogProject = nil
 	a.dialogWorkspace = nil
 	logging.Debug("Dialog result: id=%s confirmed=%v value=%s", result.ID, result.Confirmed, result.Value)
@@ -242,17 +242,17 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 }
 
 func (a *App) showQuitDialog() {
-	if a.dialog != nil && a.dialog.Visible() {
+	if a.ui.dialog != nil && a.ui.dialog.Visible() {
 		return
 	}
-	a.dialog = common.NewConfirmDialog(
+	a.ui.dialog = common.NewConfirmDialog(
 		DialogQuit,
 		"Quit AMUX",
 		"Are you sure you want to quit?",
 	)
-	a.dialog.SetSize(a.width, a.height)
-	a.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
-	a.dialog.Show()
+	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
+	a.ui.dialog.Show()
 }
 
 // handleUpdateCheckComplete handles the UpdateCheckComplete message.
@@ -274,17 +274,17 @@ func (a *App) handleUpdateCheckComplete(msg messages.UpdateCheckComplete) tea.Cm
 	}
 	logging.Info("Update available: %s -> %s", msg.CurrentVersion, msg.LatestVersion)
 	// Update settings dialog if visible
-	if a.settingsDialog != nil && a.settingsDialog.Visible() {
-		a.settingsDialog.SetUpdateInfo(msg.CurrentVersion, msg.LatestVersion, true)
+	if a.ui.settingsDialog != nil && a.ui.settingsDialog.Visible() {
+		a.ui.settingsDialog.SetUpdateInfo(msg.CurrentVersion, msg.LatestVersion, true)
 	}
 	return nil
 }
 
 // handleTriggerUpgrade handles the TriggerUpgrade message.
 func (a *App) handleTriggerUpgrade() tea.Cmd {
-	if a.settingsDialog != nil {
-		a.applyTheme(a.settingsDialog.SelectedTheme())
-		a.settingsDialog = nil
+	if a.ui.settingsDialog != nil {
+		a.applyTheme(a.ui.settingsDialog.SelectedTheme())
+		a.ui.settingsDialog = nil
 		a.settingsDialogSession++
 	}
 	persistCmd := a.persistSettingsThemeIfDirty()
@@ -319,15 +319,15 @@ func (a *App) handleUpgradeComplete(msg messages.UpgradeComplete) tea.Cmd {
 	a.upgradeRunning = false
 	if msg.Err != nil {
 		logging.Error("Upgrade failed: %v", msg.Err)
-		return a.toast.ShowError("Upgrade failed: " + msg.Err.Error())
+		return a.ui.toast.ShowError("Upgrade failed: " + msg.Err.Error())
 	}
 	a.updateAvailable = nil
 	// Update settings dialog if visible
-	if a.settingsDialog != nil && a.settingsDialog.Visible() {
-		a.settingsDialog.SetUpdateInfo(msg.NewVersion, "", false)
+	if a.ui.settingsDialog != nil && a.ui.settingsDialog.Visible() {
+		a.ui.settingsDialog.SetUpdateInfo(msg.NewVersion, "", false)
 	}
 	logging.Info("Upgrade complete: %s", msg.NewVersion)
-	return a.toast.ShowSuccess("Upgraded to " + msg.NewVersion + " - restart amux to use new version")
+	return a.ui.toast.ShowSuccess("Upgraded to " + msg.NewVersion + " - restart amux to use new version")
 }
 
 // handleOpenFileInEditor handles the OpenFileInEditor message from the project tree.
@@ -337,10 +337,10 @@ func (a *App) handleOpenFileInEditor(msg sidebar.OpenFileInEditor) tea.Cmd {
 		return nil
 	}
 	logging.Info("Opening file in editor: %s", msg.Path)
-	newCenter, cmd := a.center.Update(messages.OpenFileInVim{
+	newCenter, cmd := a.ui.center.Update(messages.OpenFileInVim{
 		Path:      msg.Path,
 		Workspace: msg.Workspace,
 	})
-	a.center = newCenter
+	a.ui.center = newCenter
 	return cmd
 }

@@ -11,11 +11,11 @@ func (a *App) Shutdown() {
 		if a.gitStatusController != nil {
 			a.gitStatusController.Shutdown()
 		}
-		if a.center != nil {
-			a.center.Close()
+		if a.ui != nil && a.ui.center != nil {
+			a.ui.center.Close()
 		}
-		if a.sidebarTerminal != nil {
-			a.sidebarTerminal.CloseAll()
+		if a.ui != nil && a.ui.sidebarTerminal != nil {
+			a.ui.sidebarTerminal.CloseAll()
 		}
 		if a.workspaceService != nil {
 			a.workspaceService.StopAll()

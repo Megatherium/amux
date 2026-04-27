@@ -116,13 +116,13 @@ func (a *App) viewLayerBased() tea.View {
 	canvas := a.canvasFor(a.width, a.height)
 
 	// Shared layout metrics (used by center and sidebar rendering below).
-	leftGutter := a.layout.LeftGutter()
-	topGutter := a.layout.TopGutter()
-	dashWidth := a.layout.DashboardWidth()
+	leftGutter := a.ui.layout.LeftGutter()
+	topGutter := a.ui.layout.TopGutter()
+	dashWidth := a.ui.layout.DashboardWidth()
 
 	// Dashboard pane (leftmost)
-	if a.layout.ShowDashboard() {
-		dashHeight := a.layout.Height()
+	if a.ui.layout.ShowDashboard() {
+		dashHeight := a.ui.layout.Height()
 		dashContentWidth := dashWidth - 3
 		dashContentHeight := dashHeight - 2
 		if dashContentWidth < 1 {
@@ -131,7 +131,7 @@ func (a *App) viewLayerBased() tea.View {
 		if dashContentHeight < 1 {
 			dashContentHeight = 1
 		}
-		dashContent := clampLines(a.dashboard.View(), dashContentWidth, dashContentHeight)
+		dashContent := clampLines(a.ui.dashboard.View(), dashContentWidth, dashContentHeight)
 		if dashDrawable := a.dashboardContent.get(dashContent, leftGutter+1, topGutter+1); dashDrawable != nil {
 			canvas.Compose(dashDrawable)
 		}
@@ -141,20 +141,20 @@ func (a *App) viewLayerBased() tea.View {
 	}
 
 	// Center pane
-	if a.layout.ShowCenter() {
+	if a.ui.layout.ShowCenter() {
 		centerGap := 0
-		if a.layout.ShowDashboard() {
-			centerGap = a.layout.GapX()
+		if a.ui.layout.ShowDashboard() {
+			centerGap = a.ui.layout.GapX()
 		}
 		centerX := leftGutter + dashWidth + centerGap
-		centerWidth := a.layout.CenterWidth()
-		centerHeight := a.layout.Height()
+		centerWidth := a.ui.layout.CenterWidth()
+		centerHeight := a.ui.layout.Height()
 
 		// Check if we can use VTermLayer for direct cell rendering
 		centerOwnsCursor := a.focusedPane == messages.PaneCenter && !blockingOverlayVisible
-		if termLayer := a.center.TerminalLayerWithCursorOwner(centerOwnsCursor); termLayer != nil && a.center.HasTabs() && !a.center.HasDiffViewer() {
+		if termLayer := a.ui.center.TerminalLayerWithCursorOwner(centerOwnsCursor); termLayer != nil && a.ui.center.HasTabs() && !a.ui.center.HasDiffViewer() {
 			// Get terminal viewport from center model (accounts for borders, tab bar, help lines)
-			termOffsetX, termOffsetY, termW, termH := a.center.TerminalViewport()
+			termOffsetX, termOffsetY, termW, termH := a.ui.center.TerminalViewport()
 			termX := centerX + termOffsetX
 			termY := topGutter + termOffsetY
 			if centerOwnsCursor && termLayer.Snap != nil {
@@ -187,26 +187,26 @@ func (a *App) viewLayerBased() tea.View {
 				canvas.Compose(border)
 			}
 
-			contentWidth := a.center.ContentWidth()
+			contentWidth := a.ui.center.ContentWidth()
 			if contentWidth < 1 {
 				contentWidth = 1
 			}
 
 			// Tab bar (top of content area).
-			tabBar := clampLines(a.center.TabBarView(), contentWidth, termOffsetY-1)
+			tabBar := clampLines(a.ui.center.TabBarView(), contentWidth, termOffsetY-1)
 			if tabBarDrawable := a.centerTabBar.get(tabBar, termX, topGutter+1); tabBarDrawable != nil {
 				canvas.Compose(tabBarDrawable)
 			}
 
 			// Status line (directly below terminal content).
-			if status := clampLines(a.center.ActiveTerminalStatusLine(), contentWidth, 1); status != "" {
+			if status := clampLines(a.ui.center.ActiveTerminalStatusLine(), contentWidth, 1); status != "" {
 				if statusDrawable := a.centerStatus.get(status, termX, termY+termH); statusDrawable != nil {
 					canvas.Compose(statusDrawable)
 				}
 			}
 
 			// Help lines at bottom of pane.
-			if helpLines := a.center.HelpLines(contentWidth); len(helpLines) > 0 {
+			if helpLines := a.ui.center.HelpLines(contentWidth); len(helpLines) > 0 {
 				helpContent := clampLines(strings.Join(helpLines, "\n"), contentWidth, len(helpLines))
 				helpY := topGutter + centerHeight - 1 - len(helpLines)
 				if helpY > termY {
@@ -219,8 +219,8 @@ func (a *App) viewLayerBased() tea.View {
 			// Fallback to string-based rendering with borders (no caching - content changes)
 			a.centerChrome.Invalidate()
 			var centerContent string
-			if a.center.HasTabs() || a.center.HasDraft() {
-				centerContent = a.center.View()
+			if a.ui.center.HasTabs() || a.ui.center.HasDraft() {
+				centerContent = a.ui.center.View()
 			} else {
 				centerContent = a.renderCenterPaneContent()
 			}
@@ -231,17 +231,17 @@ func (a *App) viewLayerBased() tea.View {
 	}
 
 	// Sidebar pane (rightmost)
-	if a.layout.ShowSidebar() {
-		sidebarX := leftGutter + a.layout.DashboardWidth()
-		if a.layout.ShowDashboard() && a.layout.ShowCenter() {
-			sidebarX += a.layout.GapX()
+	if a.ui.layout.ShowSidebar() {
+		sidebarX := leftGutter + a.ui.layout.DashboardWidth()
+		if a.ui.layout.ShowDashboard() && a.ui.layout.ShowCenter() {
+			sidebarX += a.ui.layout.GapX()
 		}
-		if a.layout.ShowCenter() {
-			sidebarX += a.layout.CenterWidth()
+		if a.ui.layout.ShowCenter() {
+			sidebarX += a.ui.layout.CenterWidth()
 		}
-		sidebarX += a.layout.GapX()
-		sidebarWidth := a.layout.SidebarWidth()
-		sidebarHeight := a.layout.Height()
+		sidebarX += a.ui.layout.GapX()
+		sidebarWidth := a.ui.layout.SidebarWidth()
+		sidebarHeight := a.ui.layout.Height()
 		topPaneHeight, bottomPaneHeight := sidebarPaneHeights(sidebarHeight)
 		if bottomPaneHeight > 0 {
 			contentWidth := sidebarWidth - 4
@@ -256,7 +256,7 @@ func (a *App) viewLayerBased() tea.View {
 				}
 
 				// Sidebar tab bar (Changes/Project tabs)
-				tabBar := a.sidebar.TabBarView()
+				tabBar := a.ui.sidebar.TabBarView()
 				tabBarHeight := 0
 				if tabBar != "" {
 					tabBarHeight = 1
@@ -272,7 +272,7 @@ func (a *App) viewLayerBased() tea.View {
 				if sidebarContentHeight < 1 {
 					sidebarContentHeight = 1
 				}
-				topContent := clampLines(a.sidebar.ContentView(), contentWidth, sidebarContentHeight)
+				topContent := clampLines(a.ui.sidebar.ContentView(), contentWidth, sidebarContentHeight)
 				if topDrawable := a.sidebarTopContent.get(topContent, sidebarX+2, topGutter+1+tabBarHeight); topDrawable != nil {
 					canvas.Compose(topDrawable)
 				}
@@ -288,9 +288,9 @@ func (a *App) viewLayerBased() tea.View {
 			}
 
 			sidebarOwnsCursor := a.focusedPane == messages.PaneSidebarTerminal && !blockingOverlayVisible
-			if termLayer := a.sidebarTerminal.TerminalLayerWithCursorOwner(sidebarOwnsCursor); termLayer != nil {
-				originX, originY := a.sidebarTerminal.TerminalOrigin()
-				termW, termH := a.sidebarTerminal.TerminalSize()
+			if termLayer := a.ui.sidebarTerminal.TerminalLayerWithCursorOwner(sidebarOwnsCursor); termLayer != nil {
+				originX, originY := a.ui.sidebarTerminal.TerminalOrigin()
+				termW, termH := a.ui.sidebarTerminal.TerminalSize()
 				if termW > contentWidth {
 					termW = contentWidth
 				}
@@ -299,7 +299,7 @@ func (a *App) viewLayerBased() tea.View {
 				}
 
 				// Tab bar (above terminal content) - compact single line
-				tabBar := a.sidebarTerminal.TabBarView()
+				tabBar := a.ui.sidebarTerminal.TabBarView()
 				tabBarHeight := 0
 				if tabBar != "" {
 					tabBarHeight = 1
@@ -310,8 +310,8 @@ func (a *App) viewLayerBased() tea.View {
 					}
 				}
 
-				status := clampLines(a.sidebarTerminal.StatusLine(), contentWidth, 1)
-				helpLines := a.sidebarTerminal.HelpLines(contentWidth)
+				status := clampLines(a.ui.sidebarTerminal.StatusLine(), contentWidth, 1)
+				helpLines := a.ui.sidebarTerminal.HelpLines(contentWidth)
 				statusLines := 0
 				if status != "" {
 					statusLines = 1
@@ -373,7 +373,7 @@ func (a *App) viewLayerBased() tea.View {
 					}
 				}
 			} else {
-				bottomContent := clampLines(a.sidebarTerminal.View(), contentWidth, bottomContentHeight)
+				bottomContent := clampLines(a.ui.sidebarTerminal.View(), contentWidth, bottomContentHeight)
 				if bottomDrawable := a.sidebarBottomContent.get(bottomContent, sidebarX+2, bottomY+1); bottomDrawable != nil {
 					canvas.Compose(bottomDrawable)
 				}

@@ -124,5 +124,5 @@ func (a *App) applyTmuxActivityPayload(msg tmuxActivityResult) tea.Cmd {
 		a.tmuxActivitySettled = true
 	}
 	a.syncActiveWorkspacesToDashboard()
-	return a.dashboard.StartSpinnerIfNeeded()
+	return a.ui.dashboard.StartSpinnerIfNeeded()
 }

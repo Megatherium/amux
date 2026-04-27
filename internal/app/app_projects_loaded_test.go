@@ -20,7 +20,9 @@ func TestHandleProjectsLoadedRebindsActiveWorkspace(t *testing.T) {
 	project.AddWorkspace(*oldWS)
 
 	app := &App{
-		dashboard:       dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		projects:        []data.Project{*project},
 		activeWorkspace: &project.Workspaces[0],
 		activeProject:   project,
@@ -59,7 +61,9 @@ func TestHandleProjectsLoadedClearsMissingActiveWorkspace(t *testing.T) {
 	project.AddWorkspace(*oldWS)
 
 	app := &App{
-		dashboard:       dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		projects:        []data.Project{*project},
 		activeWorkspace: &project.Workspaces[0],
 		activeProject:   project,
@@ -92,7 +96,9 @@ func TestHandleProjectsLoadedRebindsActiveProjectByCanonicalPath(t *testing.T) {
 	oldProject := &data.Project{Name: "repo", Path: relPath}
 
 	app := &App{
-		dashboard:     dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		projects:      []data.Project{*oldProject},
 		activeProject: oldProject,
 		showWelcome:   true,
@@ -138,7 +144,9 @@ func TestHandleProjectsLoadedRebindsActiveWorkspaceByCanonicalPathsOnIDMiss(t *t
 	oldProject.AddWorkspace(*oldWS)
 
 	app := &App{
-		dashboard:       dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 		projects:        []data.Project{*oldProject},
 		activeWorkspace: &oldProject.Workspaces[0],
 		activeProject:   oldProject,

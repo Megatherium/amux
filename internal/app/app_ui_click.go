@@ -15,16 +15,16 @@ func (a *App) handleCenterPaneClick(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
-	if a.layout == nil || !a.layout.ShowCenter() || a.center.HasTabs() || a.center.HasDraft() {
+	if a.ui == nil || a.ui.layout == nil || !a.ui.layout.ShowCenter() || a.ui.center.HasTabs() || a.ui.center.HasDraft() {
 		return nil
 	}
-	dashWidth := a.layout.DashboardWidth()
-	centerWidth := a.layout.CenterWidth()
-	gapX := a.layout.GapX()
+	dashWidth := a.ui.layout.DashboardWidth()
+	centerWidth := a.ui.layout.CenterWidth()
+	gapX := a.ui.layout.GapX()
 	if centerWidth <= 0 {
 		return nil
 	}
-	centerStart := a.layout.LeftGutter() + dashWidth + gapX
+	centerStart := a.ui.layout.LeftGutter() + dashWidth + gapX
 	centerEnd := centerStart + centerWidth
 	if msg.X < centerStart || msg.X >= centerEnd {
 		return nil
@@ -50,8 +50,8 @@ func (a *App) handleWelcomeClick(localX, localY int) tea.Cmd {
 	lines := strings.Split(content, "\n")
 	_, contentHeight := viewDimensions(content)
 
-	placeWidth := a.layout.CenterWidth() - 4
-	placeHeight := a.layout.Height() - 2
+	placeWidth := a.ui.layout.CenterWidth() - 4
+	placeHeight := a.ui.layout.Height() - 2
 	if placeWidth <= 0 || placeHeight <= 0 {
 		return nil
 	}

@@ -41,7 +41,7 @@ func TestHandleThemePreview_PersistsOnCloseOnly(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected no warning cmd when save on close succeeds")
 	}
-	if view := h.app.toast.View(); view != "" {
+	if view := h.app.ui.toast.View(); view != "" {
 		t.Fatalf("expected no toast on successful close save, got %q", view)
 	}
 
@@ -78,7 +78,7 @@ func TestHandleSettingsResult_SaveFailureShowsWarningToast(t *testing.T) {
 		t.Fatal("expected warning toast cmd when close save fails")
 	}
 
-	if view := h.app.toast.View(); !strings.Contains(view, "Failed to save theme setting") {
+	if view := h.app.ui.toast.View(); !strings.Contains(view, "Failed to save theme setting") {
 		t.Fatalf("expected warning toast for save failure, got %q", view)
 	}
 }
@@ -184,7 +184,7 @@ func TestHandleTriggerUpgrade_SaveFailureShowsWarningToast(t *testing.T) {
 	if !h.app.settingsThemeDirty {
 		t.Fatal("expected dirty flag to remain set after failed save")
 	}
-	if view := h.app.toast.View(); !strings.Contains(view, "Failed to save theme setting") {
+	if view := h.app.ui.toast.View(); !strings.Contains(view, "Failed to save theme setting") {
 		t.Fatalf("expected warning toast for save failure, got %q", view)
 	}
 }

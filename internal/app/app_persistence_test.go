@@ -50,7 +50,9 @@ func TestPersistAllWorkspacesNowSavesExplicitlyEmptyTabs(t *testing.T) {
 	// Clear old tabs from in-memory workspace before persist
 	ws.OpenTabs = nil
 	app := &App{
-		center:           c,
+		ui: &UICompositor{
+			center: c,
+		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "p", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
 		workspaceManager: &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
@@ -86,7 +88,9 @@ func TestPersistAllWorkspacesNowSavesDeleteInFlightWorkspace(t *testing.T) {
 
 	svc := newWorkspaceService(nil, store, nil, "")
 	app := &App{
-		center:           c,
+		ui: &UICompositor{
+			center: c,
+		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "p", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
 		workspaceManager: &WorkspaceManager{
@@ -143,7 +147,9 @@ func TestPersistWorkspaceTabsSkipsDeleteInFlightWorkspace(t *testing.T) {
 func TestHandlePersistDebounceSkipsWhenPersistenceDependenciesMissing(t *testing.T) {
 	// nil center
 	app := &App{
-		center:           nil,
+		ui: &UICompositor{
+			center: nil,
+		},
 		workspaceService: newWorkspaceService(nil, nil, nil, ""),
 		workspaceManager: &WorkspaceManager{
 			persistToken:    1,
@@ -157,7 +163,9 @@ func TestHandlePersistDebounceSkipsWhenPersistenceDependenciesMissing(t *testing
 
 	// nil workspaceService
 	app2 := &App{
-		center:           center.New(nil),
+		ui: &UICompositor{
+			center: center.New(nil),
+		},
 		workspaceService: nil,
 		workspaceManager: &WorkspaceManager{
 			persistToken:    1,
@@ -179,7 +187,9 @@ func TestHandlePersistDebounceSkipsDeleteInFlightWorkspace(t *testing.T) {
 	svc := newWorkspaceService(nil, store, nil, "")
 
 	app := &App{
-		center:           center.New(nil),
+		ui: &UICompositor{
+			center: center.New(nil),
+		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
 		workspaceManager: &WorkspaceManager{
@@ -219,8 +229,10 @@ func TestDeleteFailureRequeuesAndDebouncedPersistSavesWorkspace(t *testing.T) {
 	})
 
 	app := &App{
-		center:           c,
-		dashboard:        dashboard.New(),
+		ui: &UICompositor{
+			center:    c,
+			dashboard: dashboard.New(),
+		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
 		workspaceManager: &WorkspaceManager{

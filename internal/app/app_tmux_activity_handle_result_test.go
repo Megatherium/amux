@@ -21,7 +21,9 @@ func TestHandleTmuxActivityResult_OwnerTransitionErrorResetsHysteresis(t *testin
 		tmuxActivitySettled:      true,
 		tmuxActivitySettledScans: 2,
 		tmuxActiveWorkspaceIDs:   map[string]bool{"ws-stale": true},
-		dashboard:                dashboard.New(),
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
 	}
 	app.syncActiveWorkspacesToDashboard()
 
@@ -38,7 +40,7 @@ func TestHandleTmuxActivityResult_OwnerTransitionErrorResetsHysteresis(t *testin
 	if len(app.tmuxActiveWorkspaceIDs) != 0 {
 		t.Fatalf("expected stale active-workspace map cleared on owner transition, got %v", app.tmuxActiveWorkspaceIDs)
 	}
-	if got := dashboardActiveWorkspaceCount(app.dashboard); got != 0 {
+	if got := dashboardActiveWorkspaceCount(app.ui.dashboard); got != 0 {
 		t.Fatalf("expected dashboard activity cleared on owner transition, got %d", got)
 	}
 

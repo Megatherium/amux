@@ -56,8 +56,10 @@ func TestHandleFileWatcherEvent_ActiveWorkspaceRequestsFullStatus(t *testing.T) 
 	app := &App{
 		gitStatus:           stub,
 		gitStatusController: &GitStatusController{},
-		dashboard:           dashboard.New(),
-		activeWorkspace:     active,
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
+		activeWorkspace: active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
@@ -100,8 +102,10 @@ func TestHandleFileWatcherEvent_InactiveWorkspaceRequestsFastStatus(t *testing.T
 	app := &App{
 		gitStatus:           stub,
 		gitStatusController: &GitStatusController{},
-		dashboard:           dashboard.New(),
-		activeWorkspace:     active,
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
+		activeWorkspace: active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
@@ -143,8 +147,10 @@ func TestHandleGitStatusTick_ActiveWorkspaceCacheMissRequestsFullStatus(t *testi
 	app := &App{
 		gitStatus:           stub,
 		gitStatusController: &GitStatusController{},
-		dashboard:           dashboard.New(),
-		activeWorkspace:     active,
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
+		activeWorkspace: active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
@@ -190,8 +196,10 @@ func TestHandleGitStatusTick_ActiveWorkspaceCachedStatusSkipsRefresh(t *testing.
 	app := &App{
 		gitStatus:           stub,
 		gitStatusController: &GitStatusController{},
-		dashboard:           dashboard.New(),
-		activeWorkspace:     active,
+		ui: &UICompositor{
+			dashboard: dashboard.New(),
+		},
+		activeWorkspace: active,
 		workspaceManager: &WorkspaceManager{
 			dirtyWorkspaces:      make(map[string]bool),
 			creatingWorkspaceIDs: make(map[string]bool),
