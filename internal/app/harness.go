@@ -142,14 +142,15 @@ func newCenterHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 			sidebar:         tabbedSidebar,
 			sidebarTerminal: sideTerm,
 			toast:           common.NewToastModel(),
+
+			dashboardChrome: &compositor.ChromeCache{},
+			centerChrome:    &compositor.ChromeCache{},
+			sidebarChrome:   &compositor.ChromeCache{},
 		},
-		styles:          common.DefaultStyles(),
-		width:           opts.Width,
-		height:          opts.Height,
-		focusedPane:     messages.PaneCenter,
-		dashboardChrome: &compositor.ChromeCache{},
-		centerChrome:    &compositor.ChromeCache{},
-		sidebarChrome:   &compositor.ChromeCache{},
+		styles:      common.DefaultStyles(),
+		width:       opts.Width,
+		height:      opts.Height,
+		focusedPane: messages.PaneCenter,
 	}
 
 	app.ui.layout.Resize(opts.Width, opts.Height)
@@ -199,14 +200,15 @@ func newSidebarHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 			sidebar:         side,
 			sidebarTerminal: sideTerm,
 			toast:           common.NewToastModel(),
+
+			dashboardChrome: &compositor.ChromeCache{},
+			centerChrome:    &compositor.ChromeCache{},
+			sidebarChrome:   &compositor.ChromeCache{},
 		},
-		styles:          common.DefaultStyles(),
-		width:           opts.Width,
-		height:          opts.Height,
-		focusedPane:     messages.PaneSidebarTerminal,
-		dashboardChrome: &compositor.ChromeCache{},
-		centerChrome:    &compositor.ChromeCache{},
-		sidebarChrome:   &compositor.ChromeCache{},
+		styles:      common.DefaultStyles(),
+		width:       opts.Width,
+		height:      opts.Height,
+		focusedPane: messages.PaneSidebarTerminal,
 	}
 
 	app.ui.layout.Resize(opts.Width, opts.Height)

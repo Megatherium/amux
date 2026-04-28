@@ -13,7 +13,7 @@ import (
 
 func TestRenderTicketPreview(t *testing.T) {
 	app := testAppForTicketPreview()
-	app.previewTicket = &tickets.Ticket{
+	app.ui.previewTicket = &tickets.Ticket{
 		ID:          "bmx-preview",
 		Title:       "Preview ticket test",
 		Status:      "open",
@@ -54,7 +54,7 @@ func TestRenderTicketPreview(t *testing.T) {
 
 func TestRenderTicketPreviewNil(t *testing.T) {
 	app := testAppForTicketPreview()
-	app.previewTicket = nil
+	app.ui.previewTicket = nil
 	content := app.renderTicketPreview()
 	if content != "" {
 		t.Fatalf("expected empty string for nil ticket, got: %q", content)
@@ -63,7 +63,7 @@ func TestRenderTicketPreviewNil(t *testing.T) {
 
 func TestRenderTicketPreviewClosed(t *testing.T) {
 	app := testAppForTicketPreview()
-	app.previewTicket = &tickets.Ticket{
+	app.ui.previewTicket = &tickets.Ticket{
 		ID:     "bmx-closed",
 		Title:  "Closed ticket",
 		Status: "closed",
@@ -76,7 +76,7 @@ func TestRenderTicketPreviewClosed(t *testing.T) {
 
 func TestRenderTicketPreviewNoDescription(t *testing.T) {
 	app := testAppForTicketPreview()
-	app.previewTicket = &tickets.Ticket{
+	app.ui.previewTicket = &tickets.Ticket{
 		ID:     "bmx-nodesc",
 		Title:  "No description",
 		Status: "open",

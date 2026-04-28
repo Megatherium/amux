@@ -22,7 +22,6 @@ import (
 	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
 	"github.com/andyrewlee/amux/internal/ui/common"
-	"github.com/andyrewlee/amux/internal/ui/compositor"
 )
 
 // New creates a new App instance.
@@ -73,9 +72,6 @@ func New(version, commit, date string) (*App, error) {
 		keymap:                 kmap,
 		prefixLabel:            PrefixKeyLabel(),
 		prefixHelpLabel:        PrefixHelpLabel(),
-		dashboardChrome:        &compositor.ChromeCache{},
-		centerChrome:           &compositor.ChromeCache{},
-		sidebarChrome:          &compositor.ChromeCache{},
 		version:                version,
 		commit:                 commit,
 		buildDate:              date,

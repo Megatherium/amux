@@ -55,10 +55,10 @@ func TestSetWorkspaceActivationState_SetsActiveWorkspace(t *testing.T) {
 	if app.centerBtnIndex != 0 {
 		t.Fatalf("centerBtnIndex should be 0, got %d", app.centerBtnIndex)
 	}
-	if app.previewTicket != nil {
+	if app.ui.previewTicket != nil {
 		t.Fatal("previewTicket should be nil")
 	}
-	if app.previewProject != nil {
+	if app.ui.previewProject != nil {
 		t.Fatal("previewProject should be nil")
 	}
 }

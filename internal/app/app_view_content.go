@@ -31,7 +31,7 @@ func (a *App) renderCenterPaneContent() string {
 
 	// Ticket preview takes priority when no workspace is active or when the
 	// active workspace has no tabs (the center is showing the info screen).
-	if a.previewTicket != nil && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
+	if a.ui.previewTicket != nil && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
 		return a.renderTicketPreview()
 	}
 
@@ -72,8 +72,8 @@ func (a *App) goHome() {
 	}
 	a.centerBtnFocused = false
 	a.centerBtnIndex = 0
-	a.previewTicket = nil
-	a.previewProject = nil
+	a.ui.previewTicket = nil
+	a.ui.previewProject = nil
 }
 
 // hasTicketService reports whether the active project has a ticket service configured.
@@ -175,7 +175,7 @@ func (a *App) welcomeContent() string {
 // renderTicketPreview renders ticket info in the center pane when the cursor
 // hovers over a ticket row in the dashboard and no agent tabs are open.
 func (a *App) renderTicketPreview() string {
-	t := a.previewTicket
+	t := a.ui.previewTicket
 	if t == nil {
 		return ""
 	}

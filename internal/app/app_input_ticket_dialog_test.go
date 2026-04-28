@@ -77,8 +77,8 @@ func TestHandleTicketsForPickerLoaded(t *testing.T) {
 	if !strings.Contains(view, "Select Ticket") {
 		t.Fatalf("expected dialog view to contain 'Select Ticket', got:\n%s", view)
 	}
-	if len(h.app.pendingTickets) != 2 {
-		t.Fatalf("expected 2 pending tickets, got %d", len(h.app.pendingTickets))
+	if len(h.app.ui.pendingTickets) != 2 {
+		t.Fatalf("expected 2 pending tickets, got %d", len(h.app.ui.pendingTickets))
 	}
 }
 
@@ -93,7 +93,7 @@ func TestTicketPickerResult_StartsDraftFlow(t *testing.T) {
 	}
 	h.app.activeWorkspace = &data.Workspace{Name: "ws", Repo: "/r", Root: "/r/ws"}
 	h.app.activeProject = &data.Project{Name: "p", Path: "/r"}
-	h.app.pendingTickets = []tickets.Ticket{
+	h.app.ui.pendingTickets = []tickets.Ticket{
 		{ID: "bmx-1", Title: "Fix bug", Status: "open"},
 	}
 
@@ -117,7 +117,7 @@ func TestTicketPickerResult_StartsDraftFlow(t *testing.T) {
 	if tsMsg.Project == nil || tsMsg.Project.Name != "p" {
 		t.Fatalf("expected project p, got %v", tsMsg.Project)
 	}
-	if h.app.pendingTickets != nil {
+	if h.app.ui.pendingTickets != nil {
 		t.Fatal("expected pendingTickets to be cleared")
 	}
 }
@@ -132,7 +132,7 @@ func TestTicketPickerResult_NoTicketOption(t *testing.T) {
 		t.Fatalf("NewHarness: %v", err)
 	}
 	h.app.activeWorkspace = &data.Workspace{Name: "ws", Repo: "/r", Root: "/r/ws"}
-	h.app.pendingTickets = []tickets.Ticket{
+	h.app.ui.pendingTickets = []tickets.Ticket{
 		{ID: "bmx-1", Title: "Fix bug", Status: "open"},
 	}
 
@@ -160,13 +160,13 @@ func TestTicketPickerResult_Cancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHarness: %v", err)
 	}
-	h.app.pendingTickets = []tickets.Ticket{{ID: "bmx-1"}}
+	h.app.ui.pendingTickets = []tickets.Ticket{{ID: "bmx-1"}}
 
 	_ = h.app.handleDialogResult(common.DialogResult{
 		ID:        "ticket-picker",
 		Confirmed: false,
 	})
-	if h.app.pendingTickets != nil {
+	if h.app.ui.pendingTickets != nil {
 		t.Fatal("expected nil pendingTickets on cancel")
 	}
 }

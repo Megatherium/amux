@@ -98,21 +98,21 @@ func (a *App) handleSettingsDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
 
 // handleDialogResult handles dialog completion
 func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
-	project := a.dialogProject
-	workspace := a.dialogWorkspace
+	project := a.ui.dialogProject
+	workspace := a.ui.dialogWorkspace
 	a.ui.dialog = nil
-	a.dialogProject = nil
-	a.dialogWorkspace = nil
+	a.ui.dialogProject = nil
+	a.ui.dialogWorkspace = nil
 	logging.Debug("Dialog result: id=%s confirmed=%v value=%s", result.ID, result.Confirmed, result.Value)
 
 	if !result.Confirmed {
 		if result.ID == DialogSelectAssistant || result.ID == "agent-picker" {
-			a.pendingWorkspaceProject = nil
-			a.pendingWorkspaceName = ""
-			a.pendingWorkspaceBase = ""
+			a.ui.pendingWorkspaceProject = nil
+			a.ui.pendingWorkspaceName = ""
+			a.ui.pendingWorkspaceBase = ""
 		}
 		if result.ID == DialogSelectTicket || result.ID == "ticket-picker" {
-			a.pendingTickets = nil
+			a.ui.pendingTickets = nil
 		}
 		logging.Debug("Dialog canceled")
 		return nil
@@ -142,9 +142,9 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 					return messages.Error{Err: err, Context: errorContext(errorServiceDialog, "validating workspace name")}
 				}
 			}
-			a.pendingWorkspaceProject = project
-			a.pendingWorkspaceName = name
-			a.pendingWorkspaceBase = ""
+			a.ui.pendingWorkspaceProject = project
+			a.ui.pendingWorkspaceName = name
+			a.ui.pendingWorkspaceBase = ""
 			return func() tea.Msg {
 				return messages.ShowSelectAssistantDialog{}
 			}
@@ -183,13 +183,13 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 				return messages.Error{Err: errors.New("unknown assistant: " + assistant), Context: errorContext(errorServiceDialog, "validating assistant")}
 			}
 		}
-		if a.pendingWorkspaceProject != nil && a.pendingWorkspaceName != "" {
-			pendingProject := a.pendingWorkspaceProject
-			pendingName := a.pendingWorkspaceName
-			pendingBase := a.pendingWorkspaceBase
-			a.pendingWorkspaceProject = nil
-			a.pendingWorkspaceName = ""
-			a.pendingWorkspaceBase = ""
+		if a.ui.pendingWorkspaceProject != nil && a.ui.pendingWorkspaceName != "" {
+			pendingProject := a.ui.pendingWorkspaceProject
+			pendingName := a.ui.pendingWorkspaceName
+			pendingBase := a.ui.pendingWorkspaceBase
+			a.ui.pendingWorkspaceProject = nil
+			a.ui.pendingWorkspaceName = ""
+			a.ui.pendingWorkspaceBase = ""
 			return func() tea.Msg {
 				return messages.CreateWorkspace{
 					Project:   pendingProject,
@@ -211,10 +211,10 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 
 	case DialogSelectTicket, "ticket-picker":
 		var ticket *tickets.Ticket
-		if result.Index < len(a.pendingTickets) {
-			ticket = &a.pendingTickets[result.Index]
+		if result.Index < len(a.ui.pendingTickets) {
+			ticket = &a.ui.pendingTickets[result.Index]
 		}
-		a.pendingTickets = nil
+		a.ui.pendingTickets = nil
 		if ticket == nil {
 			return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
 		}

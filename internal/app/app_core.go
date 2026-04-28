@@ -18,7 +18,6 @@ import (
 	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
 	"github.com/andyrewlee/amux/internal/ui/common"
-	"github.com/andyrewlee/amux/internal/ui/compositor"
 	"github.com/andyrewlee/amux/internal/update"
 )
 
@@ -76,24 +75,11 @@ type App struct {
 
 	// UI Components (extracted to UICompositor)
 	ui *UICompositor
+
 	// Auxiliary settings state (travels with UICompositor.ui.settingsDialog)
 	settingsDialogSession       int
 	settingsThemePersistedTheme common.ThemeID
 	settingsThemeDirty          bool
-
-	// Dialog context
-	dialogProject   *data.Project
-	dialogWorkspace *data.Workspace
-	// Pending workspace creation context while selecting assistant.
-	pendingWorkspaceProject *data.Project
-	pendingWorkspaceName    string
-	pendingWorkspaceBase    string
-	// Ticket picker state
-	pendingTickets []tickets.Ticket
-
-	// Ticket preview state (cursor hover in dashboard)
-	previewTicket  *tickets.Ticket
-	previewProject *data.Project
 
 	// Git status management
 	gitStatusController *GitStatusController
@@ -144,25 +130,6 @@ type App struct {
 	// Perf tracking
 	lastInputAt         time.Time
 	pendingInputLatency bool
-
-	// Chrome caches for layer-based rendering
-	dashboardChrome      *compositor.ChromeCache
-	centerChrome         *compositor.ChromeCache
-	sidebarChrome        *compositor.ChromeCache
-	dashboardContent     drawableCache
-	dashboardBorders     borderCache
-	sidebarTopTabBar     drawableCache
-	sidebarTopContent    drawableCache
-	sidebarBottomContent drawableCache
-	sidebarBottomTabBar  drawableCache
-	sidebarBottomStatus  drawableCache
-	sidebarBottomHelp    drawableCache
-	sidebarTopBorders    borderCache
-	sidebarBottomBorders borderCache
-	centerTabBar         drawableCache
-	centerStatus         drawableCache
-	centerHelp           drawableCache
-	centerBorders        borderCache
 
 	// External message pump (for PTY readers)
 	externalMsgs     chan tea.Msg

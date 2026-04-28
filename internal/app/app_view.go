@@ -132,10 +132,10 @@ func (a *App) viewLayerBased() tea.View {
 			dashContentHeight = 1
 		}
 		dashContent := clampLines(a.ui.dashboard.View(), dashContentWidth, dashContentHeight)
-		if dashDrawable := a.dashboardContent.get(dashContent, leftGutter+1, topGutter+1); dashDrawable != nil {
+		if dashDrawable := a.ui.dashboardContent.get(dashContent, leftGutter+1, topGutter+1); dashDrawable != nil {
 			canvas.Compose(dashDrawable)
 		}
-		for _, border := range a.dashboardBorders.get(leftGutter, topGutter, dashWidth, dashHeight) {
+		for _, border := range a.ui.dashboardBorders.get(leftGutter, topGutter, dashWidth, dashHeight) {
 			canvas.Compose(border)
 		}
 	}
@@ -183,7 +183,7 @@ func (a *App) viewLayerBased() tea.View {
 			canvas.Compose(positionedTermLayer)
 
 			// Draw borders without touching the content area.
-			for _, border := range a.centerBorders.get(centerX, topGutter, centerWidth, centerHeight) {
+			for _, border := range a.ui.centerBorders.get(centerX, topGutter, centerWidth, centerHeight) {
 				canvas.Compose(border)
 			}
 
@@ -194,13 +194,13 @@ func (a *App) viewLayerBased() tea.View {
 
 			// Tab bar (top of content area).
 			tabBar := clampLines(a.ui.center.TabBarView(), contentWidth, termOffsetY-1)
-			if tabBarDrawable := a.centerTabBar.get(tabBar, termX, topGutter+1); tabBarDrawable != nil {
+			if tabBarDrawable := a.ui.centerTabBar.get(tabBar, termX, topGutter+1); tabBarDrawable != nil {
 				canvas.Compose(tabBarDrawable)
 			}
 
 			// Status line (directly below terminal content).
 			if status := clampLines(a.ui.center.ActiveTerminalStatusLine(), contentWidth, 1); status != "" {
-				if statusDrawable := a.centerStatus.get(status, termX, termY+termH); statusDrawable != nil {
+				if statusDrawable := a.ui.centerStatus.get(status, termX, termY+termH); statusDrawable != nil {
 					canvas.Compose(statusDrawable)
 				}
 			}
@@ -210,14 +210,14 @@ func (a *App) viewLayerBased() tea.View {
 				helpContent := clampLines(strings.Join(helpLines, "\n"), contentWidth, len(helpLines))
 				helpY := topGutter + centerHeight - 1 - len(helpLines)
 				if helpY > termY {
-					if helpDrawable := a.centerHelp.get(helpContent, termX, helpY); helpDrawable != nil {
+					if helpDrawable := a.ui.centerHelp.get(helpContent, termX, helpY); helpDrawable != nil {
 						canvas.Compose(helpDrawable)
 					}
 				}
 			}
 		} else {
 			// Fallback to string-based rendering with borders (no caching - content changes)
-			a.centerChrome.Invalidate()
+			a.ui.centerChrome.Invalidate()
 			var centerContent string
 			if a.ui.center.HasTabs() || a.ui.center.HasDraft() {
 				centerContent = a.ui.center.View()
@@ -262,7 +262,7 @@ func (a *App) viewLayerBased() tea.View {
 					tabBarHeight = 1
 					tabBarContent := clampLines(tabBar, contentWidth, 1)
 					tabBarY := topGutter + 1 // Inside the border
-					if tabBarDrawable := a.sidebarTopTabBar.get(tabBarContent, sidebarX+2, tabBarY); tabBarDrawable != nil {
+					if tabBarDrawable := a.ui.sidebarTopTabBar.get(tabBarContent, sidebarX+2, tabBarY); tabBarDrawable != nil {
 						canvas.Compose(tabBarDrawable)
 					}
 				}
@@ -273,10 +273,10 @@ func (a *App) viewLayerBased() tea.View {
 					sidebarContentHeight = 1
 				}
 				topContent := clampLines(a.ui.sidebar.ContentView(), contentWidth, sidebarContentHeight)
-				if topDrawable := a.sidebarTopContent.get(topContent, sidebarX+2, topGutter+1+tabBarHeight); topDrawable != nil {
+				if topDrawable := a.ui.sidebarTopContent.get(topContent, sidebarX+2, topGutter+1+tabBarHeight); topDrawable != nil {
 					canvas.Compose(topDrawable)
 				}
-				for _, border := range a.sidebarTopBorders.get(sidebarX, topGutter, sidebarWidth, topPaneHeight) {
+				for _, border := range a.ui.sidebarTopBorders.get(sidebarX, topGutter, sidebarWidth, topPaneHeight) {
 					canvas.Compose(border)
 				}
 			}
@@ -305,7 +305,7 @@ func (a *App) viewLayerBased() tea.View {
 					tabBarHeight = 1
 					tabBarContent := clampLines(tabBar, contentWidth, 1)
 					tabBarY := bottomY + 1 // Inside the border
-					if tabBarDrawable := a.sidebarBottomTabBar.get(tabBarContent, originX, tabBarY); tabBarDrawable != nil {
+					if tabBarDrawable := a.ui.sidebarBottomTabBar.get(tabBarContent, originX, tabBarY); tabBarDrawable != nil {
 						canvas.Compose(tabBarDrawable)
 					}
 				}
@@ -355,7 +355,7 @@ func (a *App) viewLayerBased() tea.View {
 				canvas.Compose(positioned)
 
 				if status != "" {
-					if statusDrawable := a.sidebarBottomStatus.get(status, originX, originY+termH); statusDrawable != nil {
+					if statusDrawable := a.ui.sidebarBottomStatus.get(status, originX, originY+termH); statusDrawable != nil {
 						canvas.Compose(statusDrawable)
 					}
 				}
@@ -363,22 +363,22 @@ func (a *App) viewLayerBased() tea.View {
 				if len(helpLines) > 0 {
 					helpContent := clampLines(strings.Join(helpLines, "\n"), contentWidth, len(helpLines))
 					helpY := originY + bottomContentHeight - len(helpLines) - tabBarHeight
-					if helpDrawable := a.sidebarBottomHelp.get(helpContent, originX, helpY); helpDrawable != nil {
+					if helpDrawable := a.ui.sidebarBottomHelp.get(helpContent, originX, helpY); helpDrawable != nil {
 						canvas.Compose(helpDrawable)
 					}
 				} else if status == "" && bottomContentHeight > termH+tabBarHeight {
 					blank := strings.Repeat(" ", contentWidth)
-					if blankDrawable := a.sidebarBottomHelp.get(blank, originX, originY+bottomContentHeight-1-tabBarHeight); blankDrawable != nil {
+					if blankDrawable := a.ui.sidebarBottomHelp.get(blank, originX, originY+bottomContentHeight-1-tabBarHeight); blankDrawable != nil {
 						canvas.Compose(blankDrawable)
 					}
 				}
 			} else {
 				bottomContent := clampLines(a.ui.sidebarTerminal.View(), contentWidth, bottomContentHeight)
-				if bottomDrawable := a.sidebarBottomContent.get(bottomContent, sidebarX+2, bottomY+1); bottomDrawable != nil {
+				if bottomDrawable := a.ui.sidebarBottomContent.get(bottomContent, sidebarX+2, bottomY+1); bottomDrawable != nil {
 					canvas.Compose(bottomDrawable)
 				}
 			}
-			for _, border := range a.sidebarBottomBorders.get(sidebarX, bottomY, sidebarWidth, bottomPaneHeight) {
+			for _, border := range a.ui.sidebarBottomBorders.get(sidebarX, bottomY, sidebarWidth, bottomPaneHeight) {
 				canvas.Compose(border)
 			}
 		}

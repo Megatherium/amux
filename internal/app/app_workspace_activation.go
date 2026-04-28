@@ -15,8 +15,8 @@ func (a *App) setWorkspaceActivationState(msg messages.WorkspaceActivated) {
 	a.showWelcome = false
 	a.centerBtnFocused = false
 	a.centerBtnIndex = 0
-	a.previewTicket = nil
-	a.previewProject = nil
+	a.ui.previewTicket = nil
+	a.ui.previewProject = nil
 	a.ui.center.SetWorkspace(msg.Workspace)
 	a.ui.center.SetHasTicketService(a.hasTicketService())
 	a.ui.sidebar.SetWorkspace(msg.Workspace)

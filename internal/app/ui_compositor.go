@@ -2,8 +2,11 @@ package app
 
 import (
 	"github.com/andyrewlee/amux/internal/config"
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/center"
 	"github.com/andyrewlee/amux/internal/ui/common"
+	"github.com/andyrewlee/amux/internal/ui/compositor"
 	"github.com/andyrewlee/amux/internal/ui/dashboard"
 	"github.com/andyrewlee/amux/internal/ui/layout"
 	"github.com/andyrewlee/amux/internal/ui/sidebar"
@@ -23,6 +26,35 @@ type UICompositor struct {
 	filePicker      *common.FilePicker     // lazy-created
 	settingsDialog  *common.SettingsDialog // lazy-created
 	toast           *common.ToastModel
+
+	// Dialog/picker context (moved from App).
+	dialogProject           *data.Project
+	dialogWorkspace         *data.Workspace
+	pendingWorkspaceProject *data.Project
+	pendingWorkspaceName    string
+	pendingWorkspaceBase    string
+	pendingTickets          []tickets.Ticket
+	previewTicket           *tickets.Ticket
+	previewProject          *data.Project
+
+	// Chrome caches for layer-based rendering (moved from App).
+	dashboardChrome      *compositor.ChromeCache
+	centerChrome         *compositor.ChromeCache
+	sidebarChrome        *compositor.ChromeCache
+	dashboardContent     drawableCache
+	dashboardBorders     borderCache
+	sidebarTopTabBar     drawableCache
+	sidebarTopContent    drawableCache
+	sidebarBottomContent drawableCache
+	sidebarBottomTabBar  drawableCache
+	sidebarBottomStatus  drawableCache
+	sidebarBottomHelp    drawableCache
+	sidebarTopBorders    borderCache
+	sidebarBottomBorders borderCache
+	centerTabBar         drawableCache
+	centerStatus         drawableCache
+	centerHelp           drawableCache
+	centerBorders        borderCache
 }
 
 // newUICompositor creates a UICompositor with all non-lazy fields
@@ -36,5 +68,9 @@ func newUICompositor(cfg *config.Config) *UICompositor {
 		sidebar:         sidebar.NewTabbedSidebar(),
 		sidebarTerminal: sidebar.NewTerminalModel(),
 		toast:           common.NewToastModel(),
+
+		dashboardChrome: &compositor.ChromeCache{},
+		centerChrome:    &compositor.ChromeCache{},
+		sidebarChrome:   &compositor.ChromeCache{},
 	}
 }

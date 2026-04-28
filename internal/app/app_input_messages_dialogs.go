@@ -32,7 +32,7 @@ func (a *App) handleShowAddProjectDialog() {
 
 // handleShowCreateWorkspaceDialog shows the create workspace dialog.
 func (a *App) handleShowCreateWorkspaceDialog(msg messages.ShowCreateWorkspaceDialog) {
-	a.dialogProject = msg.Project
+	a.ui.dialogProject = msg.Project
 	a.ui.dialog = common.NewInputDialog(DialogCreateWorkspace, "Create Workspace", "Enter workspace name...")
 	a.ui.dialog.SetInputValidate(func(s string) string {
 		s = validation.SanitizeInput(s)
@@ -51,8 +51,8 @@ func (a *App) handleShowCreateWorkspaceDialog(msg messages.ShowCreateWorkspaceDi
 
 // handleShowDeleteWorkspaceDialog shows the delete workspace dialog.
 func (a *App) handleShowDeleteWorkspaceDialog(msg messages.ShowDeleteWorkspaceDialog) {
-	a.dialogProject = msg.Project
-	a.dialogWorkspace = msg.Workspace
+	a.ui.dialogProject = msg.Project
+	a.ui.dialogWorkspace = msg.Workspace
 	a.ui.dialog = common.NewConfirmDialog(
 		DialogDeleteWorkspace,
 		"Delete Workspace",
@@ -65,7 +65,7 @@ func (a *App) handleShowDeleteWorkspaceDialog(msg messages.ShowDeleteWorkspaceDi
 
 // handleShowRemoveProjectDialog shows the remove project dialog.
 func (a *App) handleShowRemoveProjectDialog(msg messages.ShowRemoveProjectDialog) {
-	a.dialogProject = msg.Project
+	a.ui.dialogProject = msg.Project
 	projectName := ""
 	if msg.Project != nil {
 		projectName = msg.Project.Name
@@ -82,7 +82,7 @@ func (a *App) handleShowRemoveProjectDialog(msg messages.ShowRemoveProjectDialog
 
 // handleShowSelectAssistantDialog shows the select assistant dialog.
 func (a *App) handleShowSelectAssistantDialog() {
-	if a.activeWorkspace == nil && a.pendingWorkspaceProject == nil {
+	if a.activeWorkspace == nil && a.ui.pendingWorkspaceProject == nil {
 		return
 	}
 	a.ui.dialog = common.NewAgentPicker(a.assistantNames())
@@ -128,7 +128,7 @@ func (a *App) handleTicketsForPickerLoaded(msg ticketsForPickerLoaded) {
 			ParentID:  t.ParentID,
 		})
 	}
-	a.pendingTickets = sorted
+	a.ui.pendingTickets = sorted
 	a.ui.dialog = common.NewTicketPicker(items)
 	a.ui.dialog.SetSize(a.width, a.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
@@ -272,8 +272,8 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 // is shown in the center pane. When agent tabs exist, the info is shown in the
 // sidebar's ticket tab (without auto-focusing the sidebar).
 func (a *App) handleTicketPreview(msg messages.TicketPreviewMsg) {
-	a.previewTicket = msg.Ticket
-	a.previewProject = msg.Project
+	a.ui.previewTicket = msg.Ticket
+	a.ui.previewProject = msg.Project
 
 	// Forward the preview to the sidebar for the ticket tab
 	if a.ui.sidebar != nil {
