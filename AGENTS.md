@@ -58,12 +58,6 @@ State B (after SOMEONE ELSE has reviewed it):
 All kinds of modern replacements for standard shell tools are available: rg, fd, sd, choose, hck
 The interface is nicer for humans. You pick whatever feels right for you.
 
-### Vibe MCP
-
-If the `vibe_run` tool is available to you think of it as a not so bright but fast agent. Use it for low effort but content intensive tasks like tracing flow, finding code, etc.
-- Run it with agent=auto-approve so it uses all its tools
-- max_turns = 5 by default, so give it more if the request has length to it
-
 ## File Editing Strategy
 
 - **Use the Right Tool for the Job**: For any non-trivial file modifications, you **must** use the advanced editing tools provided by the MCP server.

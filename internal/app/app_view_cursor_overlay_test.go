@@ -31,7 +31,7 @@ func TestViewHidesTerminalCursorWhenSettingsOverlayIsVisible(t *testing.T) {
 
 	h.app.ui.settingsDialog = common.NewSettingsDialog(common.ThemeTokyoNight)
 	h.app.ui.settingsDialog.Show()
-	h.app.ui.settingsDialog.SetSize(h.app.width, h.app.height)
+	h.app.ui.settingsDialog.SetSize(h.app.ui.width, h.app.ui.height)
 
 	overlay := h.Render()
 	if overlay.Cursor != nil {
@@ -94,8 +94,8 @@ func TestViewHidesTerminalCursorWhenToastCoversIt(t *testing.T) {
 		t.Fatal("expected visible toast")
 	}
 	toastW, toastH := viewDimensions(toastView)
-	toastX := (h.app.width - toastW) / 2
-	toastY := h.app.height - 2
+	toastX := (h.app.ui.width - toastW) / 2
+	toastY := h.app.ui.height - 2
 
 	overlapLeft := termX
 	if toastX > overlapLeft {
@@ -175,10 +175,10 @@ func TestViewHidesOverlayCursorWhenToastCoversIt(t *testing.T) {
 
 	covered := false
 	for height := 4; height <= 24; height++ {
-		h.app.height = height
-		h.app.ui.layout.Resize(h.app.width, h.app.height)
+		h.app.ui.height = height
+		h.app.ui.layout.Resize(h.app.ui.width, h.app.ui.height)
 		h.app.updateLayout()
-		dialog.SetSize(h.app.width, h.app.height)
+		dialog.SetSize(h.app.ui.width, h.app.ui.height)
 
 		cursor := h.app.overlayCursor()
 		if cursor != nil && h.app.toastCoversPoint(cursor.X, cursor.Y) {

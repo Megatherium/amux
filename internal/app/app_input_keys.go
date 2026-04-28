@@ -139,9 +139,9 @@ func (a *App) handleKeyboardEnhancements(msg tea.KeyboardEnhancementsMsg) {
 }
 
 func (a *App) handleWindowSize(msg tea.WindowSizeMsg) {
-	a.width = msg.Width
-	a.height = msg.Height
-	a.ready = true
+	a.ui.width = msg.Width
+	a.ui.height = msg.Height
+	a.ui.ready = true
 	a.ui.layout.Resize(msg.Width, msg.Height)
 	a.updateLayout()
 }

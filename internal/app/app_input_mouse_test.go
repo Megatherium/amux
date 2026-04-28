@@ -95,8 +95,10 @@ func assertPaneAt(t *testing.T, app *App, x, y int, want messages.PaneType, want
 func TestPrefixPaletteContainsPoint(t *testing.T) {
 	app := &App{
 		prefixActive: true,
-		width:        120,
-		height:       40,
+		ui: &UICompositor{
+			width:  120,
+			height: 40,
+		},
 	}
 
 	if !app.prefixPaletteContainsPoint(10, 39) {
@@ -113,14 +115,14 @@ func TestRouteMouseClick_PrefixPaletteConsumesClicks(t *testing.T) {
 
 	app := &App{
 		prefixActive: true,
-		width:        140,
-		height:       40,
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
 			center:          center.New(&config.Config{}),
 			sidebar:         sidebar.NewTabbedSidebar(),
 			sidebarTerminal: sidebar.NewTerminalModel(),
+			width:           140,
+			height:          40,
 		},
 		focusedPane: messages.PaneDashboard,
 	}
@@ -129,7 +131,7 @@ func TestRouteMouseClick_PrefixPaletteConsumesClicks(t *testing.T) {
 	if paletteHeight <= 0 {
 		t.Fatal("expected prefix palette to render a non-zero height")
 	}
-	y := app.height - paletteHeight
+	y := app.ui.height - paletteHeight
 	if y < l.TopGutter() {
 		y = l.TopGutter()
 	}
@@ -150,14 +152,14 @@ func TestRouteMouseWheel_PrefixPaletteConsumesWheel(t *testing.T) {
 
 	app := &App{
 		prefixActive: true,
-		width:        140,
-		height:       40,
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
 			center:          center.New(&config.Config{}),
 			sidebar:         sidebar.NewTabbedSidebar(),
 			sidebarTerminal: sidebar.NewTerminalModel(),
+			width:           140,
+			height:          40,
 		},
 		focusedPane: messages.PaneDashboard,
 	}
@@ -167,7 +169,7 @@ func TestRouteMouseWheel_PrefixPaletteConsumesWheel(t *testing.T) {
 	if paletteHeight <= 0 {
 		t.Fatal("expected prefix palette to render a non-zero height")
 	}
-	y := app.height - paletteHeight
+	y := app.ui.height - paletteHeight
 	if y < l.TopGutter() {
 		y = l.TopGutter()
 	}
@@ -415,8 +417,6 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 	}
 	centerModel := center.New(cfg)
 	app := &App{
-		width:  140,
-		height: 40,
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
@@ -424,6 +424,8 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 			sidebar:         sidebar.NewTabbedSidebar(),
 			sidebarTerminal: sidebar.NewTerminalModel(),
 			toast:           common.NewToastModel(),
+			width:           140,
+			height:          40,
 		},
 	}
 	app.updateLayout()
@@ -447,8 +449,8 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 		t.Fatal("expected visible toast")
 	}
 	toastWidth, toastHeight := viewDimensions(toastView)
-	toastX := (app.width - toastWidth) / 2
-	toastY := app.height - 2
+	toastX := (app.ui.width - toastWidth) / 2
+	toastY := app.ui.height - 2
 
 	centerStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX()
 	centerEndX := centerStartX + l.CenterWidth()

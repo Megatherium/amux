@@ -25,7 +25,7 @@ func (a *App) handleShowAddProjectDialog() {
 	a.ui.filePicker = common.NewFilePicker(DialogAddProject, home, true)
 	a.ui.filePicker.SetTitle("Add Project")
 	a.ui.filePicker.SetPrimaryActionLabel("Add as project")
-	a.ui.filePicker.SetSize(a.width, a.height)
+	a.ui.filePicker.SetSize(a.ui.width, a.ui.height)
 	a.ui.filePicker.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.filePicker.Show()
 }
@@ -44,7 +44,7 @@ func (a *App) handleShowCreateWorkspaceDialog(msg messages.ShowCreateWorkspaceDi
 		}
 		return ""
 	})
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }
@@ -58,7 +58,7 @@ func (a *App) handleShowDeleteWorkspaceDialog(msg messages.ShowDeleteWorkspaceDi
 		"Delete Workspace",
 		fmt.Sprintf("Delete workspace '%s' and its branch?", msg.Workspace.Name),
 	)
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }
@@ -75,7 +75,7 @@ func (a *App) handleShowRemoveProjectDialog(msg messages.ShowRemoveProjectDialog
 		"Remove Project",
 		fmt.Sprintf("Remove project '%s' from AMUX? This won't delete any files.", projectName),
 	)
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }
@@ -86,7 +86,7 @@ func (a *App) handleShowSelectAssistantDialog() {
 		return
 	}
 	a.ui.dialog = common.NewAgentPicker(a.assistantNames())
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }
@@ -130,7 +130,7 @@ func (a *App) handleTicketsForPickerLoaded(msg ticketsForPickerLoaded) {
 	}
 	a.ui.pendingTickets = sorted
 	a.ui.dialog = common.NewTicketPicker(items)
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }
@@ -145,7 +145,7 @@ func (a *App) handleShowCleanupTmuxDialog() {
 		"Cleanup tmux sessions",
 		fmt.Sprintf("Kill all amux-* tmux sessions on server %q?", a.tmuxOptions.ServerName),
 	)
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }
@@ -160,7 +160,7 @@ func (a *App) handleShowSettingsDialog() {
 		common.ThemeID(a.config.UI.Theme),
 	)
 	a.ui.settingsDialog.SetSession(a.settingsDialogSession)
-	a.ui.settingsDialog.SetSize(a.width, a.height)
+	a.ui.settingsDialog.SetSize(a.ui.width, a.ui.height)
 
 	// Set update state
 	if a.updateAvailable != nil {
@@ -183,15 +183,15 @@ func (a *App) applyTheme(theme common.ThemeID) {
 	common.SetCurrentTheme(theme)
 	a.config.UI.Theme = string(theme)
 	a.settingsThemeDirty = theme != a.settingsThemePersistedTheme
-	a.styles = common.DefaultStyles()
+	a.ui.styles = common.DefaultStyles()
 	// Propagate styles to all components
-	a.ui.dashboard.SetStyles(a.styles)
-	a.ui.sidebar.SetStyles(a.styles)
-	a.ui.sidebarTerminal.SetStyles(a.styles)
-	a.ui.center.SetStyles(a.styles)
-	a.ui.toast.SetStyles(a.styles)
+	a.ui.dashboard.SetStyles(a.ui.styles)
+	a.ui.sidebar.SetStyles(a.ui.styles)
+	a.ui.sidebarTerminal.SetStyles(a.ui.styles)
+	a.ui.center.SetStyles(a.ui.styles)
+	a.ui.toast.SetStyles(a.ui.styles)
 	if a.ui.filePicker != nil {
-		a.ui.filePicker.SetStyles(a.styles)
+		a.ui.filePicker.SetStyles(a.ui.styles)
 	}
 }
 

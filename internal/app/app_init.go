@@ -58,6 +58,9 @@ func New(version, commit, date string) (*App, error) {
 
 	ctx := context.Background()
 	kmap := buildKeymapFromEnv()
+	// Apply saved theme before creating styles
+	common.SetCurrentTheme(common.ThemeID(cfg.UI.Theme))
+	styles := common.DefaultStyles()
 	app := &App{
 		config:                 cfg,
 		workspaceService:       workspaceService,
@@ -66,7 +69,7 @@ func New(version, commit, date string) (*App, error) {
 		updateService:          updateSvc,
 		modelRegistry:          modelReg,
 		ticketRenderer:         ticketRenderer,
-		ui:                     newUICompositor(cfg),
+		ui:                     newUICompositor(cfg, styles),
 		focusedPane:            messages.PaneDashboard,
 		showWelcome:            true,
 		keymap:                 kmap,
@@ -95,15 +98,12 @@ func New(version, commit, date string) (*App, error) {
 	app.ui.sidebarTerminal.SetMsgSink(app.enqueueExternalMsg)
 	app.ui.center.SetInstanceID(app.instanceID)
 	app.ui.sidebarTerminal.SetInstanceID(app.instanceID)
-	// Apply saved theme before creating styles
-	common.SetCurrentTheme(common.ThemeID(cfg.UI.Theme))
-	app.styles = common.DefaultStyles()
 	// Propagate styles to all components (they were created with default theme)
-	app.ui.dashboard.SetStyles(app.styles)
-	app.ui.sidebar.SetStyles(app.styles)
-	app.ui.sidebarTerminal.SetStyles(app.styles)
-	app.ui.center.SetStyles(app.styles)
-	app.ui.toast.SetStyles(app.styles)
+	app.ui.dashboard.SetStyles(styles)
+	app.ui.sidebar.SetStyles(styles)
+	app.ui.sidebarTerminal.SetStyles(styles)
+	app.ui.center.SetStyles(styles)
+	app.ui.toast.SetStyles(styles)
 	app.setKeymapHintsEnabled(cfg.UI.ShowKeymapHints)
 	// Propagate prefix key label to components for help bars
 	app.ui.dashboard.SetPrefixHelpLabel(app.prefixHelpLabel)

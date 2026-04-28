@@ -137,7 +137,9 @@ func testAppForTicketPreview() *App {
 		config: &config.Config{
 			UI: config.UISettings{},
 		},
-		ui:     &UICompositor{layout: lm},
-		styles: common.DefaultStyles(),
+		ui: &UICompositor{
+			layout: lm,
+			styles: common.DefaultStyles(),
+		},
 	}
 }

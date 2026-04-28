@@ -341,13 +341,13 @@ func (a *App) updateLayout() {
 	a.ui.sidebarTerminal.SetOffset(sidebarContentOffsetX, termOffsetY)
 
 	if a.ui.dialog != nil {
-		a.ui.dialog.SetSize(a.width, a.height)
+		a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	}
 	if a.ui.filePicker != nil {
-		a.ui.filePicker.SetSize(a.width, a.height)
+		a.ui.filePicker.SetSize(a.ui.width, a.ui.height)
 	}
 	if a.ui.settingsDialog != nil {
-		a.ui.settingsDialog.SetSize(a.width, a.height)
+		a.ui.settingsDialog.SetSize(a.ui.width, a.ui.height)
 	}
 }
 

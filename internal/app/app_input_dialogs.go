@@ -231,7 +231,7 @@ func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 		// capture current state first to avoid saving "stopped" status.
 		a.persistAllWorkspacesNow()
 		a.Shutdown()
-		a.quitting = true
+		a.ui.quitting = true
 		return tea.Quit
 
 	case DialogCleanupTmux:
@@ -250,7 +250,7 @@ func (a *App) showQuitDialog() {
 		"Quit AMUX",
 		"Are you sure you want to quit?",
 	)
-	a.ui.dialog.SetSize(a.width, a.height)
+	a.ui.dialog.SetSize(a.ui.width, a.ui.height)
 	a.ui.dialog.SetShowKeymapHints(a.config.UI.ShowKeymapHints)
 	a.ui.dialog.Show()
 }

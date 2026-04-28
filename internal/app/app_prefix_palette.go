@@ -11,11 +11,11 @@ import (
 )
 
 func (a *App) renderPrefixPalette() string {
-	if !a.prefixActive || a.width <= 0 || a.height <= 0 {
+	if !a.prefixActive || a.ui.width <= 0 || a.ui.height <= 0 {
 		return ""
 	}
 
-	panelWidth := a.width
+	panelWidth := a.ui.width
 	contentWidth := panelWidth - 2
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -63,7 +63,7 @@ func (a *App) renderPrefixPalette() string {
 		Foreground(common.ColorMuted()).
 		Render(fmt.Sprintf("Esc cancel | Backspace undo | %s reset | %s %s sends literal", a.prefixLabel, a.prefixLabel, a.prefixLabel))
 
-	maxLines := a.height - 3
+	maxLines := a.ui.height - 3
 	if maxLines < 2 {
 		maxLines = 2
 	}
@@ -395,7 +395,7 @@ func (a *App) renderChoiceCell(choice prefixPaletteChoice, keyWidth, colWidth in
 	if descWidth < 4 {
 		descWidth = 4
 	}
-	desc := a.styles.HelpDesc.Render(ansi.Truncate(choice.Desc, descWidth, ""))
+	desc := a.ui.styles.HelpDesc.Render(ansi.Truncate(choice.Desc, descWidth, ""))
 	cell := key + sep + desc
 	if w := lipgloss.Width(cell); w < colWidth {
 		cell += strings.Repeat(" ", colWidth-w)
@@ -426,7 +426,7 @@ func (a *App) prefixKeyLabel(actionKey string) string {
 
 func (a *App) renderChoiceKey(actionKey string, keyWidth int) string {
 	if len(a.prefixSequence) == 0 {
-		return a.styles.HelpKey.Width(keyWidth).Render(actionKey)
+		return a.ui.styles.HelpKey.Width(keyWidth).Render(actionKey)
 	}
 	prefix := strings.Join(a.prefixSequence, " ")
 	prefixStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())

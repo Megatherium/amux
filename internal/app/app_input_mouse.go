@@ -312,7 +312,7 @@ func (a *App) paneForPoint(x, y int) (messages.PaneType, bool) {
 }
 
 func (a *App) prefixPaletteContainsPoint(x, y int) bool {
-	if !a.prefixActive || a.width <= 0 || a.height <= 0 {
+	if !a.prefixActive || a.ui.width <= 0 || a.ui.height <= 0 {
 		return false
 	}
 	palette := a.renderPrefixPalette()
@@ -323,6 +323,6 @@ func (a *App) prefixPaletteContainsPoint(x, y int) bool {
 	if paletteHeight <= 0 {
 		return false
 	}
-	paletteY := max(a.height-paletteHeight, 0)
-	return x >= 0 && x < a.width && y >= paletteY && y < a.height
+	paletteY := max(a.ui.height-paletteHeight, 0)
+	return x >= 0 && x < a.ui.width && y >= paletteY && y < a.ui.height
 }

@@ -27,9 +27,11 @@ func TestRenderChoiceColumns_RespectsSeparatorGutterInFitLoop(t *testing.T) {
 func TestRenderPrefixPalette_RootSectionsShareHeaderRow(t *testing.T) {
 	app := &App{
 		prefixActive: true,
-		width:        120,
-		height:       24,
-		styles:       common.DefaultStyles(),
+		ui: &UICompositor{
+			width:  120,
+			height: 24,
+			styles: common.DefaultStyles(),
+		},
 	}
 
 	lines := strings.Split(ansi.Strip(app.renderPrefixPalette()), "\n")
@@ -48,9 +50,11 @@ func TestRenderPrefixPalette_RootSectionsShareHeaderRow(t *testing.T) {
 func TestRenderPrefixPalette_RootSectionsShareFirstCommandRow(t *testing.T) {
 	app := &App{
 		prefixActive: true,
-		width:        120,
-		height:       24,
-		styles:       common.DefaultStyles(),
+		ui: &UICompositor{
+			width:  120,
+			height: 24,
+			styles: common.DefaultStyles(),
+		},
 	}
 
 	lines := strings.Split(ansi.Strip(app.renderPrefixPalette()), "\n")

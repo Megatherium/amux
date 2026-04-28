@@ -85,7 +85,7 @@ func (a *App) hasTicketService() bool {
 func (a *App) renderWorkspaceInfo() string {
 	ws := a.activeWorkspace
 
-	title := a.styles.Title.Render(ws.Name)
+	title := a.ui.styles.Title.Render(ws.Name)
 	content := title + "\n\n"
 	content += fmt.Sprintf("Branch: %s\n", ws.Branch)
 	content += fmt.Sprintf("Path: %s\n", ws.Root)
@@ -126,7 +126,7 @@ func (a *App) renderWorkspaceInfo() string {
 		if hasBeads {
 			helpText = a.prefixHelpLabel + " t b:agent+ticket  " + "t a:agent"
 		}
-		content += "\n" + a.styles.Help.Render(helpText)
+		content += "\n" + a.ui.styles.Help.Render(helpText)
 	}
 
 	return content
@@ -167,7 +167,7 @@ func (a *App) welcomeContent() string {
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, addProject, "  ", settingsBtn))
 	b.WriteString("\n")
 	if a.config.UI.ShowKeymapHints {
-		b.WriteString(a.styles.Help.Render("Dashboard: j/k to move • Enter to select"))
+		b.WriteString(a.ui.styles.Help.Render("Dashboard: j/k to move • Enter to select"))
 	}
 	return b.String()
 }
@@ -184,7 +184,7 @@ func (a *App) renderTicketPreview() string {
 	b.WriteString("\n")
 
 	// Title with ticket ID
-	header := a.styles.Title.Render(t.ID + ": " + t.Title)
+	header := a.ui.styles.Title.Render(t.ID + ": " + t.Title)
 	b.WriteString(header)
 	b.WriteString("\n\n")
 
@@ -200,18 +200,18 @@ func (a *App) renderTicketPreview() string {
 	default:
 		statusStyle = statusStyle.Foreground(common.ColorForeground())
 	}
-	b.WriteString(a.styles.Muted.Render("Status: "))
+	b.WriteString(a.ui.styles.Muted.Render("Status: "))
 	b.WriteString(statusStyle.Render(t.Status))
 
 	// Priority
 	b.WriteString("  ")
-	b.WriteString(a.styles.Muted.Render("Priority: "))
+	b.WriteString(a.ui.styles.Muted.Render("Priority: "))
 	b.WriteString(tickets.PriorityLabel(t.Priority))
 
 	// Type
 	if t.IssueType != "" {
 		b.WriteString("  ")
-		b.WriteString(a.styles.Muted.Render("Type: "))
+		b.WriteString(a.ui.styles.Muted.Render("Type: "))
 		b.WriteString(t.IssueType)
 	}
 
@@ -219,16 +219,16 @@ func (a *App) renderTicketPreview() string {
 
 	// Assignee
 	if t.Assignee != "" {
-		b.WriteString(a.styles.Muted.Render("Assignee: "))
+		b.WriteString(a.ui.styles.Muted.Render("Assignee: "))
 		b.WriteString(t.Assignee)
 		b.WriteString("\n")
 	}
 
 	// Dates
-	b.WriteString(a.styles.Muted.Render("Created: "))
+	b.WriteString(a.ui.styles.Muted.Render("Created: "))
 	b.WriteString(t.CreatedAt.Format("2006-01-02 15:04"))
 	b.WriteString("  ")
-	b.WriteString(a.styles.Muted.Render("Updated: "))
+	b.WriteString(a.ui.styles.Muted.Render("Updated: "))
 	b.WriteString(t.UpdatedAt.Format("2006-01-02 15:04"))
 	b.WriteString("\n")
 
@@ -241,7 +241,7 @@ func (a *App) renderTicketPreview() string {
 			descWidth = 20
 		}
 		desc := wordWrap(t.Description, descWidth)
-		b.WriteString(a.styles.Muted.Render(desc))
+		b.WriteString(a.ui.styles.Muted.Render(desc))
 		b.WriteString("\n")
 	}
 

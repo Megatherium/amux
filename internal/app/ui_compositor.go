@@ -1,6 +1,8 @@
 package app
 
 import (
+	"charm.land/lipgloss/v2"
+
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/tickets"
@@ -37,6 +39,13 @@ type UICompositor struct {
 	previewTicket           *tickets.Ticket
 	previewProject          *data.Project
 
+	// Layout dimensions and visual state (moved from App).
+	width, height int
+	canvas        *lipgloss.Canvas // nil initially, lazy-created
+	styles        common.Styles
+	ready         bool
+	quitting      bool
+
 	// Chrome caches for layer-based rendering (moved from App).
 	dashboardChrome      *compositor.ChromeCache
 	centerChrome         *compositor.ChromeCache
@@ -60,7 +69,7 @@ type UICompositor struct {
 // newUICompositor creates a UICompositor with all non-lazy fields
 // initialized. Lazy fields (dialog, filePicker, settingsDialog) are
 // left nil and will be created on first use.
-func newUICompositor(cfg *config.Config) *UICompositor {
+func newUICompositor(cfg *config.Config, styles common.Styles) *UICompositor {
 	return &UICompositor{
 		layout:          layout.NewManager(),
 		dashboard:       dashboard.New(),
@@ -68,9 +77,26 @@ func newUICompositor(cfg *config.Config) *UICompositor {
 		sidebar:         sidebar.NewTabbedSidebar(),
 		sidebarTerminal: sidebar.NewTerminalModel(),
 		toast:           common.NewToastModel(),
+		styles:          styles,
 
 		dashboardChrome: &compositor.ChromeCache{},
 		centerChrome:    &compositor.ChromeCache{},
 		sidebarChrome:   &compositor.ChromeCache{},
 	}
+}
+
+// canvasFor returns a canvas at the given dimensions, creating or resizing
+// the cached canvas as needed. The canvas is cleared before returning.
+func (u *UICompositor) canvasFor(width, height int) *lipgloss.Canvas {
+	if width <= 0 || height <= 0 {
+		width = 1
+		height = 1
+	}
+	if u.canvas == nil {
+		u.canvas = lipgloss.NewCanvas(width, height)
+	} else if u.canvas.Width() != width || u.canvas.Height() != height {
+		u.canvas.Resize(width, height)
+	}
+	u.canvas.Clear()
+	return u.canvas
 }

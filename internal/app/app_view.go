@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
@@ -47,13 +46,13 @@ func (a *App) view() tea.View {
 		return view
 	}
 
-	if a.quitting {
+	if a.ui.quitting {
 		view := baseView()
 		view.SetContent("Goodbye!\n")
 		return a.finalizeView(view)
 	}
 
-	if !a.ready {
+	if !a.ui.ready {
 		view := baseView()
 		view.SetContent("Loading...")
 		return a.finalizeView(view)
@@ -61,20 +60,6 @@ func (a *App) view() tea.View {
 
 	// Use layer-based rendering
 	return a.finalizeView(a.viewLayerBased())
-}
-
-func (a *App) canvasFor(width, height int) *lipgloss.Canvas {
-	if width <= 0 || height <= 0 {
-		width = 1
-		height = 1
-	}
-	if a.canvas == nil {
-		a.canvas = lipgloss.NewCanvas(width, height)
-	} else if a.canvas.Width() != width || a.canvas.Height() != height {
-		a.canvas.Resize(width, height)
-	}
-	a.canvas.Clear()
-	return a.canvas
 }
 
 func (a *App) fallbackView() tea.View {
@@ -103,7 +88,7 @@ func (a *App) viewLayerBased() tea.View {
 	}
 	var terminalCursor *tea.Cursor
 	setTerminalCursor := func(x, y int) {
-		if x < 0 || y < 0 || x >= a.width || y >= a.height {
+		if x < 0 || y < 0 || x >= a.ui.width || y >= a.ui.height {
 			return
 		}
 		cursor := tea.NewCursor(x, y)
@@ -113,7 +98,7 @@ func (a *App) viewLayerBased() tea.View {
 	blockingOverlayVisible := a.overlayVisible()
 
 	// Create canvas at screen dimensions
-	canvas := a.canvasFor(a.width, a.height)
+	canvas := a.ui.canvasFor(a.ui.width, a.ui.height)
 
 	// Shared layout metrics (used by center and sidebar rendering below).
 	leftGutter := a.ui.layout.LeftGutter()

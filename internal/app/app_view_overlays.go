@@ -49,7 +49,7 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 		_, paletteHeight := viewDimensions(palette)
 		prefixOverlayHeight = paletteHeight
 		x := 0
-		y := a.height - paletteHeight
+		y := a.ui.height - paletteHeight
 		if y < 0 {
 			y = 0
 		}
@@ -62,8 +62,8 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 		toastView := a.ui.toast.View()
 		if toastView != "" {
 			toastWidth := lipgloss.Width(toastView)
-			x := (a.width - toastWidth) / 2
-			y := a.height - 2 - prefixOverlayHeight
+			x := (a.ui.width - toastWidth) / 2
+			y := a.ui.height - 2 - prefixOverlayHeight
 			if x < 0 {
 				x = 0
 			}
@@ -146,8 +146,8 @@ func viewDimensions(view string) (width, height int) {
 }
 
 func (a *App) centeredPosition(width, height int) (x, y int) {
-	x = (a.width - width) / 2
-	y = (a.height - height) / 2
+	x = (a.ui.width - width) / 2
+	y = (a.ui.height - height) / 2
 	if x < 0 {
 		x = 0
 	}
@@ -226,8 +226,8 @@ func (a *App) toastCoversPoint(x, y int) bool {
 		_, prefixOverlayHeight = viewDimensions(a.renderPrefixPalette())
 	}
 	toastWidth, toastHeight := viewDimensions(toastView)
-	toastX := (a.width - toastWidth) / 2
-	toastY := a.height - 2 - prefixOverlayHeight
+	toastX := (a.ui.width - toastWidth) / 2
+	toastY := a.ui.height - 2 - prefixOverlayHeight
 	if toastX < 0 {
 		toastX = 0
 	}

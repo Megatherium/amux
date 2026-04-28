@@ -146,10 +146,10 @@ func newCenterHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 			dashboardChrome: &compositor.ChromeCache{},
 			centerChrome:    &compositor.ChromeCache{},
 			sidebarChrome:   &compositor.ChromeCache{},
+			styles:          common.DefaultStyles(),
+			width:           opts.Width,
+			height:          opts.Height,
 		},
-		styles:      common.DefaultStyles(),
-		width:       opts.Width,
-		height:      opts.Height,
 		focusedPane: messages.PaneCenter,
 	}
 
@@ -204,10 +204,10 @@ func newSidebarHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 			dashboardChrome: &compositor.ChromeCache{},
 			centerChrome:    &compositor.ChromeCache{},
 			sidebarChrome:   &compositor.ChromeCache{},
+			styles:          common.DefaultStyles(),
+			width:           opts.Width,
+			height:          opts.Height,
 		},
-		styles:      common.DefaultStyles(),
-		width:       opts.Width,
-		height:      opts.Height,
 		focusedPane: messages.PaneSidebarTerminal,
 	}
 
