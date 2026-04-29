@@ -92,7 +92,26 @@ func New(version, commit, date string) (*App, error) {
 	app.installSupervisorErrorHandler()
 
 	// Initialize the git status controller (file + state watchers).
-	app.gitStatusController = newGitStatusController(cfg.Paths.RegistryPath, cfg.Paths.MetadataRoot, app.supervisor)
+	app.gitStatusController = newGitStatusController(
+		cfg.Paths.RegistryPath,
+		cfg.Paths.MetadataRoot,
+		app.supervisor,
+		GitStatusControllerConfig{
+			GitStatusService: app.gitStatus,
+			Dashboard:        app.ui.dashboard,
+			Sidebar:          app.ui.sidebar,
+			ActiveWorkspaceRoot: func() string {
+				if app.activeWorkspace != nil {
+					return app.activeWorkspace.Root
+				}
+				return ""
+			},
+			LoadProjects:         func() tea.Cmd { return app.loadProjects() },
+			ShouldSuppressReload: func(paths []string, now time.Time) bool { return app.shouldSuppressWorkspaceReload(paths, now) },
+			SyncDashboard:        func() { app.syncActiveWorkspacesToDashboard() },
+			StartTicker:          func() tea.Cmd { return app.startGitStatusTicker() },
+		},
+	)
 	// Route PTY messages through the app-level pump.
 	app.ui.center.SetMsgSinkTry(app.tryEnqueueExternalMsg)
 	app.ui.sidebarTerminal.SetMsgSink(app.enqueueExternalMsg)

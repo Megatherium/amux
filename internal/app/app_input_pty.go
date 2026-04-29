@@ -1,11 +1,8 @@
 package app
 
 import (
-	"time"
-
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/center"
 	"github.com/andyrewlee/amux/internal/ui/dashboard"
 )
@@ -22,57 +19,6 @@ func (a *App) handleSidebarPTYMessages(msg tea.Msg) tea.Cmd {
 	newSidebarTerminal, cmd := a.ui.sidebarTerminal.Update(msg)
 	a.ui.sidebarTerminal = newSidebarTerminal
 	return cmd
-}
-
-// handleGitStatusTick handles the GitStatusTick message.
-func (a *App) handleGitStatusTick() []tea.Cmd {
-	var cmds []tea.Cmd
-	if a.activeWorkspace != nil {
-		cmds = append(cmds, a.requestGitStatusCached(a.activeWorkspace.Root, true))
-	}
-	// Refresh active workspace indicators even when no PTY output is flowing.
-	a.syncActiveWorkspacesToDashboard()
-	cmds = append(cmds, a.startGitStatusTicker())
-	return cmds
-}
-
-// handleFileWatcherEvent handles the FileWatcherEvent message.
-func (a *App) handleFileWatcherEvent(msg messages.FileWatcherEvent) []tea.Cmd {
-	requestRoot := msg.Root
-	requestFull := false
-	if a.gitStatus != nil {
-		a.gitStatus.Invalidate(msg.Root)
-	}
-	a.ui.dashboard.InvalidateStatus(msg.Root)
-	if a.activeWorkspace != nil && rootsReferToSameWorkspace(msg.Root, a.activeWorkspace.Root) {
-		requestRoot = a.activeWorkspace.Root
-		requestFull = true
-		if a.gitStatus != nil {
-			a.gitStatus.Invalidate(requestRoot)
-		}
-		a.ui.dashboard.InvalidateStatus(requestRoot)
-	}
-	statusCmd := a.requestGitStatus(requestRoot)
-	if requestFull {
-		statusCmd = a.requestGitStatusFull(requestRoot)
-	}
-	return []tea.Cmd{
-		statusCmd,
-		a.gitStatusController.startFileWatcher(),
-	}
-}
-
-// handleStateWatcherEvent handles changes to amux state files (projects/workspaces).
-func (a *App) handleStateWatcherEvent(msg messages.StateWatcherEvent) []tea.Cmd {
-	if msg.Reason == "workspaces" && a.shouldSuppressWorkspaceReload(msg.Paths, time.Now()) {
-		return []tea.Cmd{
-			a.gitStatusController.startStateWatcher(),
-		}
-	}
-	return []tea.Cmd{
-		a.loadProjects(),
-		a.gitStatusController.startStateWatcher(),
-	}
 }
 
 // handleTabInputFailed handles the TabInputFailed message.

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/supervisor"
+	"github.com/andyrewlee/amux/internal/ui/dashboard"
+	"github.com/andyrewlee/amux/internal/ui/sidebar"
 )
 
 // GitStatusController owns the file watcher, state watcher, and their
@@ -24,11 +27,29 @@ type GitStatusController struct {
 	stateWatcherErr error
 
 	supervisor *supervisor.Supervisor
+
+	cfg GitStatusControllerConfig
+}
+
+// GitStatusControllerConfig holds the dependencies and callbacks for handler methods.
+type GitStatusControllerConfig struct {
+	GitStatusService     GitStatusService
+	Dashboard            *dashboard.Model
+	Sidebar              *sidebar.TabbedSidebar
+	ActiveWorkspaceRoot  func() string
+	LoadProjects         func() tea.Cmd
+	ShouldSuppressReload func(paths []string, now time.Time) bool
+	SyncDashboard        func()
+	StartTicker          func() tea.Cmd
 }
 
 // newGitStatusController creates a GitStatusController, initializing the
 // file and state watchers (including their event channels).
-func newGitStatusController(registryPath, metadataRoot string, supervisor *supervisor.Supervisor) *GitStatusController {
+func newGitStatusController(
+	registryPath, metadataRoot string,
+	supervisor *supervisor.Supervisor,
+	cfg GitStatusControllerConfig,
+) *GitStatusController {
 	// Create file watcher event channel.
 	fileWatcherCh := make(chan messages.FileWatcherEvent, 10)
 
@@ -67,6 +88,7 @@ func newGitStatusController(registryPath, metadataRoot string, supervisor *super
 		stateWatcherCh:  stateWatcherCh,
 		stateWatcherErr: stateWatcherErr,
 		supervisor:      supervisor,
+		cfg:             cfg,
 	}
 }
 
@@ -152,4 +174,133 @@ func (g *GitStatusController) fileWatcherInitErr() error {
 // the state watcher.
 func (g *GitStatusController) stateWatcherInitErr() error {
 	return g.stateWatcherErr
+}
+
+// HandleFileWatcherEvent processes a FileWatcherEvent: invalidates caches,
+// requests git status (full for active workspace, fast otherwise), and
+// re-arms the file watcher.
+func (g *GitStatusController) HandleFileWatcherEvent(msg messages.FileWatcherEvent) []tea.Cmd {
+	requestRoot := msg.Root
+	requestFull := false
+	if g.cfg.GitStatusService != nil {
+		g.cfg.GitStatusService.Invalidate(msg.Root)
+	}
+	if g.cfg.Dashboard != nil {
+		g.cfg.Dashboard.InvalidateStatus(msg.Root)
+	}
+	activeRoot := g.cfg.ActiveWorkspaceRoot()
+	if activeRoot != "" && rootsReferToSameWorkspace(msg.Root, activeRoot) {
+		requestRoot = activeRoot
+		requestFull = true
+		if g.cfg.GitStatusService != nil {
+			g.cfg.GitStatusService.Invalidate(requestRoot)
+		}
+		if g.cfg.Dashboard != nil {
+			g.cfg.Dashboard.InvalidateStatus(requestRoot)
+		}
+	}
+	statusCmd := g.requestGitStatus(requestRoot)
+	if requestFull {
+		statusCmd = g.requestGitStatusFull(requestRoot)
+	}
+	return []tea.Cmd{
+		statusCmd,
+		g.startFileWatcher(),
+	}
+}
+
+// HandleStateWatcherEvent processes a StateWatcherEvent: suppresses
+// workspace reload when the event originated from a local save, otherwise
+// triggers a project reload and re-arms the state watcher.
+func (g *GitStatusController) HandleStateWatcherEvent(msg messages.StateWatcherEvent) []tea.Cmd {
+	if msg.Reason == "workspaces" && g.cfg.ShouldSuppressReload != nil && g.cfg.ShouldSuppressReload(msg.Paths, time.Now()) {
+		return []tea.Cmd{
+			g.startStateWatcher(),
+		}
+	}
+	var cmds []tea.Cmd
+	if g.cfg.LoadProjects != nil {
+		cmds = append(cmds, g.cfg.LoadProjects())
+	}
+	return append(cmds, g.startStateWatcher())
+}
+
+// HandleGitStatusTick processes a GitStatusTick: requests cached git status
+// for the active workspace (falls back to full refresh on cache miss),
+// syncs the dashboard, and re-arms the ticker.
+func (g *GitStatusController) HandleGitStatusTick() []tea.Cmd {
+	var cmds []tea.Cmd
+	root := g.cfg.ActiveWorkspaceRoot()
+	if root != "" {
+		cmds = append(cmds, g.requestGitStatusCached(root, true))
+	}
+	if g.cfg.SyncDashboard != nil {
+		g.cfg.SyncDashboard()
+	}
+	if g.cfg.StartTicker != nil {
+		cmds = append(cmds, g.cfg.StartTicker())
+	}
+	return cmds
+}
+
+// HandleGitStatusResult processes a GitStatusResult: updates the dashboard
+// and sidebar model with the git status information.
+func (g *GitStatusController) HandleGitStatusResult(msg messages.GitStatusResult) []tea.Cmd {
+	var cmds []tea.Cmd
+	if g.cfg.Dashboard != nil {
+		newDashboard, cmd := g.cfg.Dashboard.Update(msg)
+		g.cfg.Dashboard = newDashboard
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	activeRoot := g.cfg.ActiveWorkspaceRoot()
+	if g.cfg.Sidebar != nil && activeRoot != "" && rootsReferToSameWorkspace(msg.Root, activeRoot) {
+		g.cfg.Sidebar.SetGitStatus(msg.Status)
+	}
+	return cmds
+}
+
+// requestGitStatus returns a command that performs a fast git status refresh.
+func (g *GitStatusController) requestGitStatus(root string) tea.Cmd {
+	return func() tea.Msg {
+		if g.cfg.GitStatusService == nil {
+			return messages.GitStatusResult{Root: root}
+		}
+		status, err := g.cfg.GitStatusService.RefreshFast(root)
+		if err == nil {
+			g.cfg.GitStatusService.UpdateCache(root, status)
+		}
+		return messages.GitStatusResult{Root: root, Status: status, Err: err}
+	}
+}
+
+// requestGitStatusFull returns a command that performs a full git status refresh with line stats.
+func (g *GitStatusController) requestGitStatusFull(root string) tea.Cmd {
+	return func() tea.Msg {
+		if g.cfg.GitStatusService == nil {
+			return messages.GitStatusResult{Root: root}
+		}
+		status, err := g.cfg.GitStatusService.Refresh(root)
+		if err == nil {
+			g.cfg.GitStatusService.UpdateCache(root, status)
+		}
+		return messages.GitStatusResult{Root: root, Status: status, Err: err}
+	}
+}
+
+// requestGitStatusCached returns a command that serves cached git status
+// when available, falling back to full or fast refresh otherwise.
+func (g *GitStatusController) requestGitStatusCached(root string, fallbackToFull bool) tea.Cmd {
+	if g.cfg.GitStatusService != nil {
+		if cached := g.cfg.GitStatusService.GetCached(root); cached != nil {
+			return func() tea.Msg {
+				return messages.GitStatusResult{Root: root, Status: cached}
+			}
+		}
+	}
+	if fallbackToFull {
+		return g.requestGitStatusFull(root)
+	}
+	return g.requestGitStatus(root)
 }

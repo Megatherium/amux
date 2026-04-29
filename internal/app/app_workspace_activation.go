@@ -87,8 +87,8 @@ func (a *App) refreshWorkspaceResources(ws *data.Workspace) []tea.Cmd {
 		return nil
 	}
 	var cmds []tea.Cmd
-	cmds = append(cmds, a.requestGitStatusFull(ws.Root))
 	if a.gitStatusController != nil {
+		cmds = append(cmds, a.gitStatusController.requestGitStatusFull(ws.Root))
 		if err := a.gitStatusController.watchRoot(ws.Root); err != nil {
 			if a.gitStatusController.isWatchLimitReached() {
 				cmds = append(cmds, a.ui.toast.ShowWarning("File watching disabled (watch limit reached); git status may be stale"))

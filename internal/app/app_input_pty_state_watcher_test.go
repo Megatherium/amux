@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/messages"
@@ -19,15 +22,24 @@ func TestHandleStateWatcherEvent_SuppressesSelfOriginatedWorkspaceReload(t *test
 		t.Fatalf("WriteFile(localPath): %v", err)
 	}
 	app := &App{
-		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
-		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
+		workspaceService: newWorkspaceService(nil, nil, nil, ""),
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
 	}
 	app.markLocalWorkspaceSavePath(localPath)
 
-	cmds := app.handleStateWatcherEvent(messages.StateWatcherEvent{
+	ctrl := &GitStatusController{
+		stateWatcher:   &stateWatcher{},
+		stateWatcherCh: make(chan messages.StateWatcherEvent, 1),
+		cfg: GitStatusControllerConfig{
+			ShouldSuppressReload: func(paths []string, now time.Time) bool {
+				return app.shouldSuppressWorkspaceReload(paths, now)
+			},
+		},
+	}
+
+	cmds := ctrl.HandleStateWatcherEvent(messages.StateWatcherEvent{
 		Reason: "workspaces",
 		Paths:  []string{localPath},
 	})
@@ -50,15 +62,25 @@ func TestHandleStateWatcherEvent_DoesNotSuppressExternalWorkspaceReload(t *testi
 		t.Fatalf("WriteFile(localPath): %v", err)
 	}
 	app := &App{
-		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
-		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
+		workspaceService: newWorkspaceService(nil, nil, nil, ""),
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
 	}
 	app.markLocalWorkspaceSavePath(localPath)
 
-	cmds := app.handleStateWatcherEvent(messages.StateWatcherEvent{
+	ctrl := &GitStatusController{
+		stateWatcher:   &stateWatcher{},
+		stateWatcherCh: make(chan messages.StateWatcherEvent, 1),
+		cfg: GitStatusControllerConfig{
+			ShouldSuppressReload: func(paths []string, now time.Time) bool {
+				return app.shouldSuppressWorkspaceReload(paths, now)
+			},
+			LoadProjects: func() tea.Cmd { return func() tea.Msg { return messages.ProjectsLoaded{} } },
+		},
+	}
+
+	cmds := ctrl.HandleStateWatcherEvent(messages.StateWatcherEvent{
 		Reason: "workspaces",
 		Paths:  []string{externalPath},
 	})
@@ -84,8 +106,7 @@ func TestHandleStateWatcherEvent_DoesNotSuppressSamePathWhenFileChanged(t *testi
 	}
 
 	app := &App{
-		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
-		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
+		workspaceService: newWorkspaceService(nil, nil, nil, ""),
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
@@ -96,7 +117,18 @@ func TestHandleStateWatcherEvent_DoesNotSuppressSamePathWhenFileChanged(t *testi
 		t.Fatalf("WriteFile(localPath second): %v", err)
 	}
 
-	cmds := app.handleStateWatcherEvent(messages.StateWatcherEvent{
+	ctrl := &GitStatusController{
+		stateWatcher:   &stateWatcher{},
+		stateWatcherCh: make(chan messages.StateWatcherEvent, 1),
+		cfg: GitStatusControllerConfig{
+			ShouldSuppressReload: func(paths []string, now time.Time) bool {
+				return app.shouldSuppressWorkspaceReload(paths, now)
+			},
+			LoadProjects: func() tea.Cmd { return func() tea.Msg { return messages.ProjectsLoaded{} } },
+		},
+	}
+
+	cmds := ctrl.HandleStateWatcherEvent(messages.StateWatcherEvent{
 		Reason: "workspaces",
 		Paths:  []string{localPath},
 	})
@@ -112,12 +144,18 @@ func TestHandleStateWatcherEvent_DoesNotSuppressSamePathWhenFileChanged(t *testi
 }
 
 func TestHandleStateWatcherEvent_LoadsProjectsWithoutRecentLocalSave(t *testing.T) {
-	app := &App{
-		workspaceService:    newWorkspaceService(nil, nil, nil, ""),
-		gitStatusController: &GitStatusController{stateWatcher: &stateWatcher{}, stateWatcherCh: make(chan messages.StateWatcherEvent, 1)},
+	ctrl := &GitStatusController{
+		stateWatcher:   &stateWatcher{},
+		stateWatcherCh: make(chan messages.StateWatcherEvent, 1),
+		cfg: GitStatusControllerConfig{
+			ShouldSuppressReload: func(paths []string, now time.Time) bool {
+				return false
+			},
+			LoadProjects: func() tea.Cmd { return func() tea.Msg { return messages.ProjectsLoaded{} } },
+		},
 	}
 
-	cmds := app.handleStateWatcherEvent(messages.StateWatcherEvent{Reason: "workspaces"})
+	cmds := ctrl.HandleStateWatcherEvent(messages.StateWatcherEvent{Reason: "workspaces"})
 	if len(cmds) != 2 {
 		t.Fatalf("expected loadProjects + state watcher restart commands, got %d commands", len(cmds))
 	}

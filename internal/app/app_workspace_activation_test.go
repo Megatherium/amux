@@ -315,6 +315,11 @@ func TestRefreshWorkspaceResources_ReturnsGitStatusCmd(t *testing.T) {
 	ws := data.NewWorkspace("feature", "feature", "main", "/repo", "/repo/feature")
 	app := &App{
 		gitStatus: &stubGitStatusSvc{},
+		gitStatusController: &GitStatusController{
+			cfg: GitStatusControllerConfig{
+				GitStatusService: &stubGitStatusSvc{},
+			},
+		},
 	}
 
 	cmds := app.refreshWorkspaceResources(ws)
@@ -326,8 +331,12 @@ func TestRefreshWorkspaceResources_ReturnsGitStatusCmd(t *testing.T) {
 func TestRefreshWorkspaceResources_NoFileWatcher(t *testing.T) {
 	ws := data.NewWorkspace("feature", "feature", "main", "/repo", "/repo/feature")
 	app := &App{
-		gitStatus:           &stubGitStatusSvc{},
-		gitStatusController: &GitStatusController{},
+		gitStatus: &stubGitStatusSvc{},
+		gitStatusController: &GitStatusController{
+			cfg: GitStatusControllerConfig{
+				GitStatusService: &stubGitStatusSvc{},
+			},
+		},
 	}
 
 	cmds := app.refreshWorkspaceResources(ws)

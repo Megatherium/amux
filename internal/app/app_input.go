@@ -137,9 +137,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case messages.GitStatusResult:
-		if cmd := a.handleGitStatusResult(msg); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		cmds = append(cmds, a.gitStatusController.HandleGitStatusResult(msg)...)
 
 	case messages.ShowAddProjectDialog:
 		a.handleShowAddProjectDialog()
@@ -290,7 +288,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, a.handleSpinnerTick(msg)...)
 
 	case messages.GitStatusTick:
-		cmds = append(cmds, a.handleGitStatusTick()...)
+		cmds = append(cmds, a.gitStatusController.HandleGitStatusTick()...)
 
 	case messages.OrphanGCTick:
 		cmds = append(cmds, a.handleOrphanGCTick()...)
@@ -320,10 +318,10 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.handleSessionCountResult(msg)
 
 	case messages.FileWatcherEvent:
-		cmds = append(cmds, a.handleFileWatcherEvent(msg)...)
+		cmds = append(cmds, a.gitStatusController.HandleFileWatcherEvent(msg)...)
 
 	case messages.StateWatcherEvent:
-		cmds = append(cmds, a.handleStateWatcherEvent(msg)...)
+		cmds = append(cmds, a.gitStatusController.HandleStateWatcherEvent(msg)...)
 
 	case messages.WorkspaceDeleted:
 		cmds = append(cmds, a.handleWorkspaceDeleted(msg)...)

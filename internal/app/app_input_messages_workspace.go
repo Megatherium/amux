@@ -33,7 +33,7 @@ func (a *App) handleProjectsLoaded(msg messages.ProjectsLoaded) []tea.Cmd {
 	for i := range a.projects {
 		for j := range a.projects[i].Workspaces {
 			ws := &a.projects[i].Workspaces[j]
-			cmds = append(cmds, a.requestGitStatus(ws.Root))
+			cmds = append(cmds, a.gitStatusController.requestGitStatus(ws.Root))
 		}
 	}
 	cmds = append(cmds, a.initTicketStoresForLoadedProjects()...)
@@ -294,14 +294,4 @@ func (a *App) handleCreateWorkspace(msg messages.CreateWorkspace) []tea.Cmd {
 	}
 	cmds = append(cmds, a.createWorkspace(msg.Project, name, base, assistant))
 	return cmds
-}
-
-// handleGitStatusResult handles the GitStatusResult message.
-func (a *App) handleGitStatusResult(msg messages.GitStatusResult) tea.Cmd {
-	newDashboard, cmd := a.ui.dashboard.Update(msg)
-	a.ui.dashboard = newDashboard
-	if a.activeWorkspace != nil && rootsReferToSameWorkspace(msg.Root, a.activeWorkspace.Root) {
-		a.ui.sidebar.SetGitStatus(msg.Status)
-	}
-	return cmd
 }

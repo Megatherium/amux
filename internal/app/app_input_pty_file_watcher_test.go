@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/git"
 	"github.com/andyrewlee/amux/internal/messages"
@@ -53,20 +55,17 @@ func TestHandleFileWatcherEvent_ActiveWorkspaceRequestsFullStatus(t *testing.T) 
 		Root: "/tmp/repo/ws-active",
 	}
 	stub := &fileWatcherGitStatusStub{}
-	app := &App{
-		gitStatus:           stub,
-		gitStatusController: &GitStatusController{},
-		ui: &UICompositor{
-			dashboard: dashboard.New(),
-		},
-		activeWorkspace: active,
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      make(map[string]bool),
-			creatingWorkspaceIDs: make(map[string]bool),
+	ctrl := &GitStatusController{
+		cfg: GitStatusControllerConfig{
+			GitStatusService: stub,
+			Dashboard:        dashboard.New(),
+			ActiveWorkspaceRoot: func() string {
+				return active.Root
+			},
 		},
 	}
 
-	cmds := app.handleFileWatcherEvent(messages.FileWatcherEvent{Root: active.Root})
+	cmds := ctrl.HandleFileWatcherEvent(messages.FileWatcherEvent{Root: active.Root})
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 commands, got %d", len(cmds))
 	}
@@ -99,20 +98,17 @@ func TestHandleFileWatcherEvent_InactiveWorkspaceRequestsFastStatus(t *testing.T
 	}
 	otherRoot := "/tmp/repo/ws-other"
 	stub := &fileWatcherGitStatusStub{}
-	app := &App{
-		gitStatus:           stub,
-		gitStatusController: &GitStatusController{},
-		ui: &UICompositor{
-			dashboard: dashboard.New(),
-		},
-		activeWorkspace: active,
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      make(map[string]bool),
-			creatingWorkspaceIDs: make(map[string]bool),
+	ctrl := &GitStatusController{
+		cfg: GitStatusControllerConfig{
+			GitStatusService: stub,
+			Dashboard:        dashboard.New(),
+			ActiveWorkspaceRoot: func() string {
+				return active.Root
+			},
 		},
 	}
 
-	cmds := app.handleFileWatcherEvent(messages.FileWatcherEvent{Root: otherRoot})
+	cmds := ctrl.HandleFileWatcherEvent(messages.FileWatcherEvent{Root: otherRoot})
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 commands, got %d", len(cmds))
 	}
@@ -144,20 +140,21 @@ func TestHandleGitStatusTick_ActiveWorkspaceCacheMissRequestsFullStatus(t *testi
 		Root: "/tmp/repo/ws-active",
 	}
 	stub := &fileWatcherGitStatusStub{}
-	app := &App{
-		gitStatus:           stub,
-		gitStatusController: &GitStatusController{},
-		ui: &UICompositor{
-			dashboard: dashboard.New(),
-		},
-		activeWorkspace: active,
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      make(map[string]bool),
-			creatingWorkspaceIDs: make(map[string]bool),
+	ctrl := &GitStatusController{
+		cfg: GitStatusControllerConfig{
+			GitStatusService: stub,
+			ActiveWorkspaceRoot: func() string {
+				return active.Root
+			},
+			StartTicker: func() tea.Cmd {
+				return func() tea.Msg {
+					return messages.GitStatusTick{}
+				}
+			},
 		},
 	}
 
-	cmds := app.handleGitStatusTick()
+	cmds := ctrl.HandleGitStatusTick()
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 commands, got %d", len(cmds))
 	}
@@ -193,20 +190,21 @@ func TestHandleGitStatusTick_ActiveWorkspaceCachedStatusSkipsRefresh(t *testing.
 			active.Root: {HasLineStats: true},
 		},
 	}
-	app := &App{
-		gitStatus:           stub,
-		gitStatusController: &GitStatusController{},
-		ui: &UICompositor{
-			dashboard: dashboard.New(),
-		},
-		activeWorkspace: active,
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      make(map[string]bool),
-			creatingWorkspaceIDs: make(map[string]bool),
+	ctrl := &GitStatusController{
+		cfg: GitStatusControllerConfig{
+			GitStatusService: stub,
+			ActiveWorkspaceRoot: func() string {
+				return active.Root
+			},
+			StartTicker: func() tea.Cmd {
+				return func() tea.Msg {
+					return messages.GitStatusTick{}
+				}
+			},
 		},
 	}
 
-	cmds := app.handleGitStatusTick()
+	cmds := ctrl.HandleGitStatusTick()
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 commands, got %d", len(cmds))
 	}
