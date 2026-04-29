@@ -62,9 +62,10 @@ func TestActivateCenterButton_WithBeads(t *testing.T) {
 		ticketServices: map[string]*tickets.TicketService{
 			"/test": {},
 		},
+		ui: &UICompositor{},
 	}
 
-	app.centerBtnIndex = 0
+	app.ui.centerBtnIndex = 0
 	cmd := app.activateCenterButton()
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd")
@@ -74,7 +75,7 @@ func TestActivateCenterButton_WithBeads(t *testing.T) {
 		t.Errorf("expected ShowSelectTicketDialog, got %v", reflect.TypeOf(msg))
 	}
 
-	app.centerBtnIndex = 1
+	app.ui.centerBtnIndex = 1
 	cmd = app.activateCenterButton()
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd")

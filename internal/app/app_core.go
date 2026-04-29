@@ -16,7 +16,6 @@ import (
 	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/tickets/dolt"
 	"github.com/andyrewlee/amux/internal/tmux"
-	"github.com/andyrewlee/amux/internal/ui/common"
 	"github.com/andyrewlee/amux/internal/update"
 )
 
@@ -68,17 +67,8 @@ type App struct {
 	buildDate       string
 	upgradeRunning  bool
 
-	// Button focus state for welcome/workspace info screens
-	centerBtnFocused bool
-	centerBtnIndex   int
-
 	// UI Components (extracted to UICompositor)
 	ui *UICompositor
-
-	// Auxiliary settings state (travels with UICompositor.ui.settingsDialog)
-	settingsDialogSession       int
-	settingsThemePersistedTheme common.ThemeID
-	settingsThemeDirty          bool
 
 	// Git status management
 	gitStatusController *GitStatusController

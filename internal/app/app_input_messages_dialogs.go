@@ -153,13 +153,13 @@ func (a *App) handleShowCleanupTmuxDialog() {
 // handleShowSettingsDialog shows the settings dialog.
 func (a *App) handleShowSettingsDialog() {
 	persistedUI := a.config.PersistedUISettings()
-	a.settingsThemePersistedTheme = common.ThemeID(persistedUI.Theme)
-	a.settingsThemeDirty = common.ThemeID(a.config.UI.Theme) != a.settingsThemePersistedTheme
-	a.settingsDialogSession++
+	a.ui.settingsThemePersistedTheme = common.ThemeID(persistedUI.Theme)
+	a.ui.settingsThemeDirty = common.ThemeID(a.config.UI.Theme) != a.ui.settingsThemePersistedTheme
+	a.ui.settingsDialogSession++
 	a.ui.settingsDialog = common.NewSettingsDialog(
 		common.ThemeID(a.config.UI.Theme),
 	)
-	a.ui.settingsDialog.SetSession(a.settingsDialogSession)
+	a.ui.settingsDialog.SetSession(a.ui.settingsDialogSession)
 	a.ui.settingsDialog.SetSize(a.ui.width, a.ui.height)
 
 	// Set update state
@@ -182,7 +182,7 @@ func (a *App) handleShowSettingsDialog() {
 func (a *App) applyTheme(theme common.ThemeID) {
 	common.SetCurrentTheme(theme)
 	a.config.UI.Theme = string(theme)
-	a.settingsThemeDirty = theme != a.settingsThemePersistedTheme
+	a.ui.settingsThemeDirty = theme != a.ui.settingsThemePersistedTheme
 	a.ui.styles = common.DefaultStyles()
 	// Propagate styles to all components
 	a.ui.dashboard.SetStyles(a.ui.styles)
@@ -197,7 +197,7 @@ func (a *App) applyTheme(theme common.ThemeID) {
 
 // handleThemePreview handles live theme preview.
 func (a *App) handleThemePreview(msg common.ThemePreview) tea.Cmd {
-	if msg.Session != a.settingsDialogSession {
+	if msg.Session != a.ui.settingsDialogSession {
 		return nil
 	}
 	if a.ui.settingsDialog != nil {
@@ -208,15 +208,15 @@ func (a *App) handleThemePreview(msg common.ThemePreview) tea.Cmd {
 }
 
 func (a *App) persistSettingsThemeIfDirty() tea.Cmd {
-	if !a.settingsThemeDirty {
+	if !a.ui.settingsThemeDirty {
 		return nil
 	}
 	if err := a.config.SaveUISettings(); err != nil {
 		logging.Warn("Failed to save theme setting: %v", err)
 		return a.ui.toast.ShowWarning("Failed to save theme setting")
 	}
-	a.settingsThemePersistedTheme = common.ThemeID(a.config.UI.Theme)
-	a.settingsThemeDirty = false
+	a.ui.settingsThemePersistedTheme = common.ThemeID(a.config.UI.Theme)
+	a.ui.settingsThemeDirty = false
 	return nil
 }
 
@@ -226,7 +226,7 @@ func (a *App) handleSettingsResult(_ common.SettingsResult) tea.Cmd {
 		a.applyTheme(a.ui.settingsDialog.SelectedTheme())
 	}
 	a.ui.settingsDialog = nil
-	a.settingsDialogSession++
+	a.ui.settingsDialogSession++
 	return a.persistSettingsThemeIfDirty()
 }
 

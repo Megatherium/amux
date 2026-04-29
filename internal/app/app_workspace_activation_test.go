@@ -25,13 +25,13 @@ func TestSetWorkspaceActivationState_SetsActiveWorkspace(t *testing.T) {
 	project.AddWorkspace(*ws)
 
 	app := &App{
-		showWelcome:      true,
-		centerBtnFocused: true,
-		centerBtnIndex:   3,
+		showWelcome: true,
 		ui: &UICompositor{
-			center:          center.New(nil),
-			sidebar:         sidebar.NewTabbedSidebar(),
-			sidebarTerminal: sidebar.NewTerminalModel(),
+			centerBtnFocused: true,
+			centerBtnIndex:   3,
+			center:           center.New(nil),
+			sidebar:          sidebar.NewTabbedSidebar(),
+			sidebarTerminal:  sidebar.NewTerminalModel(),
 		},
 	}
 
@@ -49,11 +49,11 @@ func TestSetWorkspaceActivationState_SetsActiveWorkspace(t *testing.T) {
 	if app.showWelcome {
 		t.Fatal("showWelcome should be false")
 	}
-	if app.centerBtnFocused {
+	if app.ui.centerBtnFocused {
 		t.Fatal("centerBtnFocused should be false")
 	}
-	if app.centerBtnIndex != 0 {
-		t.Fatalf("centerBtnIndex should be 0, got %d", app.centerBtnIndex)
+	if app.ui.centerBtnIndex != 0 {
+		t.Fatalf("centerBtnIndex should be 0, got %d", app.ui.centerBtnIndex)
 	}
 	if app.ui.previewTicket != nil {
 		t.Fatal("previewTicket should be nil")

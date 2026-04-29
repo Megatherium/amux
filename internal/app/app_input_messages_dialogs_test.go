@@ -26,7 +26,7 @@ func TestHandleThemePreview_PersistsOnCloseOnly(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "amux-config.json")
 	h.app.config.Paths.ConfigPath = configPath
 	h.app.handleShowSettingsDialog()
-	session := h.app.settingsDialogSession
+	session := h.app.ui.settingsDialogSession
 
 	cmd := h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 	if cmd != nil {
@@ -70,7 +70,7 @@ func TestHandleSettingsResult_SaveFailureShowsWarningToast(t *testing.T) {
 	// Point to a directory path so os.WriteFile fails with "is a directory".
 	h.app.config.Paths.ConfigPath = t.TempDir()
 	h.app.handleShowSettingsDialog()
-	session := h.app.settingsDialogSession
+	session := h.app.ui.settingsDialogSession
 	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 
 	cmd := h.app.handleSettingsResult(common.SettingsResult{})
@@ -107,7 +107,7 @@ func TestHandleSettingsResult_UnchangedThemeSkipsSave(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected no cmd when closing settings without theme change")
 	}
-	if h.app.settingsThemeDirty {
+	if h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty flag to remain false when theme unchanged")
 	}
 }
@@ -133,14 +133,14 @@ func TestHandleTriggerUpgrade_PersistsThemeChange(t *testing.T) {
 		UpdateAvailable: true,
 	}
 	h.app.handleShowSettingsDialog()
-	session := h.app.settingsDialogSession
+	session := h.app.ui.settingsDialogSession
 	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 
 	cmd := h.app.handleTriggerUpgrade()
 	if cmd == nil {
 		t.Fatal("expected upgrade command when update is available")
 	}
-	if h.app.settingsThemeDirty {
+	if h.app.ui.settingsThemeDirty {
 		t.Fatal("expected theme dirty flag to clear after successful save on upgrade trigger")
 	}
 
@@ -174,14 +174,14 @@ func TestHandleTriggerUpgrade_SaveFailureShowsWarningToast(t *testing.T) {
 		UpdateAvailable: true,
 	}
 	h.app.handleShowSettingsDialog()
-	session := h.app.settingsDialogSession
+	session := h.app.ui.settingsDialogSession
 	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 
 	cmd := h.app.handleTriggerUpgrade()
 	if cmd == nil {
 		t.Fatal("expected command batch for upgrade trigger")
 	}
-	if !h.app.settingsThemeDirty {
+	if !h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty flag to remain set after failed save")
 	}
 	if view := h.app.ui.toast.View(); !strings.Contains(view, "Failed to save theme setting") {
@@ -205,10 +205,10 @@ func TestHandleShowSettingsDialog_RefreshesPersistedThemeBaseline(t *testing.T) 
 	// First close fails to persist, leaving dirty state true.
 	h.app.config.Paths.ConfigPath = t.TempDir()
 	h.app.handleShowSettingsDialog()
-	session := h.app.settingsDialogSession
+	session := h.app.ui.settingsDialogSession
 	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 	_ = h.app.handleSettingsResult(common.SettingsResult{})
-	if !h.app.settingsThemeDirty {
+	if !h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty state after failed close save")
 	}
 
@@ -221,13 +221,13 @@ func TestHandleShowSettingsDialog_RefreshesPersistedThemeBaseline(t *testing.T) 
 
 	// Re-open settings should refresh baseline from disk (tokyo-night).
 	h.app.handleShowSettingsDialog()
-	if h.app.settingsThemeDirty {
+	if h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty state to reset after baseline refresh")
 	}
 
 	// Switching to gruvbox must be treated as dirty and persisted on close.
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeGruvbox, Session: h.app.settingsDialogSession})
-	if !h.app.settingsThemeDirty {
+	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeGruvbox, Session: h.app.ui.settingsDialogSession})
+	if !h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty state for theme change away from persisted value")
 	}
 	_ = h.app.handleSettingsResult(common.SettingsResult{})
@@ -258,11 +258,11 @@ func TestHandleThemePreview_DropsStaleSessionAfterClose(t *testing.T) {
 	h.app.config.Paths.ConfigPath = configPath
 	startTheme := common.ThemeID(h.app.config.UI.Theme)
 	h.app.handleShowSettingsDialog()
-	session := h.app.settingsDialogSession
+	session := h.app.ui.settingsDialogSession
 
 	// Close immediately without preview.
 	_ = h.app.handleSettingsResult(common.SettingsResult{})
-	if h.app.settingsDialogSession == session {
+	if h.app.ui.settingsDialogSession == session {
 		t.Fatal("expected settings session to advance on close")
 	}
 
@@ -271,7 +271,7 @@ func TestHandleThemePreview_DropsStaleSessionAfterClose(t *testing.T) {
 	if common.ThemeID(h.app.config.UI.Theme) != startTheme {
 		t.Fatalf("expected stale preview to be ignored, got %q", h.app.config.UI.Theme)
 	}
-	if h.app.settingsThemeDirty {
+	if h.app.ui.settingsThemeDirty {
 		t.Fatal("expected stale preview to not dirty settings theme state")
 	}
 }

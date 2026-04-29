@@ -79,33 +79,33 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 		maxIndex := a.centerButtonCount() - 1
 		switch {
 		case key.Matches(msg, a.keymap.Left), key.Matches(msg, a.keymap.Up):
-			if a.centerBtnFocused {
-				if a.centerBtnIndex > 0 {
-					a.centerBtnIndex--
+			if a.ui.centerBtnFocused {
+				if a.ui.centerBtnIndex > 0 {
+					a.ui.centerBtnIndex--
 				} else {
-					a.centerBtnFocused = false
+					a.ui.centerBtnFocused = false
 				}
 			} else {
 				// Enter from the right/bottom - focus last button
-				a.centerBtnFocused = true
-				a.centerBtnIndex = maxIndex
+				a.ui.centerBtnFocused = true
+				a.ui.centerBtnIndex = maxIndex
 			}
 			return nil
 		case key.Matches(msg, a.keymap.Right), key.Matches(msg, a.keymap.Down):
-			if a.centerBtnFocused {
-				if a.centerBtnIndex < maxIndex {
-					a.centerBtnIndex++
+			if a.ui.centerBtnFocused {
+				if a.ui.centerBtnIndex < maxIndex {
+					a.ui.centerBtnIndex++
 				} else {
-					a.centerBtnFocused = false
+					a.ui.centerBtnFocused = false
 				}
 			} else {
 				// Enter from the left/top - focus first button
-				a.centerBtnFocused = true
-				a.centerBtnIndex = 0
+				a.ui.centerBtnFocused = true
+				a.ui.centerBtnIndex = 0
 			}
 			return nil
 		case key.Matches(msg, a.keymap.Enter):
-			if a.centerBtnFocused {
+			if a.ui.centerBtnFocused {
 				return a.activateCenterButton()
 			}
 		}
@@ -183,7 +183,7 @@ func (a *App) centerButtonCount() int {
 // activateCenterButton activates the currently focused center button
 func (a *App) activateCenterButton() tea.Cmd {
 	if a.showWelcome {
-		switch a.centerBtnIndex {
+		switch a.ui.centerBtnIndex {
 		case 0:
 			return func() tea.Msg { return messages.ShowAddProjectDialog{} }
 		case 1:
@@ -191,7 +191,7 @@ func (a *App) activateCenterButton() tea.Cmd {
 		}
 	} else if a.activeWorkspace != nil {
 		if a.hasTicketService() {
-			switch a.centerBtnIndex {
+			switch a.ui.centerBtnIndex {
 			case 0:
 				return func() tea.Msg { return messages.ShowSelectTicketDialog{} }
 			case 1:

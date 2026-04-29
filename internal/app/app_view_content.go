@@ -70,8 +70,8 @@ func (a *App) goHome() {
 	if a.ui.dashboard != nil {
 		a.ui.dashboard.ClearActiveRoot()
 	}
-	a.centerBtnFocused = false
-	a.centerBtnIndex = 0
+	a.ui.centerBtnFocused = false
+	a.ui.centerBtnIndex = 0
 	a.ui.previewTicket = nil
 	a.ui.previewProject = nil
 }
@@ -101,11 +101,11 @@ func (a *App) renderWorkspaceInfo() string {
 
 	if hasBeads {
 		ticketBtnStyle := inactiveStyle
-		if a.centerBtnFocused && a.centerBtnIndex == 0 {
+		if a.ui.centerBtnFocused && a.ui.centerBtnIndex == 0 {
 			ticketBtnStyle = activeStyle
 		}
 		agentBtnStyle := inactiveStyle
-		if a.centerBtnFocused && a.centerBtnIndex == 1 {
+		if a.ui.centerBtnFocused && a.ui.centerBtnIndex == 1 {
 			agentBtnStyle = activeStyle
 		}
 
@@ -114,7 +114,7 @@ func (a *App) renderWorkspaceInfo() string {
 		content += "\n" + ticketBtn + "  " + agentBtn
 	} else {
 		btnStyle := inactiveStyle
-		if a.centerBtnFocused && a.centerBtnIndex == 0 {
+		if a.ui.centerBtnFocused && a.ui.centerBtnIndex == 0 {
 			btnStyle = activeStyle
 		}
 		agentBtn := btnStyle.Render("[New Agent]")
@@ -154,8 +154,8 @@ func (a *App) welcomeContent() string {
 
 	addProjectStyle := inactiveStyle
 	settingsStyle := inactiveStyle
-	if a.centerBtnFocused {
-		switch a.centerBtnIndex {
+	if a.ui.centerBtnFocused {
+		switch a.ui.centerBtnIndex {
 		case 0:
 			addProjectStyle = activeStyle
 		case 1:

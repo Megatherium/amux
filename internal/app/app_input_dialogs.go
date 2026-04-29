@@ -285,7 +285,7 @@ func (a *App) handleTriggerUpgrade() tea.Cmd {
 	if a.ui.settingsDialog != nil {
 		a.applyTheme(a.ui.settingsDialog.SelectedTheme())
 		a.ui.settingsDialog = nil
-		a.settingsDialogSession++
+		a.ui.settingsDialogSession++
 	}
 	persistCmd := a.persistSettingsThemeIfDirty()
 	if a.updateAvailable == nil || a.upgradeRunning {

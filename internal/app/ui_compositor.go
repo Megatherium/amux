@@ -64,6 +64,15 @@ type UICompositor struct {
 	centerStatus         drawableCache
 	centerHelp           drawableCache
 	centerBorders        borderCache
+
+	// Button focus state for welcome/workspace info screens (moved from App).
+	centerBtnFocused bool
+	centerBtnIndex   int
+
+	// Settings theme dialog state (moved from App).
+	settingsDialogSession       int
+	settingsThemePersistedTheme common.ThemeID
+	settingsThemeDirty          bool
 }
 
 // newUICompositor creates a UICompositor with all non-lazy fields

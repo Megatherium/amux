@@ -13,8 +13,8 @@ func (a *App) setWorkspaceActivationState(msg messages.WorkspaceActivated) {
 	a.activeProject = msg.Project
 	a.activeWorkspace = msg.Workspace
 	a.showWelcome = false
-	a.centerBtnFocused = false
-	a.centerBtnIndex = 0
+	a.ui.centerBtnFocused = false
+	a.ui.centerBtnIndex = 0
 	a.ui.previewTicket = nil
 	a.ui.previewProject = nil
 	a.ui.center.SetWorkspace(msg.Workspace)
