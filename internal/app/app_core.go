@@ -126,10 +126,55 @@ type App struct {
 }
 
 // wm returns the WorkspaceManager, lazily initializing it if nil.
-// This allows test code to construct App without explicitly setting workspaceManager.
+// It auto-injects deps from App when available so test code that constructs
+// App without explicitly wiring SetHandlerDependencies still works.
 func (a *App) wm() *WorkspaceManager {
 	if a.workspaceManager == nil {
 		a.workspaceManager = newWorkspaceManager()
 	}
-	return a.workspaceManager
+	wm := a.workspaceManager
+	// Auto-inject from App fields; only set if not already wired.
+	if wm.workspaceService == nil && a.workspaceService != nil {
+		wm.workspaceService = a.workspaceService
+	}
+	if wm.dashboard == nil && a.ui != nil && a.ui.dashboard != nil {
+		wm.dashboard = a.ui.dashboard
+	}
+	if wm.toast == nil && a.ui != nil && a.ui.toast != nil {
+		wm.toast = a.ui.toast
+	}
+	if wm.center == nil && a.ui != nil && a.ui.center != nil {
+		wm.center = a.ui.center
+	}
+	if wm.sidebarTerminal == nil && a.ui != nil && a.ui.sidebarTerminal != nil {
+		wm.sidebarTerminal = a.ui.sidebarTerminal
+	}
+	if wm.gitStatus == nil && a.gitStatus != nil {
+		wm.gitStatus = a.gitStatus
+	}
+	if wm.metadataRoot == "" && a.config != nil {
+		wm.metadataRoot = a.config.Paths.MetadataRoot
+	}
+	if wm.cleanupTmuxSessions == nil {
+		wm.cleanupTmuxSessions = a.cleanupWorkspaceTmuxSessions
+	}
+	if wm.findWorkspaceByID == nil {
+		wm.findWorkspaceByID = a.findWorkspaceByID
+	}
+	if wm.isKnownAssistant == nil {
+		wm.isKnownAssistant = a.isKnownAssistant
+	}
+	if wm.setAppError == nil {
+		wm.setAppError = func(err error) { a.err = err }
+	}
+	if wm.deleteWorkspace == nil {
+		wm.deleteWorkspace = a.deleteWorkspace
+	}
+	if wm.persistWorkspaceTabs == nil {
+		wm.persistWorkspaceTabs = a.persistWorkspaceTabs
+	}
+	if wm.persistActiveTabs == nil {
+		wm.persistActiveTabs = a.persistActiveWorkspaceTabs
+	}
+	return wm
 }

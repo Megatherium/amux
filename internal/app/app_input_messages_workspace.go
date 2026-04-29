@@ -1,8 +1,6 @@
 package app
 
 import (
-	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -10,7 +8,6 @@ import (
 
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
-	"github.com/andyrewlee/amux/internal/validation"
 )
 
 // handleProjectsLoaded processes the ProjectsLoaded message.
@@ -260,38 +257,5 @@ func (a *App) handleWorkspaceActivated(msg messages.WorkspaceActivated) []tea.Cm
 
 // handleCreateWorkspace handles the CreateWorkspace message.
 func (a *App) handleCreateWorkspace(msg messages.CreateWorkspace) []tea.Cmd {
-	var cmds []tea.Cmd
-	name := strings.TrimSpace(msg.Name)
-	base := msg.Base
-	assistant := strings.TrimSpace(msg.Assistant)
-	if assistant == "" {
-		cmds = append(cmds, func() tea.Msg {
-			return messages.WorkspaceCreateFailed{Err: errors.New("assistant is required")}
-		})
-		return cmds
-	}
-	if err := validation.ValidateAssistant(assistant); err != nil {
-		cmds = append(cmds, func() tea.Msg {
-			return messages.WorkspaceCreateFailed{Err: err}
-		})
-		return cmds
-	}
-	if !a.isKnownAssistant(assistant) {
-		cmds = append(cmds, func() tea.Msg {
-			return messages.WorkspaceCreateFailed{Err: fmt.Errorf("unknown assistant: %s", assistant)}
-		})
-		return cmds
-	}
-	if msg.Project != nil && name != "" && a.workspaceService != nil {
-		pending := a.workspaceService.pendingWorkspace(msg.Project, name, base)
-		if pending != nil {
-			pending.Assistant = assistant
-			a.wm().setCreatingWorkspace(string(pending.ID()))
-			if cmd := a.ui.dashboard.SetWorkspaceCreating(pending, true); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-	}
-	cmds = append(cmds, a.createWorkspace(msg.Project, name, base, assistant))
-	return cmds
+	return a.wm().HandleCreateWorkspace(msg)
 }

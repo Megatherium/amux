@@ -8,11 +8,18 @@ import (
 	"sync"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/ui/center"
+	"github.com/andyrewlee/amux/internal/ui/common"
+	"github.com/andyrewlee/amux/internal/ui/dashboard"
+	"github.com/andyrewlee/amux/internal/ui/sidebar"
 )
 
 // WorkspaceManager encapsulates workspace persistence, dirty tracking,
 // creation tracking, and delete-in-flight guards.
+// It also owns the workspace lifecycle message handler bodies.
 type WorkspaceManager struct {
 	// Workspace persistence debounce
 	dirtyWorkspaces       map[string]bool
@@ -24,6 +31,24 @@ type WorkspaceManager struct {
 
 	// Workspaces in creation flow (not yet loaded into projects list)
 	creatingWorkspaceIDs map[string]bool
+
+	// Injected dependencies for workspace lifecycle handlers
+	workspaceService *workspaceService
+	dashboard        *dashboard.Model
+	toast            *common.ToastModel
+	center           *center.Model
+	sidebarTerminal  *sidebar.TerminalModel
+	gitStatus        GitStatusService
+	metadataRoot     string
+
+	// Callback functions (App-specific behavior)
+	cleanupTmuxSessions  func(ws *data.Workspace) tea.Cmd
+	findWorkspaceByID    func(id string) *data.Workspace
+	isKnownAssistant     func(assistant string) bool
+	setAppError          func(err error)
+	deleteWorkspace      func(project *data.Project, ws *data.Workspace) tea.Cmd
+	persistWorkspaceTabs func(wsID string) tea.Cmd
+	persistActiveTabs    func() tea.Cmd
 }
 
 // newWorkspaceManager creates an initialized WorkspaceManager.
@@ -298,4 +323,45 @@ func workspaceMetadataFingerprint(path string) (workspaceFileFingerprint, bool) 
 		size:            info.Size(),
 		digest:          sha256.Sum256(data),
 	}, true
+}
+
+// ---------------------------------------------------------------------------
+// Dependency injection
+// ---------------------------------------------------------------------------
+
+// SetHandlerDependencies injects the dependencies needed by workspace lifecycle
+// handler methods. Must be called after construction and before any handler is invoked.
+func (wm *WorkspaceManager) SetHandlerDependencies(deps WorkspaceHandlerDeps) {
+	wm.workspaceService = deps.WorkspaceService
+	wm.dashboard = deps.Dashboard
+	wm.toast = deps.Toast
+	wm.center = deps.Center
+	wm.sidebarTerminal = deps.SidebarTerminal
+	wm.gitStatus = deps.GitStatus
+	wm.metadataRoot = deps.MetadataRoot
+	wm.cleanupTmuxSessions = deps.CleanupTmuxSessions
+	wm.findWorkspaceByID = deps.FindWorkspaceByID
+	wm.isKnownAssistant = deps.IsKnownAssistant
+	wm.setAppError = deps.SetAppError
+	wm.deleteWorkspace = deps.DeleteWorkspace
+	wm.persistWorkspaceTabs = deps.PersistWorkspaceTabs
+	wm.persistActiveTabs = deps.PersistActiveTabs
+}
+
+// WorkspaceHandlerDeps bundles the dependencies needed for workspace lifecycle handlers.
+type WorkspaceHandlerDeps struct {
+	WorkspaceService     *workspaceService
+	Dashboard            *dashboard.Model
+	Toast                *common.ToastModel
+	Center               *center.Model
+	SidebarTerminal      *sidebar.TerminalModel
+	GitStatus            GitStatusService
+	MetadataRoot         string
+	CleanupTmuxSessions  func(ws *data.Workspace) tea.Cmd
+	FindWorkspaceByID    func(id string) *data.Workspace
+	IsKnownAssistant     func(assistant string) bool
+	SetAppError          func(err error)
+	DeleteWorkspace      func(project *data.Project, ws *data.Workspace) tea.Cmd
+	PersistWorkspaceTabs func(wsID string) tea.Cmd
+	PersistActiveTabs    func() tea.Cmd
 }

@@ -136,6 +136,25 @@ func New(version, commit, date string) (*App, error) {
 		app.supervisor.Start("git.status_manager", app.gitStatus.Run)
 	}
 	app.gitStatusController.startSupervisedTasks()
+
+	// Wire workspace lifecycle handler dependencies into WorkspaceManager.
+	app.workspaceManager.SetHandlerDependencies(WorkspaceHandlerDeps{
+		WorkspaceService:     app.workspaceService,
+		Dashboard:            app.ui.dashboard,
+		Toast:                app.ui.toast,
+		Center:               app.ui.center,
+		SidebarTerminal:      app.ui.sidebarTerminal,
+		GitStatus:            app.gitStatus,
+		MetadataRoot:         cfg.Paths.MetadataRoot,
+		CleanupTmuxSessions:  app.cleanupWorkspaceTmuxSessions,
+		FindWorkspaceByID:    app.findWorkspaceByID,
+		IsKnownAssistant:     app.isKnownAssistant,
+		SetAppError:          func(err error) { app.err = err },
+		DeleteWorkspace:      app.deleteWorkspace,
+		PersistWorkspaceTabs: app.persistWorkspaceTabs,
+		PersistActiveTabs:    app.persistActiveWorkspaceTabs,
+	})
+
 	return app, nil
 }
 

@@ -5,7 +5,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
@@ -75,67 +74,5 @@ func (a *App) persistActiveWorkspaceTabs() tea.Cmd {
 }
 
 func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
-	wm := a.wm()
-	// Ignore stale tokens (newer persist request superseded this one)
-	if msg.token != wm.currentPersistToken() {
-		return nil
-	}
-	if a.ui.center == nil || a.workspaceService == nil {
-		return nil
-	}
-	if wm.dirtyWorkspaceCount() == 0 {
-		return nil
-	}
-
-	// Collect snapshots for all dirty workspaces
-	dirty := wm.dirtyWorkspaceIDs()
-	var snapshots []*data.Workspace
-	processed := make(map[string]bool, len(dirty))
-	for wsID := range dirty {
-		if wm.isWorkspaceDeleteInFlight(wsID) {
-			// Keep dirty marker while delete is in flight. If delete fails, the
-			// marker must remain so pending workspace state can still be saved.
-			continue
-		}
-		ws := a.findWorkspaceByID(wsID)
-		if ws == nil {
-			processed[wsID] = true
-			continue
-		}
-		// Update in-memory state from center tabs
-		tabs, activeIdx := a.ui.center.GetTabsInfoForWorkspace(wsID)
-		ws.OpenTabs = tabs
-		ws.ActiveTabIndex = activeIdx
-		snapshots = append(snapshots, snapshotWorkspaceForSave(ws))
-		processed[wsID] = true
-	}
-	// Clear only workspaces processed above; keep in-flight delete markers dirty.
-	for wsID := range processed {
-		wm.clearWorkspaceDirty(wsID)
-	}
-
-	if len(snapshots) == 0 {
-		return nil
-	}
-	service := a.workspaceService
-	return func() tea.Msg {
-		for _, snap := range snapshots {
-			wsID := string(snap.ID())
-			var saveErr error
-			saved := wm.runUnlessWorkspaceDeleteInFlight(wsID, func() {
-				saveErr = service.Save(snap)
-			})
-			if !saved {
-				continue
-			}
-			if saveErr != nil {
-				logging.Warn("Failed to save workspace tabs: %v", saveErr)
-			} else {
-				// Marker bookkeeping is intentionally outside delete-state guard.
-				// Delete safety is enforced by the guarded Save above.
-				a.markLocalWorkspaceSaveForID(wsID)
-			}
-		}
-		return nil
-	}
+	return a.wm().HandlePersistDebounce(msg)
 }

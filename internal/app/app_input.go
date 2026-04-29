@@ -383,8 +383,5 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleTabDetached(msg messages.TabDetached) tea.Cmd {
-	if msg.WorkspaceID != "" {
-		return a.persistWorkspaceTabs(msg.WorkspaceID)
-	}
-	return a.persistActiveWorkspaceTabs()
+	return a.wm().HandleTabDetached(msg)
 }

@@ -33,33 +33,6 @@ func (a *App) addProject(path string) tea.Cmd {
 	return a.workspaceService.AddProject(path)
 }
 
-// createWorkspace creates a new workspace.
-func (a *App) createWorkspace(project *data.Project, name, base, assistant string) tea.Cmd {
-	if a.workspaceService == nil {
-		return nil
-	}
-	return a.workspaceService.CreateWorkspace(project, name, base, assistant)
-}
-
-// runSetupAsync runs setup scripts asynchronously and returns a WorkspaceSetupComplete message.
-func (a *App) runSetupAsync(ws *data.Workspace) tea.Cmd {
-	if a.workspaceService == nil {
-		return nil
-	}
-	return a.workspaceService.RunSetupAsync(ws)
-}
-
-// deleteWorkspace deletes a workspace.
-func (a *App) deleteWorkspace(project *data.Project, ws *data.Workspace) tea.Cmd {
-	if a.activeWorkspace != nil && ws != nil && a.activeWorkspace.Root == ws.Root {
-		a.goHome()
-	}
-	if a.workspaceService == nil {
-		return nil
-	}
-	return a.workspaceService.DeleteWorkspace(project, ws)
-}
-
 // removeProject removes a project from the registry (does not delete files).
 func (a *App) removeProject(project *data.Project) tea.Cmd {
 	if project == nil {
@@ -74,4 +47,15 @@ func (a *App) removeProject(project *data.Project) tea.Cmd {
 		return nil
 	}
 	return a.workspaceService.RemoveProject(project)
+}
+
+// deleteWorkspace deletes a workspace (used as callback by WorkspaceManager).
+func (a *App) deleteWorkspace(project *data.Project, ws *data.Workspace) tea.Cmd {
+	if a.activeWorkspace != nil && ws != nil && a.activeWorkspace.Root == ws.Root {
+		a.goHome()
+	}
+	if a.workspaceService == nil {
+		return nil
+	}
+	return a.workspaceService.DeleteWorkspace(project, ws)
 }

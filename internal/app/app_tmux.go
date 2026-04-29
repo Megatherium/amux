@@ -11,6 +11,8 @@ import (
 	"github.com/andyrewlee/amux/internal/tmux"
 )
 
+// cleanupWorkspaceTmuxSessions kills all tmux sessions tagged for the given
+// workspace (used as callback by WorkspaceManager).
 func (a *App) cleanupWorkspaceTmuxSessions(ws *data.Workspace) tea.Cmd {
 	if ws == nil {
 		return nil
