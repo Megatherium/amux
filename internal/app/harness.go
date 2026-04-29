@@ -136,6 +136,7 @@ func newCenterHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 	app := &App{
 		config: cfg,
 		ui: &UICompositor{
+			config:          cfg,
 			layout:          layoutMgr,
 			dashboard:       dash,
 			center:          centerModel,
@@ -194,6 +195,7 @@ func newSidebarHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 	app := &App{
 		config: cfg,
 		ui: &UICompositor{
+			config:          cfg,
 			layout:          layoutMgr,
 			dashboard:       dash,
 			center:          centerModel,

@@ -19,6 +19,8 @@ import (
 // a gradual decomposition; fields that are lazy-created (dialog, filePicker,
 // settingsDialog) start as nil and are instantiated on first use.
 type UICompositor struct {
+	config *config.Config
+
 	layout          *layout.Manager
 	dashboard       *dashboard.Model
 	center          *center.Model
@@ -80,6 +82,7 @@ type UICompositor struct {
 // left nil and will be created on first use.
 func newUICompositor(cfg *config.Config, styles common.Styles) *UICompositor {
 	return &UICompositor{
+		config:          cfg,
 		layout:          layout.NewManager(),
 		dashboard:       dashboard.New(),
 		center:          center.New(cfg),

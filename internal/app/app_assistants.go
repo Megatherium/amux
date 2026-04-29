@@ -10,16 +10,6 @@ func (a *App) defaultAssistantName() string {
 	return data.DefaultAssistant
 }
 
-func (a *App) assistantNames() []string {
-	if a != nil && a.config != nil {
-		names := a.config.AssistantNames()
-		if len(names) > 0 {
-			return names
-		}
-	}
-	return []string{a.defaultAssistantName()}
-}
-
 func (a *App) isKnownAssistant(name string) bool {
 	name = strings.TrimSpace(name)
 	if name == "" {

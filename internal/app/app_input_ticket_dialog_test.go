@@ -23,7 +23,7 @@ func TestHandleShowSelectTicketDialog_NoTicketService_FallbackToAssistant(t *tes
 	h.app.activeProject = &data.Project{Name: "p", Path: "/r"}
 	h.app.ticketServices = nil
 
-	cmd := h.app.handleShowSelectTicketDialog()
+	cmd := h.app.ui.ShowSelectTicketDialog(h.app.ticketServices, h.app.activeWorkspace, h.app.activeProject)
 	if cmd == nil {
 		t.Fatal("expected cmd when no ticket service")
 	}
@@ -45,7 +45,7 @@ func TestHandleShowSelectTicketDialog_NoActiveWorkspace(t *testing.T) {
 	h.app.activeWorkspace = nil
 	h.app.activeProject = nil
 
-	cmd := h.app.handleShowSelectTicketDialog()
+	cmd := h.app.ui.ShowSelectTicketDialog(h.app.ticketServices, h.app.activeWorkspace, h.app.activeProject)
 	if cmd != nil {
 		t.Fatal("expected nil cmd when no active workspace")
 	}
@@ -65,7 +65,7 @@ func TestHandleTicketsForPickerLoaded(t *testing.T) {
 		{ID: "bmx-1", Title: "Fix bug", Status: "open", IssueType: "bug", Priority: 1},
 		{ID: "bmx-2", Title: "Add feature", Status: "in_progress", IssueType: "task", Priority: 2},
 	}
-	h.app.handleTicketsForPickerLoaded(ticketsForPickerLoaded{tickets: ts})
+	h.app.ui.HandleTicketsForPickerLoaded(ticketsForPickerLoaded{tickets: ts})
 
 	if h.app.ui.dialog == nil {
 		t.Fatal("expected dialog to be created")

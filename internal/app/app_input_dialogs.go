@@ -78,24 +78,6 @@ func isNilOverlay[T any](overlay T) bool {
 	}
 }
 
-func (a *App) handleDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
-	var consumed bool
-	a.ui.dialog, consumed = handleOverlayInput(a.ui.dialog, msg, cmds, true)
-	return consumed
-}
-
-func (a *App) handleFilePickerInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
-	var consumed bool
-	a.ui.filePicker, consumed = handleOverlayInput(a.ui.filePicker, msg, cmds, true)
-	return consumed
-}
-
-func (a *App) handleSettingsDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
-	var consumed bool
-	a.ui.settingsDialog, consumed = handleOverlayInput(a.ui.settingsDialog, msg, cmds, false)
-	return consumed
-}
-
 // handleDialogResult handles dialog completion
 func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 	project := a.ui.dialogProject
@@ -283,11 +265,11 @@ func (a *App) handleUpdateCheckComplete(msg messages.UpdateCheckComplete) tea.Cm
 // handleTriggerUpgrade handles the TriggerUpgrade message.
 func (a *App) handleTriggerUpgrade() tea.Cmd {
 	if a.ui.settingsDialog != nil {
-		a.applyTheme(a.ui.settingsDialog.SelectedTheme())
+		a.ui.ApplyTheme(a.ui.settingsDialog.SelectedTheme())
 		a.ui.settingsDialog = nil
 		a.ui.settingsDialogSession++
 	}
-	persistCmd := a.persistSettingsThemeIfDirty()
+	persistCmd := a.ui.PersistSettingsThemeIfDirty()
 	if a.updateAvailable == nil || a.upgradeRunning {
 		return persistCmd
 	}
