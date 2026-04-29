@@ -1,0 +1,79 @@
+package app
+
+import (
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/logging"
+	"github.com/andyrewlee/amux/internal/ui/common"
+)
+
+// persistAllWorkspacesNow saves all workspace tab state synchronously.
+// Called before shutdown to ensure tabs are persisted before they are closed.
+// This intentionally includes delete-in-flight workspaces. If a delete fails or
+// races with shutdown, preserving UI tab state is preferred over dropping it.
+func (a *App) persistAllWorkspacesNow() {
+	if a.workspaceService == nil || a.ui.center == nil {
+		return
+	}
+	wm := a.wm()
+	for _, project := range a.projects {
+		for i := range project.Workspaces {
+			ws := &project.Workspaces[i]
+			wsID := string(ws.ID())
+			tabs, activeIdx := a.ui.center.GetTabsInfoForWorkspace(wsID)
+			if len(tabs) == 0 && !a.ui.center.HasWorkspaceState(wsID) {
+				continue
+			}
+			ws.OpenTabs = tabs
+			ws.ActiveTabIndex = activeIdx
+			snap := snapshotWorkspaceForSave(ws)
+			if err := a.workspaceService.Save(snap); err != nil {
+				logging.Warn("Failed to persist workspace on shutdown: %v", err)
+			} else {
+				a.markLocalWorkspaceSaveForID(string(snap.ID()))
+			}
+		}
+	}
+	// Clear dirty set since we just saved everything
+	wm.clearAllDirty()
+}
+
+// persistDebounceMsg is sent after the debounce period to trigger actual save.
+type persistDebounceMsg struct {
+	token int
+}
+
+// persistWorkspaceTabs marks a workspace dirty and schedules a debounced save.
+func (a *App) persistWorkspaceTabs(wsID string) tea.Cmd {
+	if wsID == "" {
+		return nil
+	}
+	wm := a.wm()
+	if wm.isWorkspaceDeleteInFlight(wsID) {
+		return nil
+	}
+	wm.markWorkspaceDirty(wsID)
+	token := wm.nextPersistToken()
+	return common.SafeTick(persistDebounce, func(t time.Time) tea.Msg {
+		return persistDebounceMsg{token: token}
+	})
+}
+
+func (a *App) migrateDirtyWorkspaceID(oldID, newID string) {
+	a.wm().migrateDirtyWorkspaceID(oldID, newID)
+}
+
+// persistActiveWorkspaceTabs is a convenience that persists the active workspace's tabs.
+func (a *App) persistActiveWorkspaceTabs() tea.Cmd {
+	if a.activeWorkspace == nil {
+		return nil
+	}
+	return a.persistWorkspaceTabs(string(a.activeWorkspace.ID()))
+}
+
+func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
+	return a.wm().HandlePersistDebounce(msg)
+}

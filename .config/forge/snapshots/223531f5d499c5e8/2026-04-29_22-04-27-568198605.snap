@@ -1,0 +1,653 @@
+package app
+
+import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/logging"
+	"github.com/andyrewlee/amux/internal/messages"
+	"github.com/andyrewlee/amux/internal/ui/center"
+	"github.com/andyrewlee/amux/internal/ui/common"
+	"github.com/andyrewlee/amux/internal/ui/dashboard"
+	"github.com/andyrewlee/amux/internal/ui/sidebar"
+	"github.com/andyrewlee/amux/internal/validation"
+)
+
+// WorkspaceManager encapsulates workspace persistence, dirty tracking,
+// creation tracking, and delete-in-flight guards.
+// It also owns the workspace lifecycle message handler bodies.
+type WorkspaceManager struct {
+	// Workspace persistence debounce
+	dirtyWorkspaces       map[string]bool
+	deletingWorkspaceMu   sync.RWMutex
+	deletingWorkspaceIDs  map[string]bool
+	persistToken          int
+	localWorkspaceSaveMu  sync.Mutex
+	localWorkspaceSavesAt map[string]localWorkspaceSaveMarker
+
+	// Workspaces in creation flow (not yet loaded into projects list)
+	creatingWorkspaceIDs map[string]bool
+
+	// Injected dependencies for workspace lifecycle handlers
+	workspaceService *workspaceService
+	dashboard        *dashboard.Model
+	toast            *common.ToastModel
+	center           *center.Model
+	sidebarTerminal  *sidebar.TerminalModel
+	gitStatus        GitStatusService
+	metadataRoot     string
+
+	// Callback functions (App-specific behavior)
+	cleanupTmuxSessions  func(ws *data.Workspace) tea.Cmd
+	findWorkspaceByID    func(id string) *data.Workspace
+	isKnownAssistant     func(assistant string) bool
+	setAppError          func(err error)
+	deleteWorkspace      func(project *data.Project, ws *data.Workspace) tea.Cmd
+	persistWorkspaceTabs func(wsID string) tea.Cmd
+	persistActiveTabs    func() tea.Cmd
+}
+
+// newWorkspaceManager creates an initialized WorkspaceManager.
+func newWorkspaceManager() *WorkspaceManager {
+	return &WorkspaceManager{
+		dirtyWorkspaces:       make(map[string]bool),
+		deletingWorkspaceIDs:  make(map[string]bool),
+		localWorkspaceSavesAt: make(map[string]localWorkspaceSaveMarker),
+		creatingWorkspaceIDs:  make(map[string]bool),
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dirty workspace tracking
+// ---------------------------------------------------------------------------
+
+// isWorkspaceDirty reports whether the given workspace ID has unsaved changes.
+func (wm *WorkspaceManager) isWorkspaceDirty(wsID string) bool {
+	return wm.dirtyWorkspaces != nil && wm.dirtyWorkspaces[wsID]
+}
+
+// markWorkspaceDirty marks a workspace as having unsaved changes.
+func (wm *WorkspaceManager) markWorkspaceDirty(wsID string) {
+	if wm.dirtyWorkspaces == nil {
+		wm.dirtyWorkspaces = make(map[string]bool)
+	}
+	wm.dirtyWorkspaces[wsID] = true
+}
+
+// clearWorkspaceDirty removes a workspace from the dirty set.
+func (wm *WorkspaceManager) clearWorkspaceDirty(wsID string) {
+	delete(wm.dirtyWorkspaces, wsID)
+}
+
+// clearAllDirty removes all workspaces from the dirty set.
+func (wm *WorkspaceManager) clearAllDirty() {
+	for k := range wm.dirtyWorkspaces {
+		delete(wm.dirtyWorkspaces, k)
+	}
+}
+
+// dirtyWorkspaceCount returns the number of dirty workspaces.
+func (wm *WorkspaceManager) dirtyWorkspaceCount() int {
+	return len(wm.dirtyWorkspaces)
+}
+
+// dirtyWorkspaceIDs returns a copy of the current dirty workspace ID set.
+func (wm *WorkspaceManager) dirtyWorkspaceIDs() map[string]bool {
+	out := make(map[string]bool, len(wm.dirtyWorkspaces))
+	for k := range wm.dirtyWorkspaces {
+		out[k] = true
+	}
+	return out
+}
+
+// migrateDirtyWorkspaceID migrates a dirty marker from oldID to newID.
+func (wm *WorkspaceManager) migrateDirtyWorkspaceID(oldID, newID string) {
+	if oldID == "" || newID == "" || oldID == newID {
+		return
+	}
+	if wm.dirtyWorkspaces == nil || !wm.dirtyWorkspaces[oldID] {
+		return
+	}
+	wm.dirtyWorkspaces[newID] = true
+	delete(wm.dirtyWorkspaces, oldID)
+}
+
+// nextPersistToken increments the persist token counter and returns the new value.
+func (wm *WorkspaceManager) nextPersistToken() int {
+	wm.persistToken++
+	return wm.persistToken
+}
+
+// currentPersistToken returns the current persist token value.
+func (wm *WorkspaceManager) currentPersistToken() int {
+	return wm.persistToken
+}
+
+// ---------------------------------------------------------------------------
+// Delete-in-flight guard
+// ---------------------------------------------------------------------------
+
+// markWorkspaceDeleteInFlight sets or clears the delete-in-flight marker for a workspace.
+func (wm *WorkspaceManager) markWorkspaceDeleteInFlight(ws *data.Workspace, deleting bool) {
+	wm.deletingWorkspaceMu.Lock()
+	defer wm.deletingWorkspaceMu.Unlock()
+
+	if ws == nil {
+		return
+	}
+	wsID := string(ws.ID())
+	if wsID == "" {
+		return
+	}
+	if wm.deletingWorkspaceIDs == nil {
+		wm.deletingWorkspaceIDs = make(map[string]bool)
+	}
+	if deleting {
+		wm.deletingWorkspaceIDs[wsID] = true
+		return
+	}
+	delete(wm.deletingWorkspaceIDs, wsID)
+}
+
+// isWorkspaceDeleteInFlight reports whether the workspace is currently being deleted.
+func (wm *WorkspaceManager) isWorkspaceDeleteInFlight(wsID string) bool {
+	wm.deletingWorkspaceMu.RLock()
+	defer wm.deletingWorkspaceMu.RUnlock()
+
+	if wsID == "" || wm.deletingWorkspaceIDs == nil {
+		return false
+	}
+	return wm.deletingWorkspaceIDs[wsID]
+}
+
+// runUnlessWorkspaceDeleteInFlight runs fn while holding a shared delete-state
+// lock only when wsID is not currently marked delete-in-flight. Holding the
+// lock across fn keeps the check and side effect atomic with respect to
+// markWorkspaceDeleteInFlight updates.
+func (wm *WorkspaceManager) runUnlessWorkspaceDeleteInFlight(wsID string, fn func()) bool {
+	wm.deletingWorkspaceMu.RLock()
+	defer wm.deletingWorkspaceMu.RUnlock()
+
+	if wsID == "" || wm.deletingWorkspaceIDs[wsID] {
+		return false
+	}
+	if fn != nil {
+		fn()
+	}
+	return true
+}
+
+// ---------------------------------------------------------------------------
+// Creation tracking
+// ---------------------------------------------------------------------------
+
+// setCreatingWorkspace marks a workspace as being created.
+func (wm *WorkspaceManager) setCreatingWorkspace(wsID string) {
+	wm.creatingWorkspaceIDs[wsID] = true
+}
+
+// clearCreatingWorkspace removes a workspace from the creation tracking set.
+func (wm *WorkspaceManager) clearCreatingWorkspace(wsID string) {
+	delete(wm.creatingWorkspaceIDs, wsID)
+}
+
+// creatingWorkspaceIDSet returns the full map of creating workspace IDs.
+func (wm *WorkspaceManager) creatingWorkspaceIDSet() map[string]bool {
+	return wm.creatingWorkspaceIDs
+}
+
+// ---------------------------------------------------------------------------
+// Local workspace save markers (reload suppression)
+// ---------------------------------------------------------------------------
+
+// markLocalWorkspaceSaveForID records a save marker for the given workspace ID.
+func (wm *WorkspaceManager) markLocalWorkspaceSaveForID(metadataRoot, wsID string) {
+	path := workspaceMetadataPath(metadataRoot, wsID)
+	if path == "" {
+		return
+	}
+	wm.markLocalWorkspaceSavePath(path)
+}
+
+// markLocalWorkspaceSavePath records a save marker for the given file path.
+func (wm *WorkspaceManager) markLocalWorkspaceSavePath(path string) {
+	normalized := filepath.Clean(strings.TrimSpace(path))
+	if normalized == "" {
+		return
+	}
+	fingerprint, ok := workspaceMetadataFingerprint(normalized)
+	if !ok {
+		return
+	}
+	now := time.Now()
+	wm.localWorkspaceSaveMu.Lock()
+	if wm.localWorkspaceSavesAt == nil {
+		wm.localWorkspaceSavesAt = make(map[string]localWorkspaceSaveMarker)
+	}
+	pruneOldLocalWorkspaceSavesLocked(wm.localWorkspaceSavesAt, now)
+	wm.localWorkspaceSavesAt[normalized] = localWorkspaceSaveMarker{
+		at:          now,
+		fingerprint: fingerprint,
+	}
+	wm.localWorkspaceSaveMu.Unlock()
+}
+
+// shouldSuppressWorkspaceReload returns true if all given paths were recently
+// saved by this process and their on-disk content matches the saved fingerprint.
+func (wm *WorkspaceManager) shouldSuppressWorkspaceReload(paths []string, now time.Time) bool {
+	if len(paths) == 0 {
+		return false
+	}
+
+	type pathMarker struct {
+		path   string
+		marker localWorkspaceSaveMarker
+	}
+	var toCheck []pathMarker
+
+	wm.localWorkspaceSaveMu.Lock()
+	if len(wm.localWorkspaceSavesAt) == 0 {
+		wm.localWorkspaceSaveMu.Unlock()
+		return false
+	}
+	pruneOldLocalWorkspaceSavesLocked(wm.localWorkspaceSavesAt, now)
+	if len(wm.localWorkspaceSavesAt) == 0 {
+		wm.localWorkspaceSaveMu.Unlock()
+		return false
+	}
+	for _, raw := range paths {
+		path := filepath.Clean(strings.TrimSpace(raw))
+		if path == "" {
+			continue
+		}
+		marker, ok := wm.localWorkspaceSavesAt[path]
+		if !ok {
+			wm.localWorkspaceSaveMu.Unlock()
+			return false
+		}
+		delta := now.Sub(marker.at)
+		if delta < 0 || delta > localWorkspaceReloadSuppressWindow {
+			wm.localWorkspaceSaveMu.Unlock()
+			return false
+		}
+		toCheck = append(toCheck, pathMarker{path: path, marker: marker})
+	}
+	wm.localWorkspaceSaveMu.Unlock()
+
+	for _, pm := range toCheck {
+		fingerprint, ok := workspaceMetadataFingerprint(pm.path)
+		if !ok {
+			return false
+		}
+		if fingerprint != pm.marker.fingerprint {
+			return false
+		}
+	}
+	return len(toCheck) > 0
+}
+
+// ---------------------------------------------------------------------------
+// Helpers (previously on App)
+// ---------------------------------------------------------------------------
+
+// workspaceMetadataPath returns the path to the workspace metadata JSON file.
+func workspaceMetadataPath(metadataRoot, wsID string) string {
+	root := strings.TrimSpace(metadataRoot)
+	id := strings.TrimSpace(wsID)
+	if root == "" || id == "" {
+		return ""
+	}
+	return filepath.Clean(filepath.Join(root, id, "workspace.json"))
+}
+
+// workspaceMetadataFingerprint returns a fingerprint for the file at path.
+// Note: there is a TOCTOU gap between Stat and ReadFile — if the file changes
+// between the two calls the fingerprint won't match the stored one, causing
+// shouldSuppressWorkspaceReload to return false (not suppress). This is the
+// safe/conservative direction so the race is benign.
+func workspaceMetadataFingerprint(path string) (workspaceFileFingerprint, bool) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return workspaceFileFingerprint{}, false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return workspaceFileFingerprint{}, false
+	}
+	return workspaceFileFingerprint{
+		modTimeUnixNano: info.ModTime().UnixNano(),
+		size:            info.Size(),
+		digest:          sha256.Sum256(data),
+	}, true
+}
+
+// ---------------------------------------------------------------------------
+// Dependency injection
+// ---------------------------------------------------------------------------
+
+// SetHandlerDependencies injects the dependencies needed by workspace lifecycle
+// handler methods. Must be called after construction and before any handler is invoked.
+func (wm *WorkspaceManager) SetHandlerDependencies(deps WorkspaceHandlerDeps) {
+	wm.workspaceService = deps.WorkspaceService
+	wm.dashboard = deps.Dashboard
+	wm.toast = deps.Toast
+	wm.center = deps.Center
+	wm.sidebarTerminal = deps.SidebarTerminal
+	wm.gitStatus = deps.GitStatus
+	wm.metadataRoot = deps.MetadataRoot
+	wm.cleanupTmuxSessions = deps.CleanupTmuxSessions
+	wm.findWorkspaceByID = deps.FindWorkspaceByID
+	wm.isKnownAssistant = deps.IsKnownAssistant
+	wm.setAppError = deps.SetAppError
+	wm.deleteWorkspace = deps.DeleteWorkspace
+	wm.persistWorkspaceTabs = deps.PersistWorkspaceTabs
+	wm.persistActiveTabs = deps.PersistActiveTabs
+}
+
+// WorkspaceHandlerDeps bundles the dependencies needed for workspace lifecycle handlers.
+type WorkspaceHandlerDeps struct {
+	WorkspaceService     *workspaceService
+	Dashboard            *dashboard.Model
+	Toast                *common.ToastModel
+	Center               *center.Model
+	SidebarTerminal      *sidebar.TerminalModel
+	GitStatus            GitStatusService
+	MetadataRoot         string
+	CleanupTmuxSessions  func(ws *data.Workspace) tea.Cmd
+	FindWorkspaceByID    func(id string) *data.Workspace
+	IsKnownAssistant     func(assistant string) bool
+	SetAppError          func(err error)
+	DeleteWorkspace      func(project *data.Project, ws *data.Workspace) tea.Cmd
+	PersistWorkspaceTabs func(wsID string) tea.Cmd
+	PersistActiveTabs    func() tea.Cmd
+}
+
+// ---------------------------------------------------------------------------
+// Workspace lifecycle handlers
+// ---------------------------------------------------------------------------
+
+// handleCreateWorkspace handles the CreateWorkspace message.
+func (wm *WorkspaceManager) HandleCreateWorkspace(msg messages.CreateWorkspace) []tea.Cmd {
+	var cmds []tea.Cmd
+	name := strings.TrimSpace(msg.Name)
+	base := msg.Base
+	assistant := strings.TrimSpace(msg.Assistant)
+	if assistant == "" {
+		cmds = append(cmds, func() tea.Msg {
+			return messages.WorkspaceCreateFailed{Err: errors.New("assistant is required")}
+		})
+		return cmds
+	}
+	if err := validation.ValidateAssistant(assistant); err != nil {
+		cmds = append(cmds, func() tea.Msg {
+			return messages.WorkspaceCreateFailed{Err: err}
+		})
+		return cmds
+	}
+	if wm.isKnownAssistant != nil && !wm.isKnownAssistant(assistant) {
+		cmds = append(cmds, func() tea.Msg {
+			return messages.WorkspaceCreateFailed{Err: fmt.Errorf("unknown assistant: %s", assistant)}
+		})
+		return cmds
+	}
+	if msg.Project != nil && name != "" && wm.workspaceService != nil {
+		pending := wm.workspaceService.pendingWorkspace(msg.Project, name, base)
+		if pending != nil {
+			pending.Assistant = assistant
+			wm.setCreatingWorkspace(string(pending.ID()))
+			if wm.dashboard != nil {
+				if cmd := wm.dashboard.SetWorkspaceCreating(pending, true); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+	}
+	if wm.workspaceService != nil {
+		cmds = append(cmds, wm.workspaceService.CreateWorkspace(msg.Project, name, base, assistant))
+	}
+	return cmds
+}
+
+// HandleWorkspaceCreated handles the WorkspaceCreated message.
+func (wm *WorkspaceManager) HandleWorkspaceCreated(msg messages.WorkspaceCreated) []tea.Cmd {
+	var cmds []tea.Cmd
+	if msg.Workspace != nil {
+		wm.clearCreatingWorkspace(string(msg.Workspace.ID()))
+		if wm.dashboard != nil {
+			if cmd := wm.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if wm.workspaceService != nil {
+			cmds = append(cmds, wm.workspaceService.RunSetupAsync(msg.Workspace))
+		}
+	}
+	if wm.workspaceService != nil {
+		cmds = append(cmds, wm.workspaceService.LoadProjects())
+	}
+	return cmds
+}
+
+// HandleWorkspaceCreatedWithWarning handles the WorkspaceCreatedWithWarning message.
+func (wm *WorkspaceManager) HandleWorkspaceCreatedWithWarning(msg messages.WorkspaceCreatedWithWarning) []tea.Cmd {
+	var cmds []tea.Cmd
+	if wm.setAppError != nil {
+		wm.setAppError(fmt.Errorf("workspace created with warning: %s", msg.Warning))
+	}
+	if msg.Workspace != nil {
+		wm.clearCreatingWorkspace(string(msg.Workspace.ID()))
+		if wm.dashboard != nil {
+			if cmd := wm.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+	}
+	if wm.workspaceService != nil {
+		cmds = append(cmds, wm.workspaceService.LoadProjects())
+	}
+	return cmds
+}
+
+// HandleWorkspaceSetupComplete handles the WorkspaceSetupComplete message.
+func (wm *WorkspaceManager) HandleWorkspaceSetupComplete(msg messages.WorkspaceSetupComplete) tea.Cmd {
+	if msg.Err != nil {
+		if wm.toast != nil {
+			return wm.toast.ShowWarning(fmt.Sprintf("Setup failed for %s: %v", msg.Workspace.Name, msg.Err))
+		}
+	}
+	return nil
+}
+
+// HandleWorkspaceCreateFailed handles the WorkspaceCreateFailed message.
+func (wm *WorkspaceManager) HandleWorkspaceCreateFailed(msg messages.WorkspaceCreateFailed) tea.Cmd {
+	var cmds []tea.Cmd
+	if msg.Workspace != nil {
+		wm.clearCreatingWorkspace(string(msg.Workspace.ID()))
+		if wm.dashboard != nil {
+			if cmd := wm.dashboard.SetWorkspaceCreating(msg.Workspace, false); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+	}
+	if errCmd := common.ReportError(errorContext(errorServiceWorkspace, "creating workspace"), msg.Err, ""); errCmd != nil {
+		cmds = append(cmds, errCmd)
+	}
+	return common.SafeBatch(cmds...)
+}
+
+// HandleDeleteWorkspace handles the DeleteWorkspace message.
+func (wm *WorkspaceManager) HandleDeleteWorkspace(msg messages.DeleteWorkspace) []tea.Cmd {
+	var cmds []tea.Cmd
+	if msg.Project == nil || msg.Workspace == nil {
+		logging.Warn("DeleteWorkspace received with nil project or workspace")
+		return nil
+	}
+	wm.markWorkspaceDeleteInFlight(msg.Workspace, true)
+	if wm.cleanupTmuxSessions != nil {
+		if cleanup := wm.cleanupTmuxSessions(msg.Workspace); cleanup != nil {
+			cmds = append(cmds, cleanup)
+		}
+	}
+	if wm.dashboard != nil {
+		if cmd := wm.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, true); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	if wm.deleteWorkspace != nil {
+		cmds = append(cmds, wm.deleteWorkspace(msg.Project, msg.Workspace))
+	}
+	return cmds
+}
+
+// HandleWorkspaceDeleted handles the WorkspaceDeleted message.
+func (wm *WorkspaceManager) HandleWorkspaceDeleted(msg messages.WorkspaceDeleted) []tea.Cmd {
+	var cmds []tea.Cmd
+	if msg.Workspace != nil {
+		wm.markWorkspaceDeleteInFlight(msg.Workspace, false)
+		wm.clearWorkspaceDirty(string(msg.Workspace.ID()))
+		if wm.cleanupTmuxSessions != nil {
+			if cleanup := wm.cleanupTmuxSessions(msg.Workspace); cleanup != nil {
+				cmds = append(cmds, cleanup)
+			}
+		}
+		if wm.dashboard != nil {
+			if cmd := wm.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, false); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if wm.gitStatus != nil {
+			wm.gitStatus.Invalidate(msg.Workspace.Root)
+		}
+		if wm.center != nil {
+			newCenter, cmd := wm.center.Update(msg)
+			wm.center = newCenter
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if wm.sidebarTerminal != nil {
+			newTerminal, cmd := wm.sidebarTerminal.Update(msg)
+			wm.sidebarTerminal = newTerminal
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+	}
+	if wm.workspaceService != nil {
+		cmds = append(cmds, wm.workspaceService.LoadProjects())
+	}
+	return cmds
+}
+
+// HandleWorkspaceDeleteFailed handles the WorkspaceDeleteFailed message.
+func (wm *WorkspaceManager) HandleWorkspaceDeleteFailed(msg messages.WorkspaceDeleteFailed) tea.Cmd {
+	var cmds []tea.Cmd
+	if msg.Workspace != nil {
+		// Ordering is intentional: clear delete-in-flight first so the
+		// persistence requeue below is not suppressed.
+		wm.markWorkspaceDeleteInFlight(msg.Workspace, false)
+		if wm.dashboard != nil {
+			if cmd := wm.dashboard.SetWorkspaceDeleting(msg.Workspace.Root, false); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		if wm.persistWorkspaceTabs != nil {
+			if cmd := wm.persistWorkspaceTabs(string(msg.Workspace.ID())); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+	}
+	if errCmd := common.ReportError(errorContext(errorServiceWorkspace, "removing workspace"), msg.Err, ""); errCmd != nil {
+		cmds = append(cmds, errCmd)
+	}
+	return common.SafeBatch(cmds...)
+}
+
+// HandlePersistDebounce handles the persistDebounceMsg message.
+func (wm *WorkspaceManager) HandlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
+	// Ignore stale tokens (newer persist request superseded this one)
+	if msg.token != wm.currentPersistToken() {
+		return nil
+	}
+	if wm.center == nil || wm.workspaceService == nil {
+		return nil
+	}
+	if wm.dirtyWorkspaceCount() == 0 {
+		return nil
+	}
+
+	// Collect snapshots for all dirty workspaces
+	dirty := wm.dirtyWorkspaceIDs()
+	var snapshots []*data.Workspace
+	processed := make(map[string]bool, len(dirty))
+	for wsID := range dirty {
+		if wm.isWorkspaceDeleteInFlight(wsID) {
+			// Keep dirty marker while delete is in flight. If delete fails, the
+			// marker must remain so pending workspace state can still be saved.
+			continue
+		}
+		ws := wm.findWorkspaceByID(wsID)
+		if ws == nil {
+			processed[wsID] = true
+			continue
+		}
+		// Update in-memory state from center tabs
+		tabs, activeIdx := wm.center.GetTabsInfoForWorkspace(wsID)
+		ws.OpenTabs = tabs
+		ws.ActiveTabIndex = activeIdx
+		snapshots = append(snapshots, snapshotWorkspaceForSave(ws))
+		processed[wsID] = true
+	}
+	// Clear only workspaces processed above; keep in-flight delete markers dirty.
+	for wsID := range processed {
+		wm.clearWorkspaceDirty(wsID)
+	}
+
+	if len(snapshots) == 0 {
+		return nil
+	}
+	service := wm.workspaceService
+	return func() tea.Msg {
+		for _, snap := range snapshots {
+			wsID := string(snap.ID())
+			var saveErr error
+			saved := wm.runUnlessWorkspaceDeleteInFlight(wsID, func() {
+				saveErr = service.Save(snap)
+			})
+			if !saved {
+				continue
+			}
+			if saveErr != nil {
+				logging.Warn("Failed to save workspace tabs: %v", saveErr)
+			} else {
+				// Marker bookkeeping is intentionally outside delete-state guard.
+				// Delete safety is enforced by the guarded Save above.
+				wm.markLocalWorkspaceSaveForID(wm.metadataRoot, wsID)
+			}
+		}
+		return nil
+	}
+}
+
+// HandleTabDetached handles the TabDetached message.
+func (wm *WorkspaceManager) HandleTabDetached(msg messages.TabDetached) tea.Cmd {
+	if msg.WorkspaceID != "" {
+		if wm.persistWorkspaceTabs != nil {
+			return wm.persistWorkspaceTabs(msg.WorkspaceID)
+		}
+		return nil
+	}
+	if wm.persistActiveTabs != nil {
+		return wm.persistActiveTabs()
+	}
+	return nil
+}
