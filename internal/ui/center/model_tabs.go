@@ -104,13 +104,33 @@ func truncateDisplayName(name string) string {
 	return name
 }
 
-// createAgentTabWithMetadata creates a new agent tab with draft metadata.
-func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace, ticketID, ticketTitle, model, agentMode string) tea.Cmd {
-	return m.createAgentTabWithSession(assistant, ws, "", "", true, ticketID, ticketTitle, model, agentMode)
+type agentTabOpts struct {
+	Assistant   string
+	Workspace   *data.Workspace
+	SessionName string
+	DisplayName string
+	Activate    bool
+	TicketID    string
+	TicketTitle string
+	Model       string
+	AgentMode   string
 }
 
-func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, sessionName, displayName string, activate bool, ticketID, ticketTitle, model, agentMode string) tea.Cmd {
-	if ws == nil {
+// createAgentTabWithMetadata creates a new agent tab with draft metadata.
+func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace, ticketID, ticketTitle, model, agentMode string) tea.Cmd {
+	return m.createAgentTabWithSession(agentTabOpts{
+		Assistant:   assistant,
+		Workspace:   ws,
+		Activate:    true,
+		TicketID:    ticketID,
+		TicketTitle: ticketTitle,
+		Model:       model,
+		AgentMode:   agentMode,
+	})
+}
+
+func (m *Model) createAgentTabWithSession(opts agentTabOpts) tea.Cmd {
+	if opts.Workspace == nil {
 		return func() tea.Msg {
 			return messages.Error{Err: errors.New("no workspace selected"), Context: "creating agent"}
 		}
@@ -121,19 +141,20 @@ func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, 
 	termWidth := tm.Width
 	termHeight := tm.Height
 	tabID := generateTabID()
+	sessionName := opts.SessionName
 	if sessionName == "" {
-		sessionName = tmux.SessionName("amux", string(ws.ID()), string(tabID))
+		sessionName = tmux.SessionName("amux", string(opts.Workspace.ID()), string(tabID))
 	}
 
 	return func() tea.Msg {
-		logging.Info("Creating agent tab: assistant=%s workspace=%s", assistant, ws.Name)
+		logging.Info("Creating agent tab: assistant=%s workspace=%s", opts.Assistant, opts.Workspace.Name)
 		now := time.Now()
 
 		tags := tmux.SessionTags{
-			WorkspaceID:  string(ws.ID()),
+			WorkspaceID:  string(opts.Workspace.ID()),
 			TabID:        string(tabID),
 			Type:         "agent",
-			Assistant:    assistant,
+			Assistant:    opts.Assistant,
 			CreatedAt:    now.Unix(),
 			InstanceID:   m.instanceID,
 			SessionOwner: m.instanceID,
@@ -142,12 +163,12 @@ func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, 
 			// ticket context from the very first creation, not only on
 			// reattach. This makes tabs discoverable by other instances
 			// immediately after launch.
-			TicketID:    ticketID,
-			TicketTitle: ticketTitle,
-			Model:       model,
-			AgentMode:   agentMode,
+			TicketID:    opts.TicketID,
+			TicketTitle: opts.TicketTitle,
+			Model:       opts.Model,
+			AgentMode:   opts.AgentMode,
 		}
-		agent, err := m.agentManager.CreateAgentWithTags(ws, appPty.AgentType(assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
+		agent, err := m.agentManager.CreateAgentWithTags(opts.Workspace, appPty.AgentType(opts.Assistant), sessionName, uint16(termHeight), uint16(termWidth), tags)
 		if err != nil {
 			logging.Error("Failed to create agent: %v", err)
 			return messages.Error{Err: err, Context: "creating agent"}
@@ -162,22 +183,22 @@ func (m *Model) createAgentTabWithSession(assistant string, ws *data.Workspace, 
 		scrollback, _ := tmux.CapturePane(sessionName, m.getTmuxOptions())
 
 		return ptyTabCreateResult{
-			Workspace:         ws,
-			Assistant:         assistant,
+			Workspace:         opts.Workspace,
+			Assistant:         opts.Assistant,
 			Agent:             agent,
 			TabID:             tabID,
-			DisplayName:       displayName,
-			Activate:          activate,
+			DisplayName:       opts.DisplayName,
+			Activate:          opts.Activate,
 			Rows:              captureRows,
 			Cols:              captureCols,
 			ScrollbackCapture: scrollback,
 			CaptureFullPane:   false,
 			SnapshotCols:      termWidth,
 			SnapshotRows:      termHeight,
-			TicketID:          ticketID,
-			TicketTitle:       ticketTitle,
-			Model:             model,
-			AgentMode:         agentMode,
+			TicketID:          opts.TicketID,
+			TicketTitle:       opts.TicketTitle,
+			Model:             opts.Model,
+			AgentMode:         opts.AgentMode,
 		}
 	}
 }
@@ -237,6 +258,10 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 			createdTerminal = true
 		}
 		tab.Assistant = msg.Assistant
+		tab.TicketID = msg.TicketID
+		tab.TicketTitle = msg.TicketTitle
+		tab.Model = msg.Model
+		tab.AgentMode = msg.AgentMode
 		if tab.Terminal != nil {
 			// Do not reset parser state when reusing an existing terminal here.
 			// pendingOutput may still contain continuation bytes queued under the
