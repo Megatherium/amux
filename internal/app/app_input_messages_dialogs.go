@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -103,7 +104,7 @@ func (a *App) handleShowSelectTicketDialog() tea.Cmd {
 		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
 	}
 	return func() tea.Msg {
-		t, _ := loadOpenAndInProgress(svc, a.activeProject.Path, 50)
+		t, _ := loadOpenAndInProgress(context.Background(), svc, a.activeProject.Path, 50)
 		return ticketsForPickerLoaded{tickets: t}
 	}
 }

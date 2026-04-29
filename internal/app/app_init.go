@@ -345,8 +345,29 @@ func (a *App) handleTicketStoreResult(msg ticketStoreResult) []tea.Cmd {
 	var cmds []tea.Cmd
 	if msg.service != nil {
 		cmds = append(cmds, a.loadTicketsForProject(msg.projectPath))
+		// Ensure the background poller is running and aware of this service.
+		a.ensureTicketPoller(msg.projectPath, msg.service)
 	}
 	return cmds
+}
+
+// ensureTicketPoller lazily creates the ticket poller on first use and starts
+// it as a supervisor worker. Subsequent calls add the new service to the
+// existing poller.
+func (a *App) ensureTicketPoller(projectPath string, svc *tickets.TicketService) {
+	if a.supervisor == nil || svc == nil {
+		return
+	}
+	if a.ticketPoller == nil {
+		a.ticketPoller = newTicketPoller(a.enqueueExternalMsg, ticketPollInterval)
+		a.supervisor.Start(
+			"app.ticket_poller",
+			a.ticketPoller.run,
+			supervisor.WithRestartPolicy(supervisor.RestartAlways),
+			supervisor.WithBackoff(supervisorBackoff),
+		)
+	}
+	a.ticketPoller.addService(projectPath, svc)
 }
 
 // loadTicketsForProject loads open tickets for a project and sends TicketsLoadedMsg.
@@ -356,7 +377,7 @@ func (a *App) loadTicketsForProject(path string) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		t, _ := loadOpenAndInProgress(svc, path, 20)
+		t, _ := loadOpenAndInProgress(context.Background(), svc, path, 20)
 		return messages.TicketsLoadedMsg{
 			ProjectPath: path,
 			Tickets:     t,
@@ -365,8 +386,10 @@ func (a *App) loadTicketsForProject(path string) tea.Cmd {
 }
 
 // loadOpenAndInProgress fetches open and in_progress tickets from a TicketService.
-func loadOpenAndInProgress(svc *tickets.TicketService, path string, limit int) ([]tickets.Ticket, error) {
-	t, err := svc.ListTickets(context.Background(), tickets.TicketFilter{
+// It returns an error if either query fails, ensuring callers never receive partial
+// results without being aware of the failure.
+func loadOpenAndInProgress(ctx context.Context, svc *tickets.TicketService, path string, limit int) ([]tickets.Ticket, error) {
+	t, err := svc.ListTickets(ctx, tickets.TicketFilter{
 		Status: "open",
 		Limit:  limit,
 	})
@@ -374,14 +397,13 @@ func loadOpenAndInProgress(svc *tickets.TicketService, path string, limit int) (
 		logging.Debug("Ticket load failed for %s (open): %v", path, err)
 		return nil, err
 	}
-	inProgress, err := svc.ListTickets(context.Background(), tickets.TicketFilter{
+	inProgress, err := svc.ListTickets(ctx, tickets.TicketFilter{
 		Status: "in_progress",
 		Limit:  limit,
 	})
 	if err != nil {
 		logging.Debug("Ticket load failed for %s (in_progress): %v", path, err)
-	} else {
-		t = append(t, inProgress...)
+		return nil, err
 	}
-	return t, nil
+	return append(t, inProgress...), nil
 }

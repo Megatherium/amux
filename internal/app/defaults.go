@@ -80,4 +80,9 @@ const (
 	// detachedAgentLivePaneStaleAfter is a stricter threshold for detached
 	// agent sessions that still have a live pane.
 	detachedAgentLivePaneStaleAfter = 72 * time.Hour
+
+	// ticketPollInterval controls how often the background poller checks
+	// TicketStore.LatestUpdate() for changes. The poller runs as a supervisor
+	// worker so this does not block the UI rendering thread.
+	ticketPollInterval = 5 * time.Second
 )

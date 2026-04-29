@@ -120,6 +120,9 @@ type App struct {
 	externalCritical chan tea.Msg
 	externalSender   func(tea.Msg)
 	externalOnce     sync.Once
+
+	// Ticket auto-refresh: supervisor worker that polls LatestUpdate() off-thread.
+	ticketPoller *ticketPoller
 }
 
 // wm returns the WorkspaceManager, lazily initializing it if nil.
