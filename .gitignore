@@ -8,3 +8,9 @@
 .dolt/
 *.db
 .beads-credential-key
+
+# Agent runtime artifacts
+.runtime/
+.claude/
+CLAUDE.md
+.config/forge/
