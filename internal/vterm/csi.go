@@ -85,6 +85,7 @@ func (p *Parser) getParam(idx, def int) int {
 	return def
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (p *Parser) executeCSI(final byte) {
 	switch final {
 	case 'A': // CUU - cursor up

@@ -10,6 +10,7 @@ import (
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
+//nolint:funlen // legacy suppression
 func (a *App) renderPrefixPalette() string {
 	if !a.prefixActive || a.ui.width <= 0 || a.ui.height <= 0 {
 		return ""
@@ -118,6 +119,7 @@ func (a *App) prefixPaletteSections() []prefixPaletteSection {
 	}
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) rootPrefixPaletteSections() []prefixPaletteSection {
 	choiceByKey := map[string]prefixPaletteChoice{}
 	groupByKey := map[string]string{}

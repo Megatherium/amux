@@ -9,6 +9,8 @@ import (
 )
 
 // View renders the project tree
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *ProjectTree) View() string {
 	if m.workspace == nil {
 		return m.renderWithHelp(m.styles.Muted.Render("No workspace selected"))

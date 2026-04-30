@@ -45,6 +45,7 @@ var (
 	buildErr  error
 )
 
+//nolint:cyclop,funlen // legacy suppression
 func StartPTYSession(opts PTYOptions) (*PTYSession, func(), error) {
 	if opts.Width <= 0 {
 		opts.Width = 120

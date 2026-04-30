@@ -129,6 +129,7 @@ func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace,
 	})
 }
 
+//nolint:funlen // legacy suppression
 func (m *Model) createAgentTabWithSession(opts agentTabOpts) tea.Cmd {
 	if opts.Workspace == nil {
 		return func() tea.Msg {
@@ -203,6 +204,7 @@ func (m *Model) createAgentTabWithSession(opts agentTabOpts) tea.Cmd {
 	}
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 	if msg.Workspace == nil || msg.Agent == nil {
 		return func() tea.Msg {

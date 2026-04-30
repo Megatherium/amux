@@ -62,6 +62,8 @@ func DrainKnownPTYNoiseTrailing(trailing *[]byte) []byte {
 
 // FilterKnownPTYNoiseStream filters chunked PTY output while carrying a possible
 // trailing diagnostic fragment between chunks so split lines can be removed.
+//
+//nolint:cyclop,funlen // legacy suppression
 func FilterKnownPTYNoiseStream(data []byte, trailing *[]byte) []byte {
 	if trailing == nil {
 		return FilterKnownPTYNoise(data)
@@ -296,6 +298,7 @@ func shouldBufferPotentialDiagnosticFragment(line []byte) bool {
 	return isMallocTokenPrefix(after)
 }
 
+//nolint:cyclop // legacy suppression
 func isPotentialPIDPrefix(token []byte) bool {
 	if len(token) == 0 {
 		return true

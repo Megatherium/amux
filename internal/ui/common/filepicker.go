@@ -130,6 +130,8 @@ func (fp *FilePicker) inputBasePath() string {
 }
 
 // Update handles messages
+//
+//nolint:cyclop,funlen // legacy suppression
 func (fp *FilePicker) Update(msg tea.Msg) (*FilePicker, tea.Cmd) {
 	if !fp.visible {
 		return fp, nil

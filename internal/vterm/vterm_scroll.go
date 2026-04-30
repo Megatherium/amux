@@ -206,6 +206,8 @@ func (v *VTerm) AppendScrollbackDelta(data []byte) {
 // viewport has changed since capture time, visibleHistoryRows indicates how
 // many of the newest captured rows are already visible after the restore/resize
 // and should not be appended back into scrollback.
+//
+//nolint:cyclop // legacy suppression
 func (v *VTerm) AppendScrollbackDeltaWithSize(data []byte, width, height, visibleHistoryRows int) {
 	if len(data) == 0 {
 		return
@@ -295,6 +297,7 @@ func (v *VTerm) LoadPaneCaptureWithCursorAndModes(
 	v.loadPaneCaptureWithCursor(data, cursorX, cursorY, hasCursor, modeState)
 }
 
+//nolint:funlen // legacy suppression
 func (v *VTerm) loadPaneCaptureWithCursor(
 	data []byte,
 	cursorX, cursorY int,

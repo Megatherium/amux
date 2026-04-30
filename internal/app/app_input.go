@@ -28,6 +28,7 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	return a.update(msg)
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer perf.Time("update")()
 	var cmds []tea.Cmd

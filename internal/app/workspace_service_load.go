@@ -14,6 +14,8 @@ import (
 )
 
 // LoadProjects loads all registered projects and their workspaces.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (s *workspaceService) LoadProjects() tea.Cmd {
 	return func() tea.Msg {
 		if s == nil || s.registry == nil {
@@ -101,6 +103,8 @@ func (s *workspaceService) LoadProjects() tea.Cmd {
 }
 
 // RescanWorkspaces discovers git worktrees and updates the workspace store.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (s *workspaceService) RescanWorkspaces() tea.Cmd {
 	return func() tea.Msg {
 		if s == nil || s.registry == nil {

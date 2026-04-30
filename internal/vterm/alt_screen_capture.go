@@ -6,6 +6,8 @@ package vterm
 // This is called before erase-display in alt-screen mode so that TUI content
 // (e.g. Claude Code plan mode) is preserved for amux scroll-back. A dedup
 // check avoids storing identical consecutive frames.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (v *VTerm) captureScreenToScrollback() {
 	lines := v.visibleCaptureFrame()
 	if len(lines) == 0 {
@@ -268,6 +270,8 @@ func (v *VTerm) dropTrackedAltScreenCapture() (int, [][]Cell) {
 // the top of the previous tracked frame when the next frame is largely a
 // suffix->prefix shift of it. This keeps transcript-style fullscreen redraws
 // (for example Claude review output) from dropping earlier text on each erase.
+//
+//nolint:funlen // legacy suppression
 func (v *VTerm) transitionTrackedAltScreenCapture(lines [][]Cell) (int, [][]Cell, bool) {
 	if len(lines) == 0 || !v.altScreenCaptureTracked || v.altScreenCaptureLen <= 0 {
 		return 0, nil, false

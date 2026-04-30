@@ -54,6 +54,7 @@ type ParserCarryState struct {
 	UTF8Remaining int
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func AdvanceParserCarryState(seed ParserCarryState, data []byte) ParserCarryState {
 	// Keep this state machine aligned with internal/ui/common/pty_overflow_trim.
 	// Both model parser continuity across chunk boundaries; if one changes
@@ -215,6 +216,7 @@ func (p *Parser) parseByte(b byte) {
 	}
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (p *Parser) parseGround(b byte) {
 	// Handle UTF-8 continuation if we're in the middle of a sequence
 	if p.utf8Len > 0 {

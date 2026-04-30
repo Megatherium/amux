@@ -13,6 +13,7 @@ const (
 	ansiActivityStringEsc
 )
 
+//nolint:cyclop,funlen // legacy suppression
 func hasVisiblePTYOutput(data []byte, state ansiActivityState) (bool, ansiActivityState) {
 	if len(data) == 0 {
 		return false, state

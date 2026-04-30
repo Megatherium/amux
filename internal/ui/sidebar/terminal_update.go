@@ -32,6 +32,7 @@ func (m *TerminalModel) Init() tea.Cmd {
 	return nil
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (m *TerminalModel) Update(msg tea.Msg) (*TerminalModel, tea.Cmd) {
 	var cmds []tea.Cmd
 

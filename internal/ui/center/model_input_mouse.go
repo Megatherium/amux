@@ -78,6 +78,8 @@ func (m *Model) updateMouseClick(msg tea.MouseClickMsg) (*Model, tea.Cmd) {
 }
 
 // updateMouseMotion handles tea.MouseMotionMsg in the Update switch.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) updateMouseMotion(msg tea.MouseMotionMsg) (*Model, tea.Cmd) {
 	var cmds []tea.Cmd
 

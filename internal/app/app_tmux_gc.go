@@ -69,6 +69,7 @@ func (a *App) gcOrphanedTmuxSessions() tea.Cmd {
 	}
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) gcStaleDetachedAgentSessions() tea.Cmd {
 	if !a.tmuxAvailable {
 		return nil

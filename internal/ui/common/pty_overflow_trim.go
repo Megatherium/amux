@@ -120,6 +120,7 @@ func overflowTrimStateToParserCarry(
 	}
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func advancePTYOverflowTrimState(
 	state ptyOverflowTrimState,
 	utf8Remaining int,

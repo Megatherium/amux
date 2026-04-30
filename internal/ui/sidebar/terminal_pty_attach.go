@@ -82,6 +82,8 @@ func (m *TerminalModel) sessionBootstrapViewportSize() (int, int) {
 }
 
 // createTerminalTab creates a new terminal tab for the workspace
+//
+//nolint:funlen // legacy suppression
 func (m *TerminalModel) createTerminalTab(ws *data.Workspace) tea.Cmd {
 	wsID := string(ws.ID())
 	tabID := generateTerminalTabID()
@@ -238,6 +240,7 @@ func (m *TerminalModel) RestartActiveTab() tea.Cmd {
 	return m.attachToSession(ws, tab.ID, sessionName, true, "restart")
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (m *TerminalModel) attachToSession(ws *data.Workspace, tabID TerminalTabID, sessionName string, detachExisting bool, action string) tea.Cmd {
 	if ws == nil {
 		return nil

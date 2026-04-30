@@ -146,6 +146,7 @@ func (v *VTerm) ResizeWithoutHistoryReveal(width, height int) {
 	v.resize(width, height, false)
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (v *VTerm) resize(width, height int, revealHistoryOnGrow bool) {
 	oldWidth := v.Width
 	oldHeight := v.Height

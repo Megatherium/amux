@@ -13,6 +13,8 @@ import (
 )
 
 // updatePTYOutput handles PTYOutput.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) updatePTYOutput(msg PTYOutput) tea.Cmd {
 	var cmds []tea.Cmd
 	tab := m.getTabByID(msg.WorkspaceID, msg.TabID)
@@ -149,6 +151,8 @@ func (m *Model) updatePTYOutput(msg PTYOutput) tea.Cmd {
 }
 
 // updatePTYFlush handles PTYFlush.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) updatePTYFlush(msg PTYFlush) tea.Cmd {
 	var cmds []tea.Cmd
 	tab := m.getTabByID(msg.WorkspaceID, msg.TabID)

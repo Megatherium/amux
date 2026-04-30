@@ -90,6 +90,8 @@ func (a *App) handleMouseMsg(msg tea.Msg) tea.Cmd {
 }
 
 // routeMouseWheel routes mouse wheel events to the appropriate pane.
+//
+//nolint:cyclop // legacy suppression
 func (a *App) routeMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	if a.prefixPaletteContainsPoint(msg.X, msg.Y) {
 		// Palette wheel input is currently non-interactive; consume it so hidden

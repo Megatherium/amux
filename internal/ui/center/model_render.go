@@ -19,6 +19,8 @@ func formatScrollPos(offset, total int) string {
 }
 
 // View renders the center pane
+//
+//nolint:funlen // legacy suppression
 func (m *Model) View() string {
 	defer perf.Time("center_view")()
 	var b strings.Builder

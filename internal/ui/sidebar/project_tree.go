@@ -65,6 +65,8 @@ func (m *ProjectTree) Init() tea.Cmd {
 }
 
 // Update handles messages
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *ProjectTree) Update(msg tea.Msg) (*ProjectTree, tea.Cmd) {
 	if !m.focused {
 		return m, nil

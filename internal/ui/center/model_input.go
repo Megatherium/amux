@@ -44,6 +44,8 @@ func (m *Model) noteLocalInput(tab *Tab, workspaceID, data string, now time.Time
 }
 
 // Update handles messages
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	defer perf.Time("center_update")()
 	var cmds []tea.Cmd

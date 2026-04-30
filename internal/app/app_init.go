@@ -25,6 +25,8 @@ import (
 )
 
 // New creates a new App instance.
+//
+//nolint:funlen // legacy suppression
 func New(version, commit, date string) (*App, error) {
 	cfg, err := config.DefaultConfig()
 	if err != nil {

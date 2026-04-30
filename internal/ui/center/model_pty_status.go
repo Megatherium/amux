@@ -270,6 +270,8 @@ func (m *Model) TerminalLayer() *compositor.VTermLayer {
 
 // TerminalLayerWithCursorOwner returns a VTermLayer for the active terminal while
 // enforcing whether this pane currently owns cursor rendering.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) TerminalLayerWithCursorOwner(cursorOwner bool) *compositor.VTermLayer {
 	tabs := m.getTabs()
 	activeIdx := m.getActiveTabIdx()

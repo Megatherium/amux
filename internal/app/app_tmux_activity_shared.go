@@ -228,6 +228,7 @@ func encodeTmuxActivitySnapshot(active map[string]bool, epoch int64, now time.Ti
 	return strconv.FormatInt(epoch, 10) + ";" + strconv.FormatInt(now.UnixMilli(), 10) + ";" + payload
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func decodeTmuxActivitySnapshot(raw string) (map[string]bool, int64, time.Time, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

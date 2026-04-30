@@ -157,6 +157,8 @@ type SelectionRegion struct {
 }
 
 // DrawScreen draws a vterm screen into the canvas with clipping.
+//
+//nolint:cyclop // legacy suppression
 func (c *Canvas) DrawScreen(x, y, w, h int, screen [][]vterm.Cell, cursor CursorState, viewOffset int, selection SelectionRegion) {
 	if w <= 0 || h <= 0 {
 		return
@@ -277,6 +279,8 @@ func RenderTerminal(term *vterm.VTerm, width, height int, showCursor bool, fg, b
 }
 
 // RenderTerminalWithCanvas renders a vterm into a reusable canvas.
+//
+//nolint:cyclop,funlen // legacy suppression
 func RenderTerminalWithCanvas(canvas *Canvas, term *vterm.VTerm, width, height int, showCursor bool, fg, bg vterm.Color) string {
 	if term == nil || width <= 0 || height <= 0 {
 		return ""

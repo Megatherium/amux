@@ -91,6 +91,8 @@ func (d *StringDrawable) Draw(screen uv.Screen, r uv.Rectangle) {
 }
 
 // applySGR updates the style based on SGR parameters.
+//
+//nolint:cyclop,funlen // legacy suppression
 func applySGR(style uv.Style, params ansi.Params) uv.Style {
 	if len(params) == 0 {
 		return uv.Style{}

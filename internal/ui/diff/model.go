@@ -119,6 +119,8 @@ func (m *Model) loadDiff() tea.Cmd {
 }
 
 // Update handles messages
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case diffLoaded:

@@ -187,6 +187,7 @@ func (d *Draft) Update(msg tea.Msg) (*Draft, tea.Cmd) {
 	return d, nil
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (d *Draft) handleKey(msg tea.KeyPressMsg) (*Draft, tea.Cmd) {
 	if d.activeSlot == SlotComplete {
 		return d, nil

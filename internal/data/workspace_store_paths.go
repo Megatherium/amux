@@ -77,6 +77,7 @@ func canonicalLookupPath(path string) string {
 	return NormalizePath(value)
 }
 
+//nolint:cyclop // legacy suppression
 func shouldPreferWorkspace(candidate, existing *Workspace) bool {
 	if existing == nil {
 		return true

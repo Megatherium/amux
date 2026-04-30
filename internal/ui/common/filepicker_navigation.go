@@ -48,6 +48,8 @@ func (fp *FilePicker) loadDirectory() {
 }
 
 // applyFilter updates filteredIdx based on input
+//
+//nolint:cyclop // legacy suppression
 func (fp *FilePicker) applyFilter() {
 	rawQuery := strings.TrimSpace(fp.input.Value())
 	query := rawQuery
@@ -193,6 +195,8 @@ func (fp *FilePicker) resolveInputPath(input string) (string, bool) {
 }
 
 // handleEnter handles the enter key
+//
+//nolint:funlen // legacy suppression
 func (fp *FilePicker) handleEnter() (*FilePicker, tea.Cmd) {
 	baseInput := strings.TrimSpace(fp.input.Value())
 	isBaseInput := fp.isBaseInput(baseInput)

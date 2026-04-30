@@ -2,6 +2,8 @@ package vterm
 
 // scrollUp scrolls the screen up by n lines, capturing to scrollback
 // This is THE critical function - lines scroll off into scrollback here
+//
+//nolint:cyclop // legacy suppression
 func (v *VTerm) scrollUp(n int) {
 	if n <= 0 {
 		return

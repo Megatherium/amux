@@ -26,6 +26,8 @@ func (a *App) syncActiveWorkspacesToDashboard() {
 }
 
 // handleKeyPress handles keyboard input
+//
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 	// Dismiss error on any key
 	if a.err != nil {

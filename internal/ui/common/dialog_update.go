@@ -10,6 +10,8 @@ import (
 )
 
 // Update handles messages
+//
+//nolint:cyclop,funlen // legacy suppression
 func (d *Dialog) Update(msg tea.Msg) (*Dialog, tea.Cmd) {
 	if !d.visible {
 		return d, nil
@@ -156,6 +158,7 @@ func (d *Dialog) Update(msg tea.Msg) (*Dialog, tea.Cmd) {
 	return d, nil
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (d *Dialog) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	if !d.visible {
 		return nil

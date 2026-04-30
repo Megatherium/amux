@@ -166,6 +166,7 @@ func (m *Model) RunTabActor(ctx context.Context) error {
 	}
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) handleTabEvent(ev tabEvent) {
 	if ev.tab == nil || ev.tab.isClosed() {
 		perf.Count("tab_event_drop_missing", 1)

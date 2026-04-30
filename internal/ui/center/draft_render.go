@@ -34,6 +34,7 @@ func (d *Draft) renderCollapsedSlot(slot DraftSlot, label string) string {
 	return checkStyle.Render("  ✓ ") + mutedStyle.Render(label+": "+value)
 }
 
+//nolint:funlen // legacy suppression
 func (d *Draft) renderExpandedSlot(_ DraftSlot, label string) string {
 	var b strings.Builder
 

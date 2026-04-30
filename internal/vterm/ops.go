@@ -3,6 +3,8 @@ package vterm
 import "github.com/mattn/go-runewidth"
 
 // putChar places a character at current cursor position
+//
+//nolint:cyclop,funlen // legacy suppression
 func (v *VTerm) putChar(r rune) {
 	lineY := v.CursorY
 	width := runewidth.RuneWidth(r)
@@ -141,6 +143,8 @@ func (v *VTerm) backspace() {
 }
 
 // eraseDisplay clears parts of the display
+//
+//nolint:cyclop // legacy suppression
 func (v *VTerm) eraseDisplay(mode int) {
 	switch mode {
 	case 0: // Cursor to end

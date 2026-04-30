@@ -18,6 +18,8 @@ func applyDirtyForeground(style lipgloss.Style, dirty, active, selected bool) li
 }
 
 // renderRow renders a single dashboard row
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) renderRow(row Row, selected bool) string {
 	switch row.Type {
 	case RowHome:

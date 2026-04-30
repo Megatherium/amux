@@ -31,6 +31,8 @@ func NewVTermSnapshot(term *vterm.VTerm, showCursor bool) *VTermSnapshot {
 // NewVTermSnapshotWithCache creates a snapshot from a VTerm, optionally reusing
 // lines from a previous snapshot when dirty line tracking allows.
 // MUST be called while holding the appropriate lock on the VTerm.
+//
+//nolint:cyclop,funlen // legacy suppression
 func NewVTermSnapshotWithCache(term *vterm.VTerm, showCursor bool, prev *VTermSnapshot) *VTermSnapshot {
 	if term == nil {
 		return nil

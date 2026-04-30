@@ -6,10 +6,12 @@ linters:
   default: none
   enable:
     - copyloopvar
+    - cyclop
     - depguard
     - errcheck
     - errorlint
     - forbidigo
+    - funlen
     - govet
     - ineffassign
     - misspell
@@ -23,6 +25,11 @@ linters:
     - usestdlibvars
     - whitespace
   settings:
+    cyclop:
+      max-complexity: 15
+    funlen:
+      lines: 60
+      statements: 40
     depguard:
       rules:
         main:
@@ -110,6 +117,10 @@ linters:
         path: ^cmd/
       - linters:
           - forbidigo
+        path: _test\.go
+      - linters:
+          - cyclop
+          - funlen
         path: _test\.go
     paths:
       - third_party$

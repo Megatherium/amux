@@ -84,6 +84,8 @@ func SessionLatestActivity(sessionName string, opts Options) (time.Time, bool, e
 // Activity is derived from tmux's window_activity timestamp.
 // Note: monitor-activity is set once at startup and per-session at creation
 // via SetMonitorActivityOn, not on every scan.
+//
+//nolint:cyclop,funlen // legacy suppression
 func ActiveAgentSessionsByActivity(window time.Duration, opts Options) ([]SessionActivity, error) {
 	if err := EnsureAvailable(); err != nil {
 		return nil, err

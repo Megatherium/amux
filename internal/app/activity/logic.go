@@ -13,6 +13,8 @@ import (
 // Fresh tags are trusted only when tmux reports recent window activity
 // (or if that prefilter is unavailable), preventing control-sequence noise
 // from holding sessions in an always-active state.
+//
+//nolint:cyclop,funlen // legacy suppression
 func ActiveWorkspaceIDsFromTags(
 	infoBySession map[string]SessionInfo,
 	sessions []TaggedSession,
@@ -193,6 +195,7 @@ func ActiveWorkspaceIDsWithHysteresis(
 	return activeWorkspaceIDsWithHysteresisWithSeen(infoBySession, sessions, states, nil, opts, captureFn, hashFn)
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func activeWorkspaceIDsWithHysteresisWithSeen(
 	infoBySession map[string]SessionInfo,
 	sessions []tmux.SessionActivity,

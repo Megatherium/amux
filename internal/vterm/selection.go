@@ -141,6 +141,8 @@ func (v *VTerm) GetSelectedText(startX, startLine, endX, endLine int) string {
 
 // GetTextRange extracts text from a range in the combined scrollback+screen buffer.
 // Coordinates are absolute line indices (0-based) and columns.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (v *VTerm) GetTextRange(startX, startLine, endX, endLine int) string {
 	if v == nil {
 		return ""

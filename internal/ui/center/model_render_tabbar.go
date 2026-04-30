@@ -9,6 +9,8 @@ import (
 )
 
 // renderTabBar renders the tab bar with activity indicators
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) renderTabBar() string {
 	m.tabHits = m.tabHits[:0]
 	currentTabs := m.getTabs()

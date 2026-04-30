@@ -153,6 +153,8 @@ func (r *ScriptRunner) RunSetup(ws *data.Workspace) error {
 }
 
 // RunScript runs a script for a workspace
+//
+//nolint:funlen // legacy suppression
 func (r *ScriptRunner) RunScript(ws *data.Workspace, scriptType ScriptType) (*exec.Cmd, error) {
 	if err := validateScriptWorkspace(ws); err != nil {
 		return nil, err

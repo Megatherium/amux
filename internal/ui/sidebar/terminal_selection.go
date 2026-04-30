@@ -146,6 +146,8 @@ func (m *TerminalModel) handleMouseClick(msg tea.MouseClickMsg) (*TerminalModel,
 }
 
 // handleMouseMotion handles mouse motion events for selection dragging
+//
+//nolint:funlen // legacy suppression
 func (m *TerminalModel) handleMouseMotion(msg tea.MouseMotionMsg) (*TerminalModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil

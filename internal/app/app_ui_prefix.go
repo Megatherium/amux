@@ -75,6 +75,7 @@ func (a *App) matchingPrefixCommands(sequence []string) []prefixCommand {
 	return matches
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) runPrefixAction(action string) tea.Cmd {
 	switch action {
 	case "focus_left":

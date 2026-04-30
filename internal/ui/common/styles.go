@@ -89,6 +89,8 @@ type Styles struct {
 }
 
 // DefaultStyles returns the default application styles using the current theme
+//
+//nolint:funlen // legacy suppression
 func DefaultStyles() Styles {
 	return Styles{
 		// Layout - Pane borders

@@ -118,6 +118,8 @@ func (m *Model) addPlaceholderTab(ws *data.Workspace, info data.TabInfo) (TabID,
 // reattachToSession returns a tea.Cmd that asynchronously connects a placeholder
 // tab to its tmux session. On success it produces ptyTabReattachResult which
 // updates the tab in-place (by TabID). On failure it produces ptyTabReattachFailed.
+//
+//nolint:funlen // legacy suppression
 func (m *Model) reattachToSession(ws *data.Workspace, tabID TabID, assistant, sessionName string) tea.Cmd {
 	termWidth, termHeight := m.sessionBootstrapViewportSize()
 	tm := m.terminalMetrics()

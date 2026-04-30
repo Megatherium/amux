@@ -8,3 +8,9 @@
 .dolt/
 *.db
 .beads-credential-key
+.config/
+.runtime/
+.claude/
+CLAUDE.md
+refinery/
+witness/

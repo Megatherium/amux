@@ -51,6 +51,8 @@ func (m *Model) View() string {
 }
 
 // renderChanges renders the git changes with grouped display
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) renderChanges() string {
 	if m.gitStatus == nil {
 		return m.styles.Muted.Render("No status loaded")

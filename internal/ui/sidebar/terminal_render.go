@@ -12,6 +12,8 @@ import (
 )
 
 // renderTabBar renders the terminal tab bar (compact single-line, no borders)
+//
+//nolint:funlen // legacy suppression
 func (m *TerminalModel) renderTabBar() string {
 	m.tabHits = m.tabHits[:0]
 	tabs := m.getTabs()

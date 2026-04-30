@@ -3,6 +3,8 @@ package common
 import tea "charm.land/bubbletea/v2"
 
 // KeyToBytes converts a key press message to bytes for the terminal.
+//
+//nolint:cyclop,funlen // legacy suppression
 func KeyToBytes(msg tea.KeyPressMsg) []byte {
 	key := msg.Key()
 

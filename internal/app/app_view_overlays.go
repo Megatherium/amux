@@ -13,6 +13,8 @@ import (
 )
 
 // composeOverlays adds overlay layers (dialogs, toasts, help, etc.) to the canvas.
+//
+//nolint:funlen // legacy suppression
 func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 	prefixOverlayHeight := 0
 

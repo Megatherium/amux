@@ -159,6 +159,7 @@ func defaultAssistants() map[string]AssistantConfig {
 	}
 }
 
+//nolint:cyclop // legacy suppression
 func loadAssistantOverrides(path string, assistants map[string]AssistantConfig) {
 	data, err := os.ReadFile(path)
 	if err != nil {

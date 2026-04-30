@@ -174,6 +174,8 @@ func (a *App) welcomeContent() string {
 
 // renderTicketPreview renders ticket info in the center pane when the cursor
 // hovers over a ticket row in the dashboard and no agent tabs are open.
+//
+//nolint:funlen // legacy suppression
 func (a *App) renderTicketPreview() string {
 	t := a.ui.previewTicket
 	if t == nil {

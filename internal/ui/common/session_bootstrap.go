@@ -53,6 +53,7 @@ func SessionBootstrapGeneration(sessionName string, opts tmux.Options, fns Sessi
 	return sessionCreatedAt, paneID, true
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func CaptureExistingSessionBootstrap(
 	sessionName string,
 	cols, rows int,
@@ -119,6 +120,7 @@ func CaptureExistingSessionBootstrap(
 	return bootstrap
 }
 
+//nolint:cyclop // legacy suppression
 func BootstrapSnapshotStillMatchesSession(
 	sessionName string,
 	bootstrap SessionBootstrapCapture,

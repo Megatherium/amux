@@ -51,6 +51,8 @@ func StyleToANSI(s Style) string {
 // StyleToDeltaANSI returns the minimal SGR escape sequence to transition from prev to next style.
 // This avoids the overhead of always emitting a full reset.
 // Optimized to avoid allocations using strings.Builder.
+//
+//nolint:cyclop,funlen // legacy suppression
 func StyleToDeltaANSI(prev, next Style) string {
 	if prev == next {
 		return ""

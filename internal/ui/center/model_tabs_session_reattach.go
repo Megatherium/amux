@@ -87,6 +87,8 @@ func (m *Model) sessionBootstrapViewportSize() (int, int) {
 }
 
 // ReattachActiveTab reattaches to a detached/stopped tmux session.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) ReattachActiveTab() tea.Cmd {
 	tabs := m.getTabs()
 	activeIdx := m.getActiveTabIdx()
@@ -278,6 +280,8 @@ func (m *Model) ReattachActiveTab() tea.Cmd {
 }
 
 // RestartActiveTab restarts a stopped or detached agent tab by creating a fresh tmux client.
+//
+//nolint:funlen // legacy suppression
 func (m *Model) RestartActiveTab() tea.Cmd {
 	tabs := m.getTabs()
 	activeIdx := m.getActiveTabIdx()

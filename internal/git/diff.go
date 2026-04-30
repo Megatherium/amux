@@ -108,6 +108,8 @@ func GetUntrackedFileContent(repoPath, path string) (*DiffResult, error) {
 }
 
 // parseDiff parses unified diff output into a DiffResult
+//
+//nolint:cyclop,funlen // legacy suppression
 func parseDiff(path, content string) *DiffResult {
 	result := &DiffResult{
 		Path:    path,

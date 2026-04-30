@@ -73,6 +73,8 @@ func (m *Model) sessionRestoreLiveSize(captureFullPane bool, captureCols, captur
 }
 
 // updatePtyTabReattachResult handles ptyTabReattachResult.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) updatePtyTabReattachResult(msg ptyTabReattachResult) (*Model, tea.Cmd) {
 	tab := m.getTabByID(msg.WorkspaceID, msg.TabID)
 	if tab == nil || msg.Agent == nil {

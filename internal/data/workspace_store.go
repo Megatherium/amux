@@ -364,6 +364,7 @@ func (s *WorkspaceStore) ListByRepoIncludingArchived(repoPath string) ([]*Worksp
 	return s.listByRepo(repoPath, true)
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (s *WorkspaceStore) listByRepo(repoPath string, includeArchived bool) ([]*Workspace, error) {
 	ids, err := s.List()
 	if err != nil {

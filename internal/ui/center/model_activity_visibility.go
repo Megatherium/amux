@@ -45,6 +45,7 @@ func consumeSubmittedPasteEchoLocked(tab *Tab, output []byte) bool {
 	return false
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func normalizeSubmittedPasteEchoOutput(output []byte) string {
 	if len(output) == 0 {
 		return ""
@@ -132,6 +133,7 @@ func normalizeSubmittedPasteEchoOutput(output []byte) string {
 	return normalized
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) noteVisibleActivityLockedWithOutput(
 	tab *Tab,
 	hasMoreBuffered bool,

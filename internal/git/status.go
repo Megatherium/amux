@@ -174,6 +174,8 @@ func countUntrackedLines(repoPath string, untracked []Change) int {
 // parseStatusPorcelain parses git status --porcelain=v1 -z output
 // Format: XY PATH\0 or XY NEWPATH\0OLDPATH\0 (for renames/copies)
 // Where X is index status, Y is work tree status
+//
+//nolint:funlen // legacy suppression
 func parseStatusPorcelain(output []byte) *StatusResult {
 	result := &StatusResult{
 		Staged:    []Change{},

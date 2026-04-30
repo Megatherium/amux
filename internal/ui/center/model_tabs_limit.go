@@ -24,6 +24,8 @@ type attachedTabCandidate struct {
 // the number of attached/running chat tabs exceeds maxAttached.
 //
 // The currently focused tab in the active workspace is never auto-detached.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) EnforceAttachedAgentTabLimit(maxAttached int) ([]DetachedTabInfo, []tea.Cmd) {
 	// 0 means disabled (unlimited attached chat tabs).
 	if maxAttached <= 0 {

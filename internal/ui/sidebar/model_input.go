@@ -10,6 +10,8 @@ import (
 )
 
 // Update handles messages.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	var cmds []tea.Cmd
 

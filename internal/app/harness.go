@@ -93,6 +93,7 @@ func newMonitorHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 	return h
 }
 
+//nolint:funlen // legacy suppression
 func newCenterHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 	centerModel := center.New(cfg)
 	centerModel.SetShowKeymapHints(opts.ShowKeymapHints)

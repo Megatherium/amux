@@ -21,6 +21,8 @@ func isDigitsAndSemicolons(s string) bool {
 
 // isLocalEditingEscapeSequence reports escape sequences commonly produced by
 // navigation/editing keys (arrow keys, home/end, insert/delete, etc.).
+//
+//nolint:cyclop // legacy suppression
 func isLocalEditingEscapeSequence(data string) bool {
 	if len(data) < 2 || data[0] != '\x1b' {
 		return false

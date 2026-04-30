@@ -9,6 +9,8 @@ import (
 
 // RebindWorkspaceID migrates tab state from a previous workspace ID to a new one.
 // This keeps tabs/session state visible when workspace identity changes during reloads.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) RebindWorkspaceID(previous, current *data.Workspace) tea.Cmd {
 	if m == nil || previous == nil || current == nil {
 		return nil

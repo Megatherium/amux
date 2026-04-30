@@ -214,6 +214,7 @@ func Flush(reason string) {
 	}
 }
 
+//nolint:funlen // legacy suppression
 func snapshotAndReset() ([]statSnapshot, []counterSnapshot) {
 	statsMu.Lock()
 	statsList := make([]statEntry, 0, len(statsMap))

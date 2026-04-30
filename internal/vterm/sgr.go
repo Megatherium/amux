@@ -1,5 +1,6 @@
 package vterm
 
+//nolint:cyclop,funlen // legacy suppression
 func (p *Parser) executeSGR() {
 	if len(p.params) == 0 {
 		p.params = []int{0}

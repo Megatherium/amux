@@ -103,6 +103,8 @@ func (s *Supervisor) SetErrorHandler(handler func(name string, err error)) {
 }
 
 // Start runs a worker under supervision.
+//
+//nolint:cyclop // legacy suppression
 func (s *Supervisor) Start(name string, fn func(context.Context) error, opts ...Option) {
 	if s == nil || fn == nil {
 		return

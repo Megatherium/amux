@@ -31,6 +31,8 @@ type PTYMsgFactory struct {
 // RunPTYReader reads from r, buffers bytes, sends Output messages via msgCh
 // on ticker ticks or when MaxPendingBytes is hit. Sends Stopped on error.
 // Closes msgCh on exit.
+//
+//nolint:cyclop,funlen // legacy suppression
 func RunPTYReader(
 	r io.Reader, msgCh chan tea.Msg, cancel <-chan struct{},
 	heartbeat *int64, cfg PTYReaderConfig, factory PTYMsgFactory,
@@ -195,6 +197,8 @@ type OutputMerger struct {
 }
 
 // ForwardPTYMsgs reads from msgCh, merges consecutive output messages, forwards via sink.
+//
+//nolint:cyclop // legacy suppression
 func ForwardPTYMsgs(msgCh <-chan tea.Msg, sink func(tea.Msg), merger OutputMerger) {
 	for msg := range msgCh {
 		if msg == nil {

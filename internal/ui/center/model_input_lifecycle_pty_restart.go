@@ -14,6 +14,8 @@ import (
 )
 
 // updatePTYStopped handles PTYStopped.
+//
+//nolint:funlen // legacy suppression
 func (m *Model) updatePTYStopped(msg PTYStopped) tea.Cmd {
 	var cmds []tea.Cmd
 	var tagSessionName string

@@ -40,6 +40,7 @@ func (a *App) handleProjectsLoaded(msg messages.ProjectsLoaded) []tea.Cmd {
 	return cmds
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) rebindActiveSelection() []tea.Cmd {
 	var cmds []tea.Cmd
 	if a.activeWorkspace != nil {

@@ -9,6 +9,8 @@ import (
 
 // RebindWorkspaceID migrates terminal tabs from a previous workspace ID to a new one.
 // This preserves running/session-backed terminal tabs across workspace ID rewrites.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *TerminalModel) RebindWorkspaceID(previous, current *data.Workspace) tea.Cmd {
 	if m == nil || previous == nil || current == nil {
 		return nil

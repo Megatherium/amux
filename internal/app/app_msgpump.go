@@ -81,6 +81,7 @@ func (a *App) tryEnqueueExternalMsg(msg tea.Msg) bool {
 	}
 }
 
+//nolint:cyclop // legacy suppression
 func (a *App) runExternalMsgs(ctx context.Context) error {
 	for {
 		// Fast-path: drain critical messages first (non-blocking)

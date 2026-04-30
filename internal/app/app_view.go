@@ -78,6 +78,8 @@ func (a *App) fallbackView() tea.View {
 
 // viewLayerBased renders the application using lipgloss Canvas composition.
 // This enables ultraviolet to perform cell-level differential updates.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) viewLayerBased() tea.View {
 	view := tea.View{
 		AltScreen:            true,

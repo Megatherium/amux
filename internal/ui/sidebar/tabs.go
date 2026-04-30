@@ -90,6 +90,8 @@ func (m *TabbedSidebar) Init() tea.Cmd {
 }
 
 // Update handles messages
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *TabbedSidebar) Update(msg tea.Msg) (*TabbedSidebar, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -221,6 +223,8 @@ func (m *TabbedSidebar) updateFocus() {
 }
 
 // renderTabBar renders the tab bar
+//
+//nolint:funlen // legacy suppression
 func (m *TabbedSidebar) renderTabBar() string {
 	m.tabHits = m.tabHits[:0]
 

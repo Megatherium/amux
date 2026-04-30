@@ -48,6 +48,8 @@ func ParsePrefixKey(raw string) ([]string, string) {
 
 // PrefixKeyByte returns the raw byte to send to a terminal for the given key
 // name, or -1 if no single-byte representation exists (e.g. function keys).
+//
+//nolint:cyclop,funlen // legacy suppression
 func PrefixKeyByte(keyName string) int {
 	lower := strings.ToLower(keyName)
 	if strings.HasPrefix(lower, "ctrl+") {

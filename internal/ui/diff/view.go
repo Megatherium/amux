@@ -152,6 +152,8 @@ func (m *Model) renderHeader() string {
 }
 
 // renderDiff renders the actual diff content
+//
+//nolint:funlen // legacy suppression
 func (m *Model) renderDiff() string {
 	var b strings.Builder
 

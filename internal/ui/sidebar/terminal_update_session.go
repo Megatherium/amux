@@ -74,6 +74,8 @@ func (m *TerminalModel) handleTerminalCreated(msg SidebarTerminalCreated) tea.Cm
 }
 
 // handleReattachResult applies the result of a terminal reattach operation.
+//
+//nolint:funlen // legacy suppression
 func (m *TerminalModel) handleReattachResult(msg SidebarTerminalReattachResult) tea.Cmd {
 	tab := m.getTabByID(msg.WorkspaceID, msg.TabID)
 	if tab == nil || tab.State == nil {

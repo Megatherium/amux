@@ -64,6 +64,8 @@ func (m *TerminalModel) handlePTYOutput(msg messages.SidebarPTYOutput) tea.Cmd {
 }
 
 // handlePTYFlush writes buffered PTY data to the vterm when the quiet period expires.
+//
+//nolint:funlen // legacy suppression
 func (m *TerminalModel) handlePTYFlush(msg messages.SidebarPTYFlush) tea.Cmd {
 	wsID := msg.WorkspaceID
 	tabID := TerminalTabID(msg.TabID)
@@ -140,6 +142,8 @@ func (m *TerminalModel) handlePTYFlush(msg messages.SidebarPTYFlush) tea.Cmd {
 }
 
 // handlePTYStopped handles PTY reader exit, restarting with backoff or marking detached.
+//
+//nolint:funlen // legacy suppression
 func (m *TerminalModel) handlePTYStopped(msg messages.SidebarPTYStopped) tea.Cmd {
 	wsID := msg.WorkspaceID
 	tabID := TerminalTabID(msg.TabID)

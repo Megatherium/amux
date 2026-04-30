@@ -51,6 +51,7 @@ func (fp *FilePicker) dialogBounds(contentHeight int) (x, y, w, h int) {
 	return x, y, w, h
 }
 
+//nolint:funlen // legacy suppression
 func (fp *FilePicker) renderLines() []string {
 	fp.rowHits = fp.rowHits[:0]
 	fp.buttonHits = fp.buttonHits[:0]

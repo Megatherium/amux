@@ -60,6 +60,8 @@ func New() *Model {
 }
 
 // rebuildDisplayList rebuilds the flat display list from grouped status.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (m *Model) rebuildDisplayList() {
 	m.displayItems = nil
 

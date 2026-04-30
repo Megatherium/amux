@@ -2,6 +2,7 @@ package app
 
 import "github.com/andyrewlee/amux/internal/messages"
 
+//nolint:cyclop // legacy suppression
 func (a *App) prefixActionVisible(action string) bool {
 	// Keep behavior permissive in lightweight tests that don't fully initialize App state.
 	if a == nil || a.ui == nil || a.ui.layout == nil || a.ui.center == nil || a.ui.sidebarTerminal == nil {

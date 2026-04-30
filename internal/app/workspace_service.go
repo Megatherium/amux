@@ -72,6 +72,8 @@ func (s *workspaceService) AddProject(path string) tea.Cmd {
 }
 
 // CreateWorkspace creates a new workspace.
+//
+//nolint:funlen // legacy suppression
 func (s *workspaceService) CreateWorkspace(project *data.Project, name, base string, assistant ...string) tea.Cmd {
 	return func() (msg tea.Msg) {
 		var ws *data.Workspace
@@ -193,6 +195,8 @@ func (s *workspaceService) RunSetupAsync(ws *data.Workspace) tea.Cmd {
 }
 
 // DeleteWorkspace deletes a workspace.
+//
+//nolint:funlen // legacy suppression
 func (s *workspaceService) DeleteWorkspace(project *data.Project, ws *data.Workspace) tea.Cmd {
 	// Defensive nil checks
 	if project == nil || ws == nil {

@@ -83,6 +83,8 @@ func (u *Updater) Check() (*CheckResult, error) {
 }
 
 // Upgrade downloads and installs the latest version.
+//
+//nolint:funlen // legacy suppression
 func (u *Updater) Upgrade(release *Release) error {
 	if release == nil {
 		return errors.New("no release to upgrade to")

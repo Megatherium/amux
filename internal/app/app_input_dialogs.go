@@ -97,6 +97,8 @@ func (a *App) handleSettingsDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
 }
 
 // handleDialogResult handles dialog completion
+//
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) handleDialogResult(result common.DialogResult) tea.Cmd {
 	project := a.ui.dialogProject
 	workspace := a.ui.dialogWorkspace

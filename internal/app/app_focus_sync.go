@@ -4,6 +4,8 @@ import "github.com/andyrewlee/amux/internal/messages"
 
 // syncPaneFocusFlags keeps child model focus flags consistent with focusedPane.
 // This is a defensive invariant to prevent stale multi-cursor states.
+//
+//nolint:funlen // legacy suppression
 func (a *App) syncPaneFocusFlags() {
 	focusDashboard := func() {
 		if a.ui.dashboard != nil {

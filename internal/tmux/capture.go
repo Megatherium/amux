@@ -185,6 +185,7 @@ func SessionPaneSize(sessionName string, opts Options) (int, int, bool, error) {
 	return paneSize(paneID, opts)
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func parsePaneModeState(parts []string, paneID string) (PaneModeState, bool) {
 	if len(parts) == 0 {
 		return PaneModeState{}, false

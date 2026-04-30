@@ -58,6 +58,8 @@ func (m *TicketView) Blur() { m.focused = false }
 func (m *TicketView) Focused() bool { return m.focused }
 
 // View renders the ticket details.
+//
+//nolint:funlen // legacy suppression
 func (m *TicketView) View() string {
 	if m.ticket == nil {
 		return m.styles.Muted.Render("No ticket selected")

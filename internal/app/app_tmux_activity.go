@@ -112,6 +112,7 @@ func (a *App) handleTmuxActivityTick(msg tmuxActivityTick) []tea.Cmd {
 	return cmds
 }
 
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) runTmuxActivityScan(
 	scanToken int,
 	infoBySession map[string]activity.SessionInfo,
@@ -318,6 +319,8 @@ func (a *App) tabSessionInfoByName() map[string]activity.SessionInfo {
 // ActiveWorkspaceIDsFromTags call (which filters via IsRunningSession) sees corrected
 // statuses. It returns TabSessionStatus messages for sessions whose status changed
 // from a running-like state to stopped.
+//
+//nolint:cyclop,funlen // legacy suppression
 func syncActivitySessionStates(
 	infoBySession map[string]activity.SessionInfo,
 	sessions []activity.TaggedSession,

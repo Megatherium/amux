@@ -31,6 +31,8 @@ type sidebarSessionInfo struct {
 }
 
 // discoverWorkspaceTabsFromTmux populates missing tabs from live tmux sessions.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (a *App) discoverWorkspaceTabsFromTmux(ws *data.Workspace) tea.Cmd {
 	if ws == nil || !a.tmuxAvailable {
 		return nil
@@ -125,6 +127,8 @@ func (a *App) discoverWorkspaceTabsFromTmux(ws *data.Workspace) tea.Cmd {
 }
 
 // discoverSidebarTerminalsFromTmux finds terminal sessions for the workspace.
+//
+//nolint:funlen // legacy suppression
 func (a *App) discoverSidebarTerminalsFromTmux(ws *data.Workspace) tea.Cmd {
 	if ws == nil {
 		return nil

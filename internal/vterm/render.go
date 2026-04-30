@@ -78,6 +78,8 @@ func (v *VTerm) VisibleScreen() [][]Cell {
 
 // VisibleScreenInto returns the currently visible screen buffer, reusing dst when possible.
 // dst is resized as needed and its lines are reused to reduce allocations.
+//
+//nolint:cyclop,funlen // legacy suppression
 func (v *VTerm) VisibleScreenInto(dst [][]Cell) [][]Cell {
 	screen, scrollbackLen := v.RenderBuffers()
 	width := v.Width
@@ -283,6 +285,8 @@ func (v *VTerm) renderRow(row []Cell, y int) string {
 }
 
 // renderWithScrollbackFrom renders content from scrollback + screen
+//
+//nolint:cyclop,funlen // legacy suppression
 func (v *VTerm) renderWithScrollbackFrom(screen [][]Cell, scrollbackLen int) string {
 	var buf strings.Builder
 	buf.Grow(v.Width * v.Height * 2)

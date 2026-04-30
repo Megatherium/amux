@@ -219,6 +219,8 @@ func (m *Model) RestoreTabsFromWorkspace(ws *data.Workspace) tea.Cmd {
 }
 
 // AddTabsFromWorkspace adds new tabs without resetting existing UI state.
+//
+//nolint:cyclop // legacy suppression
 func (m *Model) AddTabsFromWorkspace(ws *data.Workspace, tabs []data.TabInfo) tea.Cmd {
 	if ws == nil || len(tabs) == 0 {
 		return nil
