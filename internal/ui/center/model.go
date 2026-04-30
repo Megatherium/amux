@@ -1,7 +1,6 @@
 package center
 
 import (
-	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -20,8 +19,9 @@ type Model struct {
 	workspaceIDCached     string
 	workspaceIDRepo       string
 	workspaceIDRoot       string
-	tabsByWorkspace       map[string][]*Tab // tabs per workspace ID
-	activeTabByWorkspace  map[string]int    // active tab index per workspace
+	tabsByWorkspace       map[string][]*Tab          // tabs per workspace ID
+	activeTabByWorkspace  map[string]int             // active tab index per workspace
+	agentsByWorkspace     map[string][]*appPty.Agent // agents per workspace ID
 	focused               bool
 	canFocusRight         bool
 	tabsRevision          uint64
@@ -29,9 +29,9 @@ type Model struct {
 	msgSink               func(tea.Msg)
 	msgSinkTry            func(tea.Msg) bool
 	tabEvents             chan tabEvent
-	tabActorReady         uint32
+	tabActorReady         bool
 	tabActorHeartbeat     int64
-	tabActorRedrawPending uint32
+	tabActorRedrawPending bool
 	flushLoadSampleAt     time.Time
 	cachedBusyTabCount    int
 
@@ -196,38 +196,32 @@ func (m *Model) terminalMetrics() TerminalMetrics {
 }
 
 func (m *Model) isTabActorReady() bool {
-	if atomic.LoadUint32(&m.tabActorReady) == 0 {
+	if !m.tabActorReady {
 		return false
 	}
-	lastBeat := atomic.LoadInt64(&m.tabActorHeartbeat)
-	if lastBeat == 0 {
+	if m.tabActorHeartbeat == 0 {
 		return false
 	}
-	if time.Since(time.Unix(0, lastBeat)) > tabActorStallTimeout {
-		atomic.StoreUint32(&m.tabActorReady, 0)
+	if time.Since(time.Unix(0, m.tabActorHeartbeat)) > tabActorStallTimeout {
+		m.tabActorReady = false
 		return false
 	}
 	return true
 }
 
 func (m *Model) setTabActorReady() {
-	atomic.StoreInt64(&m.tabActorHeartbeat, time.Now().UnixNano())
-	atomic.StoreUint32(&m.tabActorReady, 1)
+	m.tabActorHeartbeat = time.Now().UnixNano()
+	m.tabActorReady = true
 }
 
 func (m *Model) noteTabActorHeartbeat() {
 	observedAt := time.Now().UnixNano()
-	for {
-		prev := atomic.LoadInt64(&m.tabActorHeartbeat)
-		if observedAt <= prev {
-			observedAt = prev + 1
-		}
-		if atomic.CompareAndSwapInt64(&m.tabActorHeartbeat, prev, observedAt) {
-			break
-		}
+	if observedAt <= m.tabActorHeartbeat {
+		observedAt = m.tabActorHeartbeat + 1
 	}
-	if atomic.LoadUint32(&m.tabActorReady) == 0 {
-		atomic.StoreUint32(&m.tabActorReady, 1)
+	m.tabActorHeartbeat = observedAt
+	if !m.tabActorReady {
+		m.tabActorReady = true
 	}
 }
 
@@ -236,13 +230,14 @@ func (m *Model) requestTabActorRedraw() {
 		return
 	}
 	if m.msgSinkTry != nil {
-		if !atomic.CompareAndSwapUint32(&m.tabActorRedrawPending, 0, 1) {
+		if m.tabActorRedrawPending {
 			return
 		}
+		m.tabActorRedrawPending = true
 		if m.msgSinkTry(tabActorRedraw{}) {
 			return
 		}
-		atomic.StoreUint32(&m.tabActorRedrawPending, 0)
+		m.tabActorRedrawPending = false
 		return
 	}
 	if m.msgSink != nil {
@@ -254,7 +249,30 @@ func (m *Model) clearTabActorRedrawPending() {
 	if m == nil {
 		return
 	}
-	atomic.StoreUint32(&m.tabActorRedrawPending, 0)
+	m.tabActorRedrawPending = false
+}
+
+// addAgent registers an agent in the per-workspace registry.
+func (m *Model) addAgent(wsID string, agent *appPty.Agent) {
+	if wsID == "" || agent == nil {
+		return
+	}
+	m.agentsByWorkspace[wsID] = append(m.agentsByWorkspace[wsID], agent)
+}
+
+// removeAgent removes an agent from the per-workspace registry.
+func (m *Model) removeAgent(agent *appPty.Agent) {
+	if agent == nil || agent.Workspace == nil {
+		return
+	}
+	wsID := string(agent.Workspace.ID())
+	agents := m.agentsByWorkspace[wsID]
+	for i, a := range agents {
+		if a == agent {
+			m.agentsByWorkspace[wsID] = append(agents[:i], agents[i+1:]...)
+			return
+		}
+	}
 }
 
 func (m *Model) setWorkspace(ws *data.Workspace) {

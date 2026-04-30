@@ -431,7 +431,12 @@ func (m *Model) CleanupWorkspace(ws *data.Workspace) {
 	m.noteTabsChanged()
 
 	// Also cleanup agents for this workspace
-	if m.agentManager != nil {
-		m.agentManager.CloseWorkspaceAgents(ws)
+	if agents, ok := m.agentsByWorkspace[wsID]; ok {
+		for _, agent := range agents {
+			if agent.Terminal != nil {
+				agent.Terminal.Close()
+			}
+		}
+		delete(m.agentsByWorkspace, wsID)
 	}
 }

@@ -120,6 +120,7 @@ func (m *Model) updatePtyTabReattachResult(msg ptyTabReattachResult) (*Model, te
 		}
 	}
 	tab.Agent = msg.Agent
+	m.addAgent(msg.WorkspaceID, msg.Agent)
 	tab.SessionName = msg.Agent.Session
 	tab.Detached = false
 	tab.reattachInFlight = false
@@ -217,6 +218,7 @@ func (m *Model) updateTabSessionStatus(msg messages.TabSessionStatus) (*Model, t
 	tab.Agent = nil
 	tab.mu.Unlock()
 	if agent != nil {
+		m.removeAgent(agent)
 		_ = m.agentManager.CloseAgent(agent)
 	}
 	tab.mu.Lock()

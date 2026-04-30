@@ -72,13 +72,18 @@ type tabActorRedraw struct{}
 func (tabActorRedraw) MarkCriticalExternalMsg()            {}
 func (tabActorRedraw) MarkNonEvictingCriticalExternalMsg() {}
 
-type tabDiffCmd struct{ cmd tea.Cmd }
+type tabActorReadyMsg struct{}
 
-type TabInputFailed struct {
-	TabID       TabID
-	WorkspaceID string
-	Err         error
-}
+// tabActorHeartbeatMsg carries a heartbeat timestamp from the background actor.
+type (
+	tabActorHeartbeatMsg struct{ At int64 }
+	tabDiffCmd           struct{ cmd tea.Cmd }
+	TabInputFailed       struct {
+		TabID       TabID
+		WorkspaceID string
+		Err         error
+	}
+)
 
 func (m *Model) shouldPostWriteRedraw(tab *Tab) bool {
 	return tab != nil && (m.isChatTab(tab) || tab.postWriteVisible())
@@ -147,7 +152,10 @@ func (m *Model) RunTabActor(ctx context.Context) error {
 	if m == nil || m.tabEvents == nil {
 		return nil
 	}
-	m.setTabActorReady()
+	// Signal readiness to the main loop via message.
+	if m.msgSink != nil {
+		m.msgSink(tabActorReadyMsg{})
+	}
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -155,13 +163,17 @@ func (m *Model) RunTabActor(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case ev := <-m.tabEvents:
-			m.noteTabActorHeartbeat()
+			if m.msgSink != nil {
+				m.msgSink(tabActorHeartbeatMsg{At: time.Now().UnixNano()})
+			}
 			m.handleTabEvent(ev)
 			if shouldPostTabActorRedraw(ev.kind) {
 				m.requestTabActorRedraw()
 			}
 		case <-ticker.C:
-			m.noteTabActorHeartbeat()
+			if m.msgSink != nil {
+				m.msgSink(tabActorHeartbeatMsg{At: time.Now().UnixNano()})
+			}
 		}
 	}
 }
@@ -172,7 +184,6 @@ func (m *Model) handleTabEvent(ev tabEvent) {
 		return
 	}
 	tab := ev.tab
-
 	switch ev.kind {
 	case tabEventSelectionClear:
 		hadSelection := false

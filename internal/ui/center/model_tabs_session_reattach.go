@@ -321,6 +321,7 @@ func (m *Model) RestartActiveTab() tea.Cmd {
 	tab.Agent = nil
 	tab.mu.Unlock()
 	if existingAgent != nil {
+		m.removeAgent(existingAgent)
 		_ = m.agentManager.CloseAgent(existingAgent)
 	}
 	tmuxOpts := m.getTmuxOptions()

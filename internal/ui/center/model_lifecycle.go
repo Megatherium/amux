@@ -15,6 +15,7 @@ func New(cfg *config.Config) *Model {
 	return &Model{
 		tabsByWorkspace:      make(map[string][]*Tab),
 		activeTabByWorkspace: make(map[string]int),
+		agentsByWorkspace:    make(map[string][]*appPty.Agent),
 		config:               cfg,
 		agentManager:         appPty.NewAgentManager(cfg),
 		styles:               common.DefaultStyles(),
@@ -234,9 +235,15 @@ func (m *Model) Close() {
 			tab.markClosed()
 		}
 	}
-	if m.agentManager != nil {
-		m.agentManager.CloseAll()
+	// Close all agent terminals directly via the model's agent registry.
+	for _, agents := range m.agentsByWorkspace {
+		for _, agent := range agents {
+			if agent.Terminal != nil {
+				agent.Terminal.Close()
+			}
+		}
 	}
+	m.agentsByWorkspace = make(map[string][]*appPty.Agent)
 }
 
 // TickSpinner advances the spinner animation frame.

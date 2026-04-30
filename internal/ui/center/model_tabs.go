@@ -173,6 +173,7 @@ func (m *Model) createAgentTabWithSession(opts agentTabOpts) tea.Cmd {
 			logging.Error("Failed to create agent: %v", err)
 			return messages.Error{Err: err, Context: "creating agent"}
 		}
+		m.addAgent(string(opts.Workspace.ID()), agent)
 
 		logging.Info("Agent created, Terminal=%v", agent.Terminal != nil)
 
@@ -297,6 +298,7 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 		}
 		tab.Workspace = msg.Workspace
 		tab.Agent = msg.Agent
+		m.addAgent(wsID, msg.Agent)
 		tab.SessionName = msg.Agent.Session
 		tab.Detached = false
 		tab.Running = true
@@ -322,6 +324,7 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 		tab.mu.Unlock()
 		tab.resetActivityANSIState()
 		if oldAgent != nil && oldAgent != msg.Agent {
+			m.removeAgent(oldAgent)
 			_ = m.agentManager.CloseAgent(oldAgent)
 		}
 

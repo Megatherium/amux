@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/andyrewlee/amux/internal/config"
@@ -36,35 +35,29 @@ type Agent struct {
 	Session   string
 }
 
-// AgentManager manages agent instances
+// AgentManager manages agent creation and lifecycle.
+// It is stateless regarding agent tracking — the caller (e.g. center.Model)
+// owns the agent registry and passes agent lists for bulk operations.
 type AgentManager struct {
 	config      *config.Config
-	mu          sync.Mutex
-	agents      map[data.WorkspaceID][]*Agent
 	tmuxOptions tmux.Options
 }
 
-// NewAgentManager creates a new agent manager
+// NewAgentManager creates a new agent manager.
 func NewAgentManager(cfg *config.Config) *AgentManager {
 	return &AgentManager{
 		config:      cfg,
-		agents:      make(map[data.WorkspaceID][]*Agent),
 		tmuxOptions: tmux.DefaultOptions(),
 	}
 }
 
 // SetTmuxOptions updates tmux options for future agent/viewer command construction.
 func (m *AgentManager) SetTmuxOptions(opts tmux.Options) {
-	m.mu.Lock()
 	m.tmuxOptions = opts
-	m.mu.Unlock()
 }
 
 func (m *AgentManager) getTmuxOptions() tmux.Options {
-	m.mu.Lock()
-	opts := m.tmuxOptions
-	m.mu.Unlock()
-	return opts
+	return m.tmuxOptions
 }
 
 // CreateAgent creates a new agent for the given workspace.
@@ -125,10 +118,6 @@ func (m *AgentManager) CreateAgentWithTags(ws *data.Workspace, agentType AgentTy
 		Session:   sessionName,
 	}
 
-	m.mu.Lock()
-	m.agents[ws.ID()] = append(m.agents[ws.ID()], agent)
-	m.mu.Unlock()
-
 	return agent, nil
 }
 
@@ -176,66 +165,41 @@ func (m *AgentManager) CreateViewerWithTags(ws *data.Workspace, command, session
 		Session:   sessionName,
 	}
 
-	m.mu.Lock()
-	m.agents[ws.ID()] = append(m.agents[ws.ID()], agent)
-	m.mu.Unlock()
-
 	return agent, nil
 }
 
-// CloseAgent closes an agent
+// CloseAgent closes an agent's terminal.
+// The caller is responsible for removing the agent from its registry.
 func (m *AgentManager) CloseAgent(agent *Agent) error {
+	if agent == nil {
+		return nil
+	}
 	if agent.Terminal != nil {
 		agent.Terminal.Close()
 	}
-
-	// Remove from list
-	if agent.Workspace != nil {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		agents := m.agents[agent.Workspace.ID()]
-		for i, a := range agents {
-			if a == agent {
-				m.agents[agent.Workspace.ID()] = append(agents[:i], agents[i+1:]...)
-				break
-			}
-		}
-	}
-
 	return nil
 }
 
-// CloseAll closes all agents
-func (m *AgentManager) CloseAll() {
-	m.mu.Lock()
-	agentsByWorkspace := m.agents
-	m.agents = make(map[data.WorkspaceID][]*Agent)
-	m.mu.Unlock()
-
-	for _, agents := range agentsByWorkspace {
-		for _, agent := range agents {
-			if agent.Terminal != nil {
-				agent.Terminal.Close()
-			}
-		}
-	}
-}
-
-// CloseWorkspaceAgents closes and removes all agents for a specific workspace
-func (m *AgentManager) CloseWorkspaceAgents(ws *data.Workspace) {
-	if ws == nil {
-		return
-	}
-	wsID := ws.ID()
-	m.mu.Lock()
-	agents := m.agents[wsID]
-	delete(m.agents, wsID)
-	m.mu.Unlock()
+// CloseAllAgents closes terminals for all provided agents.
+func (m *AgentManager) CloseAllAgents(agents []*Agent) {
 	for _, agent := range agents {
 		if agent.Terminal != nil {
 			agent.Terminal.Close()
 		}
 	}
+}
+
+// CloseAll closes all agents (deprecated: use CloseAllAgents with caller-owned list).
+// This method is retained for backward compatibility.
+func (m *AgentManager) CloseAll() {
+	// Now a no-op — the caller (center.Model) manages agent lifecycle directly.
+}
+
+// CloseWorkspaceAgents closes terminals for all agents in a workspace.
+// The caller is responsible for removing agents from its registry.
+// This method is retained for backward compatibility.
+func (m *AgentManager) CloseWorkspaceAgents(ws *data.Workspace) {
+	// Now a no-op — the caller (center.Model) manages agent lifecycle directly.
 }
 
 // SendInterrupt sends an interrupt to an agent

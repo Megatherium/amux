@@ -401,6 +401,17 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	case tabDiffCmd:
 		return m.updateTabDiffCmd(msg)
 
+	case tabActorReadyMsg:
+		m.setTabActorReady()
+		return m, nil
+
+	case tabActorHeartbeatMsg:
+		m.tabActorHeartbeat = msg.At
+		if !m.tabActorReady {
+			m.tabActorReady = true
+		}
+		return m, nil
+
 	case tabActorRedraw:
 		m.clearTabActorRedrawPending()
 		return m, nil
