@@ -36,12 +36,21 @@ type Agent struct {
 	Session   string
 }
 
+// AgentEvent represents a lifecycle event for an agent.
+type AgentEvent struct {
+	WorkspaceID data.WorkspaceID
+	Session     string
+	AgentType   AgentType
+	Closed      bool
+}
+
 // AgentManager manages agent instances
 type AgentManager struct {
 	config      *config.Config
 	mu          sync.Mutex
 	agents      map[data.WorkspaceID][]*Agent
 	tmuxOptions tmux.Options
+	notify      func(any)
 }
 
 // NewAgentManager creates a new agent manager
@@ -53,11 +62,28 @@ func NewAgentManager(cfg *config.Config) *AgentManager {
 	}
 }
 
+// SetNotifyFunc sets a callback that receives AgentEvent messages when agents
+// are created or closed. The callback delivers events to the TEA message loop.
+func (m *AgentManager) SetNotifyFunc(fn func(any)) {
+	m.mu.Lock()
+	m.notify = fn
+	m.mu.Unlock()
+}
+
 // SetTmuxOptions updates tmux options for future agent/viewer command construction.
 func (m *AgentManager) SetTmuxOptions(opts tmux.Options) {
 	m.mu.Lock()
 	m.tmuxOptions = opts
 	m.mu.Unlock()
+}
+
+func (m *AgentManager) emitEvent(ev AgentEvent) {
+	m.mu.Lock()
+	n := m.notify
+	m.mu.Unlock()
+	if n != nil {
+		n(ev)
+	}
 }
 
 func (m *AgentManager) getTmuxOptions() tmux.Options {
@@ -129,6 +155,8 @@ func (m *AgentManager) CreateAgentWithTags(ws *data.Workspace, agentType AgentTy
 	m.agents[ws.ID()] = append(m.agents[ws.ID()], agent)
 	m.mu.Unlock()
 
+	m.emitEvent(AgentEvent{WorkspaceID: ws.ID(), Session: sessionName, AgentType: agentType})
+
 	return agent, nil
 }
 
@@ -180,6 +208,8 @@ func (m *AgentManager) CreateViewerWithTags(ws *data.Workspace, command, session
 	m.agents[ws.ID()] = append(m.agents[ws.ID()], agent)
 	m.mu.Unlock()
 
+	m.emitEvent(AgentEvent{WorkspaceID: ws.ID(), Session: sessionName, AgentType: AgentType("viewer")})
+
 	return agent, nil
 }
 
@@ -192,7 +222,6 @@ func (m *AgentManager) CloseAgent(agent *Agent) error {
 	// Remove from list
 	if agent.Workspace != nil {
 		m.mu.Lock()
-		defer m.mu.Unlock()
 		agents := m.agents[agent.Workspace.ID()]
 		for i, a := range agents {
 			if a == agent {
@@ -200,6 +229,8 @@ func (m *AgentManager) CloseAgent(agent *Agent) error {
 				break
 			}
 		}
+		m.mu.Unlock()
+		m.emitEvent(AgentEvent{WorkspaceID: agent.Workspace.ID(), Session: agent.Session, AgentType: agent.Type, Closed: true})
 	}
 
 	return nil
@@ -217,6 +248,7 @@ func (m *AgentManager) CloseAll() {
 			if agent.Terminal != nil {
 				agent.Terminal.Close()
 			}
+			m.emitEvent(AgentEvent{WorkspaceID: agent.Workspace.ID(), Session: agent.Session, AgentType: agent.Type, Closed: true})
 		}
 	}
 }
@@ -235,6 +267,7 @@ func (m *AgentManager) CloseWorkspaceAgents(ws *data.Workspace) {
 		if agent.Terminal != nil {
 			agent.Terminal.Close()
 		}
+		m.emitEvent(AgentEvent{WorkspaceID: wsID, Session: agent.Session, AgentType: agent.Type, Closed: true})
 	}
 }
 

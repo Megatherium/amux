@@ -405,6 +405,16 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		m.clearTabActorRedrawPending()
 		return m, nil
 
+	case tabActorHeartbeat:
+		m.lastTabActorHeartbeat = time.Now()
+		m.tabActorReady = true
+		return m, nil
+
+	case tabActorReadySignal:
+		m.tabActorReady = true
+		m.lastTabActorHeartbeat = time.Now()
+		return m, nil
+
 	case PTYOutput:
 		cmd := m.updatePTYOutput(msg)
 		cmds = append(cmds, cmd)

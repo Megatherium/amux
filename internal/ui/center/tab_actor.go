@@ -72,6 +72,14 @@ type tabActorRedraw struct{}
 func (tabActorRedraw) MarkCriticalExternalMsg()            {}
 func (tabActorRedraw) MarkNonEvictingCriticalExternalMsg() {}
 
+// tabActorHeartbeat is sent by the tab actor goroutine to refresh the actor
+// liveness heartbeat. The model's Update handler records the current time.
+type tabActorHeartbeat struct{}
+
+// tabActorReadySignal is sent by the tab actor on startup to indicate the actor
+// is ready to process events.
+type tabActorReadySignal struct{}
+
 type tabDiffCmd struct{ cmd tea.Cmd }
 
 type TabInputFailed struct {

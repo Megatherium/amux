@@ -1,7 +1,6 @@
 package center
 
 import (
-	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -29,9 +28,9 @@ type Model struct {
 	msgSink               func(tea.Msg)
 	msgSinkTry            func(tea.Msg) bool
 	tabEvents             chan tabEvent
-	tabActorReady         uint32
-	tabActorHeartbeat     int64
-	tabActorRedrawPending uint32
+	tabActorReady         bool
+	lastTabActorHeartbeat time.Time
+	tabActorRedrawPending bool
 	flushLoadSampleAt     time.Time
 	cachedBusyTabCount    int
 
@@ -196,53 +195,37 @@ func (m *Model) terminalMetrics() TerminalMetrics {
 }
 
 func (m *Model) isTabActorReady() bool {
-	if atomic.LoadUint32(&m.tabActorReady) == 0 {
+	if !m.tabActorReady {
 		return false
 	}
-	lastBeat := atomic.LoadInt64(&m.tabActorHeartbeat)
-	if lastBeat == 0 {
+	if m.lastTabActorHeartbeat.IsZero() {
 		return false
 	}
-	if time.Since(time.Unix(0, lastBeat)) > tabActorStallTimeout {
-		atomic.StoreUint32(&m.tabActorReady, 0)
+	if time.Since(m.lastTabActorHeartbeat) > tabActorStallTimeout {
+		m.tabActorReady = false
 		return false
 	}
 	return true
 }
 
 func (m *Model) setTabActorReady() {
-	atomic.StoreInt64(&m.tabActorHeartbeat, time.Now().UnixNano())
-	atomic.StoreUint32(&m.tabActorReady, 1)
+	m.tabActorReady = true
+	m.lastTabActorHeartbeat = time.Now()
+	if m.msgSink != nil {
+		m.msgSink(tabActorReadySignal{})
+	}
 }
 
 func (m *Model) noteTabActorHeartbeat() {
-	observedAt := time.Now().UnixNano()
-	for {
-		prev := atomic.LoadInt64(&m.tabActorHeartbeat)
-		if observedAt <= prev {
-			observedAt = prev + 1
-		}
-		if atomic.CompareAndSwapInt64(&m.tabActorHeartbeat, prev, observedAt) {
-			break
-		}
-	}
-	if atomic.LoadUint32(&m.tabActorReady) == 0 {
-		atomic.StoreUint32(&m.tabActorReady, 1)
+	m.tabActorReady = true
+	m.lastTabActorHeartbeat = time.Now()
+	if m.msgSink != nil {
+		m.msgSink(tabActorHeartbeat{})
 	}
 }
 
 func (m *Model) requestTabActorRedraw() {
 	if m == nil {
-		return
-	}
-	if m.msgSinkTry != nil {
-		if !atomic.CompareAndSwapUint32(&m.tabActorRedrawPending, 0, 1) {
-			return
-		}
-		if m.msgSinkTry(tabActorRedraw{}) {
-			return
-		}
-		atomic.StoreUint32(&m.tabActorRedrawPending, 0)
 		return
 	}
 	if m.msgSink != nil {
@@ -254,7 +237,7 @@ func (m *Model) clearTabActorRedrawPending() {
 	if m == nil {
 		return
 	}
-	atomic.StoreUint32(&m.tabActorRedrawPending, 0)
+	m.tabActorRedrawPending = false
 }
 
 func (m *Model) setWorkspace(ws *data.Workspace) {
