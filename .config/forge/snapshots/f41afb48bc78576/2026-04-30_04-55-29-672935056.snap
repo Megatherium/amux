@@ -1,0 +1,111 @@
+package app
+
+import (
+	"charm.land/lipgloss/v2"
+
+	"github.com/andyrewlee/amux/internal/config"
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/tickets"
+	"github.com/andyrewlee/amux/internal/ui/center"
+	"github.com/andyrewlee/amux/internal/ui/common"
+	"github.com/andyrewlee/amux/internal/ui/compositor"
+	"github.com/andyrewlee/amux/internal/ui/dashboard"
+	"github.com/andyrewlee/amux/internal/ui/layout"
+	"github.com/andyrewlee/amux/internal/ui/sidebar"
+)
+
+// UICompositor holds the core UI component models that together form the
+// main screen layout. It is extracted from the App god object as part of
+// a gradual decomposition; fields that are lazy-created (dialog, filePicker,
+// settingsDialog) start as nil and are instantiated on first use.
+type UICompositor struct {
+	layout          *layout.Manager
+	dashboard       *dashboard.Model
+	center          *center.Model
+	sidebar         *sidebar.TabbedSidebar
+	sidebarTerminal *sidebar.TerminalModel
+	dialog          *common.Dialog         // lazy-created
+	filePicker      *common.FilePicker     // lazy-created
+	settingsDialog  *common.SettingsDialog // lazy-created
+	toast           *common.ToastModel
+
+	// Dialog/picker context (moved from App).
+	dialogProject           *data.Project
+	dialogWorkspace         *data.Workspace
+	pendingWorkspaceProject *data.Project
+	pendingWorkspaceName    string
+	pendingWorkspaceBase    string
+	pendingTickets          []tickets.Ticket
+	previewTicket           *tickets.Ticket
+	previewProject          *data.Project
+
+	// Layout dimensions and visual state (moved from App).
+	width, height int
+	canvas        *lipgloss.Canvas // nil initially, lazy-created
+	styles        common.Styles
+	ready         bool
+	quitting      bool
+
+	// Chrome caches for layer-based rendering (moved from App).
+	dashboardChrome      *compositor.ChromeCache
+	centerChrome         *compositor.ChromeCache
+	sidebarChrome        *compositor.ChromeCache
+	dashboardContent     drawableCache
+	dashboardBorders     borderCache
+	sidebarTopTabBar     drawableCache
+	sidebarTopContent    drawableCache
+	sidebarBottomContent drawableCache
+	sidebarBottomTabBar  drawableCache
+	sidebarBottomStatus  drawableCache
+	sidebarBottomHelp    drawableCache
+	sidebarTopBorders    borderCache
+	sidebarBottomBorders borderCache
+	centerTabBar         drawableCache
+	centerStatus         drawableCache
+	centerHelp           drawableCache
+	centerBorders        borderCache
+
+	// Button focus state for welcome/workspace info screens (moved from App).
+	centerBtnFocused bool
+	centerBtnIndex   int
+
+	// Settings theme dialog state (moved from App).
+	settingsDialogSession       int
+	settingsThemePersistedTheme common.ThemeID
+	settingsThemeDirty          bool
+}
+
+// newUICompositor creates a UICompositor with all non-lazy fields
+// initialized. Lazy fields (dialog, filePicker, settingsDialog) are
+// left nil and will be created on first use.
+func newUICompositor(cfg *config.Config, styles common.Styles) *UICompositor {
+	return &UICompositor{
+		layout:          layout.NewManager(),
+		dashboard:       dashboard.New(),
+		center:          center.New(cfg),
+		sidebar:         sidebar.NewTabbedSidebar(),
+		sidebarTerminal: sidebar.NewTerminalModel(),
+		toast:           common.NewToastModel(),
+		styles:          styles,
+
+		dashboardChrome: &compositor.ChromeCache{},
+		centerChrome:    &compositor.ChromeCache{},
+		sidebarChrome:   &compositor.ChromeCache{},
+	}
+}
+
+// canvasFor returns a canvas at the given dimensions, creating or resizing
+// the cached canvas as needed. The canvas is cleared before returning.
+func (u *UICompositor) canvasFor(width, height int) *lipgloss.Canvas {
+	if width <= 0 || height <= 0 {
+		width = 1
+		height = 1
+	}
+	if u.canvas == nil {
+		u.canvas = lipgloss.NewCanvas(width, height)
+	} else if u.canvas.Width() != width || u.canvas.Height() != height {
+		u.canvas.Resize(width, height)
+	}
+	u.canvas.Clear()
+	return u.canvas
+}

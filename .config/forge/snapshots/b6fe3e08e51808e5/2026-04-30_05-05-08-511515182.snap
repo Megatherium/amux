@@ -1,0 +1,120 @@
+package app
+
+import (
+	"sort"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/messages"
+	"github.com/andyrewlee/amux/internal/tickets"
+	"github.com/andyrewlee/amux/internal/ui/common"
+)
+
+// handleTicketSelected handles a ticket selection from the dashboard,
+// starting the draft flow in the center pane.
+func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
+	if msg.Ticket == nil {
+		return nil
+	}
+
+	project := msg.Project
+	if project == nil {
+		return []tea.Cmd{a.ui.toast.ShowError("No project associated with this ticket")}
+	}
+
+	var mainWS *data.Workspace
+	for i := range project.Workspaces {
+		ws := &project.Workspaces[i]
+		if ws.IsMainBranch() || ws.IsPrimaryCheckout() {
+			mainWS = ws
+			break
+		}
+	}
+	if mainWS == nil {
+		return []tea.Cmd{a.ui.toast.ShowError("No workspace found for project " + project.Name)}
+	}
+
+	var cmds []tea.Cmd
+	if a.activeWorkspace == nil || string(a.activeWorkspace.ID()) != string(mainWS.ID()) {
+		cmds = append(cmds, a.handleWorkspaceActivated(messages.WorkspaceActivated{
+			Project:   project,
+			Workspace: mainWS,
+		})...)
+	}
+
+	a.ui.center.StartDraft(msg.Ticket, mainWS)
+	cmds = append(cmds, a.focusPane(messages.PaneCenter))
+	return cmds
+}
+
+// handleTicketPreview updates the preview state when the cursor hovers over
+// a ticket row in the dashboard. When no agent tabs are open, the ticket info
+// is shown in the center pane. When agent tabs exist, the info is shown in the
+// sidebar's ticket tab (without auto-focusing the sidebar).
+func (a *App) handleTicketPreview(msg messages.TicketPreviewMsg) {
+	a.ui.previewTicket = msg.Ticket
+	a.ui.previewProject = msg.Project
+
+	// Forward the preview to the sidebar for the ticket tab
+	if a.ui.sidebar != nil {
+		a.ui.sidebar.SetPreviewTicket(msg.Ticket)
+	}
+}
+
+// sortTicketsHierarchically reorders tickets so that child tickets
+// (tickets with a non-empty ParentID) appear immediately after
+// their parent.
+func sortTicketsHierarchically(ts []tickets.Ticket) []tickets.Ticket {
+	if len(ts) == 0 {
+		return ts
+	}
+
+	// Build parent index map: ticket ID → position
+	parentPos := make(map[string]int, len(ts))
+	for i, t := range ts {
+		parentPos[t.ID] = i
+	}
+
+	// Separate children from parents
+	var ordered []tickets.Ticket
+	childrenOf := make(map[int][]tickets.Ticket) // parent position → children
+
+	for _, t := range ts {
+		if t.ParentID == "" {
+			// Parent or root ticket
+			ordered = append(ordered, t)
+		} else {
+			// Child ticket - defer placement
+			pidx, ok := parentPos[t.ParentID]
+			if ok {
+				childrenOf[pidx] = append(childrenOf[pidx], t)
+			} else {
+				// Parent not in this batch, treat as root
+				ordered = append(ordered, t)
+			}
+		}
+	}
+
+	// Insert children after their parents (iterate in reverse to preserve order)
+	for i := len(ordered) - 1; i >= 0; i-- {
+		// Find the original position of this parent to look up children
+		for pidx, children := range childrenOf {
+			if pidx < 0 || pidx >= len(ts) {
+				continue
+			}
+			if ts[pidx].ID == ordered[i].ID {
+				// Insert children directly after this parent
+				sort.Slice(children, func(a, b int) bool {
+					return children[a].CreatedAt.Before(children[b].CreatedAt)
+				})
+				insertAt := i + 1
+				ordered = append(ordered[:insertAt], append(children, ordered[insertAt:]...)...)
+				delete(childrenOf, pidx)
+				break
+			}
+		}
+	}
+
+	return ordered
+}

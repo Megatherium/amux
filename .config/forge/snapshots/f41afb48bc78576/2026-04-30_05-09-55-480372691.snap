@@ -1,0 +1,368 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"github.com/andyrewlee/amux/internal/config"
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/logging"
+	"github.com/andyrewlee/amux/internal/messages"
+	"github.com/andyrewlee/amux/internal/tickets"
+	"github.com/andyrewlee/amux/internal/ui/center"
+	"github.com/andyrewlee/amux/internal/ui/common"
+	"github.com/andyrewlee/amux/internal/ui/compositor"
+	"github.com/andyrewlee/amux/internal/ui/dashboard"
+	"github.com/andyrewlee/amux/internal/ui/layout"
+	"github.com/andyrewlee/amux/internal/ui/sidebar"
+	"github.com/andyrewlee/amux/internal/update"
+	"github.com/andyrewlee/amux/internal/validation"
+)
+
+// UICompositor holds the core UI component models that together form the
+// main screen layout. It is extracted from the App god object as part of
+// a gradual decomposition; fields that are lazy-created (dialog, filePicker,
+// settingsDialog) start as nil and are instantiated on first use.
+type UICompositor struct {
+	config *config.Config
+
+	layout          *layout.Manager
+	dashboard       *dashboard.Model
+	center          *center.Model
+	sidebar         *sidebar.TabbedSidebar
+	sidebarTerminal *sidebar.TerminalModel
+	dialog          *common.Dialog         // lazy-created
+	filePicker      *common.FilePicker     // lazy-created
+	settingsDialog  *common.SettingsDialog // lazy-created
+	toast           *common.ToastModel
+
+	// Dialog/picker context (moved from App).
+	dialogProject           *data.Project
+	dialogWorkspace         *data.Workspace
+	pendingWorkspaceProject *data.Project
+	pendingWorkspaceName    string
+	pendingWorkspaceBase    string
+	pendingTickets          []tickets.Ticket
+	previewTicket           *tickets.Ticket
+	previewProject          *data.Project
+
+	// Layout dimensions and visual state (moved from App).
+	width, height int
+	canvas        *lipgloss.Canvas // nil initially, lazy-created
+	styles        common.Styles
+	ready         bool
+	quitting      bool
+
+	// Chrome caches for layer-based rendering (moved from App).
+	dashboardChrome      *compositor.ChromeCache
+	centerChrome         *compositor.ChromeCache
+	sidebarChrome        *compositor.ChromeCache
+	dashboardContent     drawableCache
+	dashboardBorders     borderCache
+	sidebarTopTabBar     drawableCache
+	sidebarTopContent    drawableCache
+	sidebarBottomContent drawableCache
+	sidebarBottomTabBar  drawableCache
+	sidebarBottomStatus  drawableCache
+	sidebarBottomHelp    drawableCache
+	sidebarTopBorders    borderCache
+	sidebarBottomBorders borderCache
+	centerTabBar         drawableCache
+	centerStatus         drawableCache
+	centerHelp           drawableCache
+	centerBorders        borderCache
+
+	// Button focus state for welcome/workspace info screens (moved from App).
+	centerBtnFocused bool
+	centerBtnIndex   int
+
+	// Settings theme dialog state (moved from App).
+	settingsDialogSession       int
+	settingsThemePersistedTheme common.ThemeID
+	settingsThemeDirty          bool
+}
+
+// newUICompositor creates a UICompositor with all non-lazy fields
+// initialized. Lazy fields (dialog, filePicker, settingsDialog) are
+// left nil and will be created on first use.
+func newUICompositor(cfg *config.Config, styles common.Styles) *UICompositor {
+	return &UICompositor{
+		config: cfg,
+
+		layout:          layout.NewManager(),
+		dashboard:       dashboard.New(),
+		center:          center.New(cfg),
+		sidebar:         sidebar.NewTabbedSidebar(),
+		sidebarTerminal: sidebar.NewTerminalModel(),
+		toast:           common.NewToastModel(),
+		styles:          styles,
+
+		dashboardChrome: &compositor.ChromeCache{},
+		centerChrome:    &compositor.ChromeCache{},
+		sidebarChrome:   &compositor.ChromeCache{},
+	}
+}
+
+// canvasFor returns a canvas at the given dimensions, creating or resizing
+// the cached canvas as needed. The canvas is cleared before returning.
+func (u *UICompositor) canvasFor(width, height int) *lipgloss.Canvas {
+	if width <= 0 || height <= 0 {
+		width = 1
+		height = 1
+	}
+	if u.canvas == nil {
+		u.canvas = lipgloss.NewCanvas(width, height)
+	} else if u.canvas.Width() != width || u.canvas.Height() != height {
+		u.canvas.Resize(width, height)
+	}
+	u.canvas.Clear()
+	return u.canvas
+}
+
+// Dialog/picker context sentinel for internal ticket loading.
+type ticketsForPickerLoaded struct {
+	tickets []tickets.Ticket
+}
+
+// ---- Dialog show handlers ----
+
+// ShowAddProjectDialog shows the add project file picker.
+func (u *UICompositor) ShowAddProjectDialog() {
+	logging.Info("Showing Add Project file picker")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "/"
+	}
+	u.filePicker = common.NewFilePicker(DialogAddProject, home, true)
+	u.filePicker.SetTitle("Add Project")
+	u.filePicker.SetPrimaryActionLabel("Add as project")
+	u.filePicker.SetSize(u.width, u.height)
+	u.filePicker.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.filePicker.Show()
+}
+
+// ShowCreateWorkspaceDialog shows the create workspace dialog.
+func (u *UICompositor) ShowCreateWorkspaceDialog(msg messages.ShowCreateWorkspaceDialog) {
+	u.dialogProject = msg.Project
+	u.dialog = common.NewInputDialog(DialogCreateWorkspace, "Create Workspace", "Enter workspace name...")
+	u.dialog.SetInputValidate(func(s string) string {
+		s = validation.SanitizeInput(s)
+		if s == "" {
+			return "" // Don't show error for empty input
+		}
+		if err := validation.ValidateWorkspaceName(s); err != nil {
+			return err.Error()
+		}
+		return ""
+	})
+	u.dialog.SetSize(u.width, u.height)
+	u.dialog.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.dialog.Show()
+}
+
+// ShowDeleteWorkspaceDialog shows the delete workspace dialog.
+func (u *UICompositor) ShowDeleteWorkspaceDialog(msg messages.ShowDeleteWorkspaceDialog) {
+	u.dialogProject = msg.Project
+	u.dialogWorkspace = msg.Workspace
+	u.dialog = common.NewConfirmDialog(
+		DialogDeleteWorkspace,
+		"Delete Workspace",
+		fmt.Sprintf("Delete workspace '%s' and its branch?", msg.Workspace.Name),
+	)
+	u.dialog.SetSize(u.width, u.height)
+	u.dialog.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.dialog.Show()
+}
+
+// ShowRemoveProjectDialog shows the remove project dialog.
+func (u *UICompositor) ShowRemoveProjectDialog(msg messages.ShowRemoveProjectDialog) {
+	u.dialogProject = msg.Project
+	projectName := ""
+	if msg.Project != nil {
+		projectName = msg.Project.Name
+	}
+	u.dialog = common.NewConfirmDialog(
+		DialogRemoveProject,
+		"Remove Project",
+		fmt.Sprintf("Remove project '%s' from AMUX? This won't delete any files.", projectName),
+	)
+	u.dialog.SetSize(u.width, u.height)
+	u.dialog.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.dialog.Show()
+}
+
+// ShowSelectAssistantDialog shows the select assistant dialog.
+func (u *UICompositor) ShowSelectAssistantDialog(activeWorkspace *data.Workspace) {
+	if activeWorkspace == nil && u.pendingWorkspaceProject == nil {
+		return
+	}
+	u.dialog = common.NewAgentPicker(u.config.AssistantNames())
+	u.dialog.SetSize(u.width, u.height)
+	u.dialog.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.dialog.Show()
+}
+
+// ShowSelectTicketDialog returns a command to load tickets and show the ticket picker dialog.
+// If no ticket service is available for the active project, it falls back
+// directly to the assistant picker.
+func (u *UICompositor) ShowSelectTicketDialog(activeWorkspace *data.Workspace, activeProject *data.Project, svc *tickets.TicketService) tea.Cmd {
+	if activeWorkspace == nil || activeProject == nil {
+		return nil
+	}
+	if svc == nil {
+		return func() tea.Msg { return messages.ShowSelectAssistantDialog{} }
+	}
+	return func() tea.Msg {
+		t, _ := loadOpenAndInProgress(context.TODO(), svc, activeProject.Path, 50)
+		return ticketsForPickerLoaded{tickets: t}
+	}
+}
+
+// HandleTicketsForPickerLoaded creates and shows the ticket picker with hierarchically sorted tickets.
+func (u *UICompositor) HandleTicketsForPickerLoaded(msg ticketsForPickerLoaded) {
+	// Sort tickets hierarchically: parents first, children after their parent
+	sorted := sortTicketsHierarchically(msg.tickets)
+
+	items := make([]common.TicketPickerItem, 0, len(sorted))
+	for _, t := range sorted {
+		items = append(items, common.TicketPickerItem{
+			ID:        t.ID,
+			Title:     t.Title,
+			Status:    t.Status,
+			IssueType: t.IssueType,
+			Priority:  t.Priority,
+			ParentID:  t.ParentID,
+		})
+	}
+	u.pendingTickets = sorted
+	u.dialog = common.NewTicketPicker(items)
+	u.dialog.SetSize(u.width, u.height)
+	u.dialog.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.dialog.Show()
+}
+
+// ShowCleanupTmuxDialog shows the tmux cleanup dialog.
+func (u *UICompositor) ShowCleanupTmuxDialog(serverName string) {
+	if u.dialog != nil && u.dialog.Visible() {
+		return
+	}
+	u.dialog = common.NewConfirmDialog(
+		DialogCleanupTmux,
+		"Cleanup tmux sessions",
+		fmt.Sprintf("Kill all amux-* tmux sessions on server %q?", serverName),
+	)
+	u.dialog.SetSize(u.width, u.height)
+	u.dialog.SetShowKeymapHints(u.config.UI.ShowKeymapHints)
+	u.dialog.Show()
+}
+
+// ShowSettingsDialog shows the settings dialog.
+func (u *UICompositor) ShowSettingsDialog(updateAvailable *update.CheckResult, updateServiceIsHomebrew bool, version string) {
+	persistedUI := u.config.PersistedUISettings()
+	u.settingsThemePersistedTheme = common.ThemeID(persistedUI.Theme)
+	u.settingsThemeDirty = common.ThemeID(u.config.UI.Theme) != u.settingsThemePersistedTheme
+	u.settingsDialogSession++
+	u.settingsDialog = common.NewSettingsDialog(
+		common.ThemeID(u.config.UI.Theme),
+	)
+	u.settingsDialog.SetSession(u.settingsDialogSession)
+	u.settingsDialog.SetSize(u.width, u.height)
+
+	// Set update state
+	if updateAvailable != nil {
+		u.settingsDialog.SetUpdateInfo(
+			updateAvailable.CurrentVersion,
+			updateAvailable.LatestVersion,
+			updateAvailable.UpdateAvailable,
+		)
+	} else {
+		u.settingsDialog.SetUpdateInfo(version, "", false)
+	}
+	if updateServiceIsHomebrew {
+		u.settingsDialog.SetUpdateHint("Installed via Homebrew - update with brew upgrade amux")
+	}
+
+	u.settingsDialog.Show()
+}
+
+// ---- Theme/settings handlers ----
+
+// ApplyTheme applies a theme to all UI components.
+func (u *UICompositor) ApplyTheme(theme common.ThemeID) {
+	common.SetCurrentTheme(theme)
+	u.config.UI.Theme = string(theme)
+	u.settingsThemeDirty = theme != u.settingsThemePersistedTheme
+	u.styles = common.DefaultStyles()
+	// Propagate styles to all components
+	u.dashboard.SetStyles(u.styles)
+	u.sidebar.SetStyles(u.styles)
+	u.sidebarTerminal.SetStyles(u.styles)
+	u.center.SetStyles(u.styles)
+	u.toast.SetStyles(u.styles)
+	if u.filePicker != nil {
+		u.filePicker.SetStyles(u.styles)
+	}
+}
+
+// HandleThemePreview handles live theme preview.
+func (u *UICompositor) HandleThemePreview(msg common.ThemePreview) tea.Cmd {
+	if msg.Session != u.settingsDialogSession {
+		return nil
+	}
+	if u.settingsDialog != nil {
+		u.settingsDialog.SetSelectedTheme(msg.Theme)
+	}
+	u.ApplyTheme(msg.Theme)
+	return nil
+}
+
+// PersistSettingsThemeIfDirty saves the theme if it has been changed.
+func (u *UICompositor) PersistSettingsThemeIfDirty() tea.Cmd {
+	if !u.settingsThemeDirty {
+		return nil
+	}
+	if err := u.config.SaveUISettings(); err != nil {
+		logging.Warn("Failed to save theme setting: %v", err)
+		return u.toast.ShowWarning("Failed to save theme setting")
+	}
+	u.settingsThemePersistedTheme = common.ThemeID(u.config.UI.Theme)
+	u.settingsThemeDirty = false
+	return nil
+}
+
+// HandleSettingsResult handles settings dialog close.
+func (u *UICompositor) HandleSettingsResult(_ common.SettingsResult) tea.Cmd {
+	if u.settingsDialog != nil {
+		u.ApplyTheme(u.settingsDialog.SelectedTheme())
+	}
+	u.settingsDialog = nil
+	u.settingsDialogSession++
+	return u.PersistSettingsThemeIfDirty()
+}
+
+// ---- Input routing handlers ----
+
+// HandleDialogInput routes input to the active dialog overlay.
+func (u *UICompositor) HandleDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
+	var consumed bool
+	u.dialog, consumed = handleOverlayInput(u.dialog, msg, cmds, true)
+	return consumed
+}
+
+// HandleFilePickerInput routes input to the active file picker overlay.
+func (u *UICompositor) HandleFilePickerInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
+	var consumed bool
+	u.filePicker, consumed = handleOverlayInput(u.filePicker, msg, cmds, true)
+	return consumed
+}
+
+// HandleSettingsDialogInput routes input to the active settings dialog overlay.
+func (u *UICompositor) HandleSettingsDialogInput(msg tea.Msg, cmds *[]tea.Cmd) bool {
+	var consumed bool
+	u.settingsDialog, consumed = handleOverlayInput(u.settingsDialog, msg, cmds, false)
+	return consumed
+}
