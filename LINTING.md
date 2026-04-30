@@ -23,6 +23,14 @@ CI enforces the same lint checks in `.github/workflows/ci.yml`.
 
 Phase 2 is enabled as a stricter profile in `.golangci.strict.yml`.
 
+Strict profile includes additional rules beyond baseline:
+- `cyclop` (cyclomatic complexity check, max 15; tests skipped)
+- `funlen` (function length: max 60 lines, 40 statements)
+- `perfsprint` (performance-oriented string formatting)
+- `revive` (broad code quality rules)
+
+These rules are ratcheted on changed code in CI (via `--new-from-rev`). They will be promoted to baseline `.golangci.yml` after existing violations are incrementally addressed.
+
 Use it locally on changed code:
 
 ```bash

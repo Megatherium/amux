@@ -6,10 +6,12 @@ linters:
   default: none
   enable:
     - copyloopvar
+    - cyclop
     - depguard
     - errcheck
     - errorlint
     - forbidigo
+    - funlen
     - govet
     - ineffassign
     - misspell
@@ -23,6 +25,9 @@ linters:
     - usestdlibvars
     - whitespace
   settings:
+    cyclop:
+      max-complexity: 15
+      skip-tests: true
     depguard:
       rules:
         main:
@@ -88,6 +93,9 @@ linters:
         - name: use-any
         - name: var-declaration
         - name: var-naming
+    funlen:
+      lines: 60
+      statements: 40
     thelper:
       test:
         begin: false
