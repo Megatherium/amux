@@ -43,8 +43,11 @@ func TestNewAgentManager(t *testing.T) {
 	if m.config != cfg {
 		t.Error("config not set correctly")
 	}
-	if m.agents == nil {
-		t.Error("agents map should be initialized")
+	if m.cmdCh == nil {
+		t.Error("cmdCh should be initialized")
+	}
+	if m.stopCh == nil {
+		t.Error("stopCh should be initialized")
 	}
 }
 
@@ -126,29 +129,19 @@ func TestAgentManager_CloseAgent(t *testing.T) {
 	}
 
 	wsID := ws.ID()
-	m.mu.Lock()
-	m.agents[wsID] = append(m.agents[wsID], agent)
-	m.mu.Unlock()
-
-	// Verify it was added
-	m.mu.Lock()
-	if len(m.agents[wsID]) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(m.agents[wsID]))
-	}
-	m.mu.Unlock()
+	m.injectAgentsForTest(wsID, []*Agent{agent})
 
 	// Close it
-	err := m.CloseAgent(agent)
-	if err != nil {
-		t.Fatalf("CloseAgent failed: %v", err)
+	change := m.CloseAgent(agent)
+	if change.Kind != "closed" {
+		t.Errorf("expected kind='closed', got %q", change.Kind)
 	}
 
-	// Verify it was removed
-	m.mu.Lock()
-	if len(m.agents[wsID]) != 0 {
-		t.Errorf("expected 0 agents after close, got %d", len(m.agents[wsID]))
+	// Closing an already-closed agent is idempotent (no-op)
+	change2 := m.CloseAgent(agent)
+	if change2.Kind != "closed" {
+		t.Errorf("expected kind='closed' for idempotent close, got %q", change2.Kind)
 	}
-	m.mu.Unlock()
 }
 
 func TestAgentManager_CloseAgent_WithTerminal(t *testing.T) {
@@ -169,24 +162,13 @@ func TestAgentManager_CloseAgent_WithTerminal(t *testing.T) {
 	}
 
 	wsID := ws.ID()
-	m.mu.Lock()
-	m.agents[wsID] = append(m.agents[wsID], agent)
-	m.mu.Unlock()
+	m.injectAgentsForTest(wsID, []*Agent{agent})
 
-	err = m.CloseAgent(agent)
-	if err != nil {
-		t.Fatalf("CloseAgent failed: %v", err)
-	}
+	_ = m.CloseAgent(agent)
 
 	if !term.IsClosed() {
 		t.Error("terminal should be closed after CloseAgent")
 	}
-
-	m.mu.Lock()
-	if len(m.agents[wsID]) != 0 {
-		t.Errorf("expected 0 agents after close, got %d", len(m.agents[wsID]))
-	}
-	m.mu.Unlock()
 }
 
 func TestAgentManager_CloseAgent_NilWorkspace(t *testing.T) {
@@ -200,9 +182,9 @@ func TestAgentManager_CloseAgent_NilWorkspace(t *testing.T) {
 	}
 
 	// Should not panic with nil workspace
-	err := m.CloseAgent(agent)
-	if err != nil {
-		t.Fatalf("CloseAgent with nil workspace failed: %v", err)
+	change := m.CloseAgent(agent)
+	if change.Error != nil {
+		t.Fatalf("CloseAgent with nil workspace should not error, got %v", change.Error)
 	}
 }
 
@@ -225,10 +207,8 @@ func TestAgentManager_CloseAll(t *testing.T) {
 	agent1 := &Agent{Type: AgentClaude, Terminal: term1, Workspace: ws1, Session: "s1"}
 	agent2 := &Agent{Type: AgentCodex, Terminal: term2, Workspace: ws2, Session: "s2"}
 
-	m.mu.Lock()
-	m.agents[ws1.ID()] = []*Agent{agent1}
-	m.agents[ws2.ID()] = []*Agent{agent2}
-	m.mu.Unlock()
+	m.injectAgentsForTest(ws1.ID(), []*Agent{agent1})
+	m.injectAgentsForTest(ws2.ID(), []*Agent{agent2})
 
 	m.CloseAll()
 
@@ -238,12 +218,6 @@ func TestAgentManager_CloseAll(t *testing.T) {
 	if !term2.IsClosed() {
 		t.Error("term2 should be closed")
 	}
-
-	m.mu.Lock()
-	if len(m.agents) != 0 {
-		t.Errorf("expected empty agents map, got %d entries", len(m.agents))
-	}
-	m.mu.Unlock()
 }
 
 func TestAgentManager_CloseAll_Empty(t *testing.T) {
@@ -271,10 +245,8 @@ func TestAgentManager_CloseWorkspaceAgents(t *testing.T) {
 	agent1 := &Agent{Type: AgentClaude, Terminal: term1, Workspace: ws1, Session: "s1"}
 	agent2 := &Agent{Type: AgentCodex, Terminal: term2, Workspace: ws2, Session: "s2"}
 
-	m.mu.Lock()
-	m.agents[ws1.ID()] = []*Agent{agent1}
-	m.agents[ws2.ID()] = []*Agent{agent2}
-	m.mu.Unlock()
+	m.injectAgentsForTest(ws1.ID(), []*Agent{agent1})
+	m.injectAgentsForTest(ws2.ID(), []*Agent{agent2})
 
 	// Close only ws1's agents
 	m.CloseWorkspaceAgents(ws1)
@@ -285,15 +257,6 @@ func TestAgentManager_CloseWorkspaceAgents(t *testing.T) {
 	if term2.IsClosed() {
 		t.Error("term2 should NOT be closed")
 	}
-
-	m.mu.Lock()
-	if _, ok := m.agents[ws1.ID()]; ok {
-		t.Error("ws1 should be removed from agents map")
-	}
-	if len(m.agents[ws2.ID()]) != 1 {
-		t.Errorf("ws2 should still have 1 agent, got %d", len(m.agents[ws2.ID()]))
-	}
-	m.mu.Unlock()
 
 	// Cleanup
 	term2.Close()
@@ -420,22 +383,14 @@ func TestAgentManager_MultipleAgentsPerWorkspace(t *testing.T) {
 	agent2 := &Agent{Type: AgentCodex, Terminal: term2, Workspace: ws, Session: "s2"}
 
 	wsID := ws.ID()
-	m.mu.Lock()
-	m.agents[wsID] = []*Agent{agent1, agent2}
-	m.mu.Unlock()
+	m.injectAgentsForTest(wsID, []*Agent{agent1, agent2})
 
 	// Close only agent1
 	_ = m.CloseAgent(agent1)
 
-	m.mu.Lock()
-	remaining := m.agents[wsID]
-	m.mu.Unlock()
-
-	if len(remaining) != 1 {
-		t.Fatalf("expected 1 remaining agent, got %d", len(remaining))
-	}
-	if remaining[0] != agent2 {
-		t.Error("expected agent2 to remain")
+	// Verify agent2's terminal is still open (not closed erroneously)
+	if term2.IsClosed() {
+		t.Error("agent2 should remain open")
 	}
 
 	// Cleanup

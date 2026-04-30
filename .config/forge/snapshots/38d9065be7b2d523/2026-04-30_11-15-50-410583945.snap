@@ -1,0 +1,393 @@
+package pty
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/andyrewlee/amux/internal/config"
+	"github.com/andyrewlee/amux/internal/data"
+	"github.com/andyrewlee/amux/internal/tmux"
+)
+
+// AgentType represents the type of AI agent
+type AgentType string
+
+const (
+	AgentClaude   AgentType = "claude"
+	AgentCodex    AgentType = "codex"
+	AgentGemini   AgentType = "gemini"
+	AgentAmp      AgentType = "amp"
+	AgentOpencode AgentType = "opencode"
+	AgentDroid    AgentType = "droid"
+	AgentCline    AgentType = "cline"
+	AgentCursor   AgentType = "cursor"
+	AgentPi       AgentType = "pi"
+)
+
+// Agent represents a running AI agent instance
+type Agent struct {
+	Type      AgentType
+	Terminal  *Terminal
+	Workspace *data.Workspace
+	Config    config.AssistantConfig
+	Session   string
+}
+
+// AgentStateChange represents a state change produced by AgentManager operations.
+// Callers convert these to tea.Msg for Bubbletea processing.
+type AgentStateChange struct {
+	Kind       string  // "created", "closed"
+	AgentType  string  // string representation of AgentType
+	Session    string  // tmux session name
+	Error      error   // non-nil when operation failed
+}
+
+// agentCmd is a command sent to the AgentManager's serial command channel.
+type agentCmd struct {
+	kind string
+
+	// create
+	ws          *data.Workspace
+	agentType   AgentType
+	sessionName string
+	rows        uint16
+	cols        uint16
+	tags        tmux.SessionTags
+	viewerCmd   string
+
+	// close
+	agent *Agent
+
+	// tmux options
+	tmuxOpts tmux.Options
+
+	// response
+	respCh chan agentResp
+}
+
+type agentResp struct {
+	agent       *Agent
+	err         error
+	tmuxOptions tmux.Options
+	change      AgentStateChange
+}
+
+// AgentManager manages agent instances.
+// All mutable state is serialized through a command channel processed by a
+// single background goroutine, eliminating the need for a sync.Mutex.
+type AgentManager struct {
+	config      *config.Config
+	cmdCh       chan agentCmd
+	stopCh      chan struct{}
+}
+
+// NewAgentManager creates a new agent manager and starts its command-processing goroutine.
+func NewAgentManager(cfg *config.Config) *AgentManager {
+	m := &AgentManager{
+		config: cfg,
+		cmdCh:  make(chan agentCmd, 64),
+		stopCh: make(chan struct{}),
+	}
+	go m.loop()
+	return m
+}
+
+func (m *AgentManager) loop() {
+	agents := make(map[data.WorkspaceID][]*Agent)
+	tmuxOptions := tmux.DefaultOptions()
+
+	for {
+		select {
+		case <-m.stopCh:
+			// Drain remaining commands before shutting down
+			for {
+				select {
+				case cmd := <-m.cmdCh:
+					m.handle(&cmd, agents, &tmuxOptions)
+				default:
+					return
+				}
+			}
+		case cmd := <-m.cmdCh:
+			m.handle(&cmd, agents, &tmuxOptions)
+		}
+	}
+}
+
+func (m *AgentManager) handle(cmd *agentCmd, agents map[data.WorkspaceID][]*Agent, tmuxOpts *tmux.Options) {
+	switch cmd.kind {
+	case "set_tmux_opts":
+		*tmuxOpts = cmd.tmuxOpts
+		cmd.respCh <- agentResp{tmuxOptions: *tmuxOpts}
+
+	case "get_tmux_opts":
+		cmd.respCh <- agentResp{tmuxOptions: *tmuxOpts}
+
+	case "create_agent":
+		agent, err := m.createAgentLocked(cmd, agents, tmuxOpts)
+		cmd.respCh <- agentResp{agent: agent, err: err, change: AgentStateChange{
+			Kind:      "created",
+			AgentType: string(cmd.agentType),
+			Session:   cmd.sessionName,
+			Error:     err,
+		}}
+
+	case "close_agent":
+		m.closeAgentLocked(cmd.agent, agents)
+		cmd.respCh <- agentResp{change: AgentStateChange{
+			Kind:    "closed",
+			Session: cmd.agent.Session,
+		}}
+
+	case "close_all":
+		for _, ags := range agents {
+			for _, a := range ags {
+				if a.Terminal != nil {
+					a.Terminal.Close()
+				}
+			}
+		}
+		agents = make(map[data.WorkspaceID][]*Agent)
+		// The agents map variable is shadowed here, so we need to ensure
+		// the caller's map is updated by copying back.
+		for k := range agents {
+			delete(agents, k)
+		}
+		cmd.respCh <- agentResp{}
+
+	case "close_workspace":
+		ws := cmd.ws
+		if ws != nil {
+			wsID := ws.ID()
+			for _, a := range agents[wsID] {
+				if a.Terminal != nil {
+					a.Terminal.Close()
+				}
+			}
+			delete(agents, wsID)
+		}
+		cmd.respCh <- agentResp{}
+	}
+}
+
+func (m *AgentManager) createAgentLocked(cmd *agentCmd, agents map[data.WorkspaceID][]*Agent, tmuxOpts *tmux.Options) (*Agent, error) {
+	ws := cmd.ws
+	agentType := cmd.agentType
+	sessionName := cmd.sessionName
+
+	if sessionName == "" {
+		if cmd.kind == "create_agent" {
+			sessionName = tmux.SessionName("amux", string(ws.ID()), string(agentType))
+		} else {
+			sessionName = tmux.SessionName("amux", string(ws.ID()), "viewer")
+		}
+	}
+
+	if cmd.kind == "create_agent" {
+		assistantCfg, ok := m.config.Assistants[string(agentType)]
+		if !ok {
+			return nil, fmt.Errorf("unknown agent type: %s", agentType)
+		}
+		if err := tmux.EnsureAvailable(); err != nil {
+			return nil, err
+		}
+
+		env := []string{
+			"WORKSPACE_ROOT=" + ws.Root,
+			"WORKSPACE_NAME=" + ws.Name,
+			"LINES=",
+			"COLUMNS=",
+			"COLORTERM=truecolor",
+		}
+
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			shell = "/bin/bash"
+		}
+
+		fullCommand := fmt.Sprintf("%s; stty sane; printf '\\033[?1049l\\033[?25h\\033[0m\\033c'; echo 'Agent exited. Dropping to shell...'; export TERM=xterm-256color; exec %s -l", assistantCfg.Command, shell)
+
+		termCommand := tmux.NewClientCommand(sessionName, tmux.ClientCommandParams{
+			WorkDir:        ws.Root,
+			Command:        fullCommand,
+			Options:        *tmuxOpts,
+			Tags:           cmd.tags,
+			DetachExisting: true,
+		})
+		term, err := NewWithSize(termCommand, ws.Root, env, cmd.rows, cmd.cols)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create terminal: %w", err)
+		}
+
+		agent := &Agent{
+			Type:      agentType,
+			Terminal:  term,
+			Workspace: ws,
+			Config:    assistantCfg,
+			Session:   sessionName,
+		}
+		agents[ws.ID()] = append(agents[ws.ID()], agent)
+		return agent, nil
+	}
+
+	// create_viewer
+	if ws == nil {
+		return nil, errors.New("workspace is required")
+	}
+	if err := tmux.EnsureAvailable(); err != nil {
+		return nil, err
+	}
+	env := []string{
+		"WORKSPACE_ROOT=" + ws.Root,
+		"WORKSPACE_NAME=" + ws.Name,
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+	}
+
+	termCommand := tmux.NewClientCommand(sessionName, tmux.ClientCommandParams{
+		WorkDir:        ws.Root,
+		Command:        cmd.viewerCmd,
+		Options:        *tmuxOpts,
+		Tags:           cmd.tags,
+		DetachExisting: true,
+	})
+	term, err := NewWithSize(termCommand, ws.Root, env, cmd.rows, cmd.cols)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create terminal: %w", err)
+	}
+
+	agent := &Agent{
+		Type:      AgentType("viewer"),
+		Terminal:  term,
+		Workspace: ws,
+		Config:    config.AssistantConfig{},
+		Session:   sessionName,
+	}
+	agents[ws.ID()] = append(agents[ws.ID()], agent)
+	return agent, nil
+}
+
+func (m *AgentManager) closeAgentLocked(agent *Agent, agents map[data.WorkspaceID][]*Agent) {
+	if agent.Terminal != nil {
+		agent.Terminal.Close()
+	}
+	if agent.Workspace != nil {
+		wsID := agent.Workspace.ID()
+		ags := agents[wsID]
+		for i, a := range ags {
+			if a == agent {
+				agents[wsID] = append(ags[:i], ags[i+1:]...)
+				break
+			}
+		}
+	}
+}
+
+// sendCmd sends a command to the loop and returns the response.
+func (m *AgentManager) sendCmd(cmd agentCmd) agentResp {
+	if m.cmdCh == nil {
+		return agentResp{err: errors.New("agent manager is shutting down")}
+	}
+	respCh := make(chan agentResp, 1)
+	cmd.respCh = respCh
+	m.cmdCh <- cmd
+	return <-respCh
+}
+
+// SetTmuxOptions updates tmux options for future agent/viewer command construction.
+func (m *AgentManager) SetTmuxOptions(opts tmux.Options) {
+	resp := m.sendCmd(agentCmd{kind: "set_tmux_opts", tmuxOpts: opts})
+	_ = resp
+}
+
+func (m *AgentManager) getTmuxOptions() tmux.Options {
+	resp := m.sendCmd(agentCmd{kind: "get_tmux_opts"})
+	return resp.tmuxOptions
+}
+
+// CreateAgent creates a new agent for the given workspace.
+func (m *AgentManager) CreateAgent(ws *data.Workspace, agentType AgentType, sessionName string, rows, cols uint16) (*Agent, error) {
+	return m.CreateAgentWithTags(ws, agentType, sessionName, rows, cols, tmux.SessionTags{})
+}
+
+// CreateAgentWithTags creates a new agent for the given workspace with tmux tags.
+func (m *AgentManager) CreateAgentWithTags(ws *data.Workspace, agentType AgentType, sessionName string, rows, cols uint16, tags tmux.SessionTags) (*Agent, error) {
+	resp := m.sendCmd(agentCmd{
+		kind:        "create_agent",
+		ws:          ws,
+		agentType:   agentType,
+		sessionName: sessionName,
+		rows:        rows,
+		cols:        cols,
+		tags:        tags,
+	})
+	return resp.agent, resp.err
+}
+
+// CreateViewer creates a new agent (viewer) for the given workspace and command.
+func (m *AgentManager) CreateViewer(ws *data.Workspace, command, sessionName string, rows, cols uint16) (*Agent, error) {
+	return m.CreateViewerWithTags(ws, command, sessionName, rows, cols, tmux.SessionTags{})
+}
+
+// CreateViewerWithTags creates a new viewer for the given workspace with tmux tags.
+func (m *AgentManager) CreateViewerWithTags(ws *data.Workspace, command, sessionName string, rows, cols uint16, tags tmux.SessionTags) (*Agent, error) {
+	resp := m.sendCmd(agentCmd{
+		kind:        "create_viewer",
+		ws:          ws,
+		sessionName: sessionName,
+		rows:        rows,
+		cols:        cols,
+		tags:        tags,
+		viewerCmd:   command,
+	})
+	return resp.agent, resp.err
+}
+
+// CloseAgent closes an agent.
+// Returns AgentStateChange that the caller can convert to a tea.Msg.
+func (m *AgentManager) CloseAgent(agent *Agent) AgentStateChange {
+	if agent == nil {
+		return AgentStateChange{}
+	}
+	resp := m.sendCmd(agentCmd{kind: "close_agent", agent: agent})
+	return resp.change
+}
+
+// CloseAll closes all agents.
+func (m *AgentManager) CloseAll() {
+	respCh := make(chan agentResp, 1)
+	m.cmdCh <- agentCmd{kind: "close_all", respCh: respCh}
+	<-respCh
+}
+
+// CloseWorkspaceAgents closes and removes all agents for a specific workspace.
+func (m *AgentManager) CloseWorkspaceAgents(ws *data.Workspace) {
+	if ws == nil {
+		return
+	}
+	respCh := make(chan agentResp, 1)
+	m.cmdCh <- agentCmd{kind: "close_workspace", ws: ws, respCh: respCh}
+	<-respCh
+}
+
+// SendInterrupt sends an interrupt to an agent.
+func (m *AgentManager) SendInterrupt(agent *Agent) error {
+	if agent.Terminal == nil {
+		return nil
+	}
+
+	// Send multiple interrupts if configured (e.g., for Claude)
+	for i := 0; i < agent.Config.InterruptCount; i++ {
+		if err := agent.Terminal.SendInterrupt(); err != nil {
+			return err
+		}
+		// Add delay between interrupts if configured
+		if i < agent.Config.InterruptCount-1 && agent.Config.InterruptDelayMs > 0 {
+			time.Sleep(time.Duration(agent.Config.InterruptDelayMs) * time.Millisecond)
+		}
+	}
+
+	return nil
+}

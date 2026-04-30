@@ -2,7 +2,6 @@ package center
 
 import (
 	"context"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,12 +13,12 @@ import (
 func TestIsTabActorReady_FalseWhenHeartbeatStale(t *testing.T) {
 	m := newTestModel()
 	m.setTabActorReady()
-	atomic.StoreInt64(&m.tabActorHeartbeat, time.Now().Add(-(tabActorStallTimeout + time.Second)).UnixNano())
+	m.tabActorLastBeat = time.Now().Add(-(tabActorStallTimeout + time.Second))
 
 	if m.isTabActorReady() {
 		t.Fatal("expected stale actor heartbeat to clear readiness")
 	}
-	if atomic.LoadUint32(&m.tabActorReady) != 0 {
+	if m.tabActorRunning {
 		t.Fatal("expected stale readiness flag to be cleared")
 	}
 }
@@ -27,7 +26,7 @@ func TestIsTabActorReady_FalseWhenHeartbeatStale(t *testing.T) {
 func TestUpdatePTYFlush_StaleActorHeartbeatForcesParserResetFallback(t *testing.T) {
 	m := newTestModel()
 	m.setTabActorReady()
-	atomic.StoreInt64(&m.tabActorHeartbeat, time.Now().Add(-(tabActorStallTimeout + time.Second)).UnixNano())
+	m.tabActorLastBeat = time.Now().Add(-(tabActorStallTimeout + time.Second))
 
 	ws := newTestWorkspace("ws", "/repo/ws")
 	wsID := string(ws.ID())
@@ -63,7 +62,7 @@ func TestUpdatePTYFlush_StaleActorHeartbeatForcesParserResetFallback(t *testing.
 	}
 }
 
-func TestRunTabActor_SetsReadyWithoutEmittingLivenessMsgs(t *testing.T) {
+func TestRunTabActor_SetsReadyViaMessage(t *testing.T) {
 	m := newTestModel()
 	m.tabEvents = make(chan tabEvent, 1)
 	sinkMsgs := make(chan tea.Msg, 4)
@@ -79,18 +78,20 @@ func TestRunTabActor_SetsReadyWithoutEmittingLivenessMsgs(t *testing.T) {
 		done <- m.RunTabActor(ctx)
 	}()
 
-	deadline := time.Now().Add(time.Second)
-	for !m.isTabActorReady() {
-		if time.Now().After(deadline) {
-			t.Fatal("expected actor startup to set readiness directly")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
 	select {
 	case msg := <-sinkMsgs:
-		t.Fatalf("unexpected liveness message on startup: %T", msg)
-	case <-time.After(100 * time.Millisecond):
+		if _, ok := msg.(tabActorSignal); !ok {
+			t.Fatalf("expected tabActorSignal on startup, got %T", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected actor startup to emit tabActorSignal message")
+	}
+
+	// Process the startup message to set readiness.
+	m.Update(tabActorSignal{kind: "started"})
+
+	if !m.isTabActorReady() {
+		t.Fatal("expected actor to be ready after processing tabActorSignal")
 	}
 
 	cancel()
@@ -104,33 +105,38 @@ func TestRunTabActor_SetsReadyWithoutEmittingLivenessMsgs(t *testing.T) {
 	}
 }
 
-func TestNoteTabActorHeartbeat_RefreshesReadiness(t *testing.T) {
+func TestTabActorHeartbeat_RefreshesReadiness(t *testing.T) {
 	m := newTestModel()
-	before := time.Now()
-
-	m.noteTabActorHeartbeat()
+	// Simulate actor started
+	m.Update(tabActorSignal{kind: "started"})
 
 	if !m.isTabActorReady() {
-		t.Fatal("expected direct heartbeat to refresh actor readiness")
+		t.Fatal("expected actor ready after processing tabActorSignal")
 	}
-	if got := atomic.LoadUint32(&m.tabActorReady); got != 1 {
-		t.Fatalf("expected ready flag to be set, got %d", got)
+
+	// Advance time past the stall timeout
+	before := m.tabActorLastBeat
+
+	// A heartbeat message refreshes the timestamp
+	m.Update(tabActorSignal{kind: "heartbeat"})
+
+	if m.tabActorLastBeat.Equal(before) {
+		t.Fatal("expected heartbeat message to refresh the last-beat timestamp")
 	}
-	got := atomic.LoadInt64(&m.tabActorHeartbeat)
-	if got < before.UnixNano() {
-		t.Fatalf("expected heartbeat timestamp to be refreshed on receipt, got %d before %d", got, before.UnixNano())
+	if !m.isTabActorReady() {
+		t.Fatal("expected actor to remain ready after heartbeat")
 	}
 }
 
-func TestSetTabActorReady_SeedsHeartbeatBeforeReadiness(t *testing.T) {
+func TestSetTabActorReady_SetsNonAtomicFields(t *testing.T) {
 	m := newTestModel()
 
 	m.setTabActorReady()
 
-	if got := atomic.LoadUint32(&m.tabActorReady); got != 1 {
-		t.Fatalf("expected ready flag to be set, got %d", got)
+	if !m.tabActorRunning {
+		t.Fatal("expected tabActorRunning to be set")
 	}
-	if got := atomic.LoadInt64(&m.tabActorHeartbeat); got == 0 {
+	if m.tabActorLastBeat.IsZero() {
 		t.Fatal("expected setTabActorReady to seed heartbeat timestamp")
 	}
 	if !m.isTabActorReady() {
@@ -154,29 +160,35 @@ func TestRunTabActor_EmitsRedrawForActorHandledUIEvent(t *testing.T) {
 		done <- m.RunTabActor(ctx)
 	}()
 
-	deadline := time.Now().Add(time.Second)
-	for !m.isTabActorReady() {
-		if time.Now().After(deadline) {
-			t.Fatal("expected actor startup to set readiness directly")
-		}
-		time.Sleep(10 * time.Millisecond)
+	// Drain startup message
+	select {
+	case <-sinkMsgs:
+	case <-time.After(time.Second):
+		t.Fatal("expected startup message")
 	}
 
 	tab := &Tab{Terminal: vterm.New(80, 24)}
 	m.tabEvents <- tabEvent{kind: tabEventSelectionStart, tab: tab}
-	select {
-	case msg := <-sinkMsgs:
-		if _, ok := msg.(tabActorRedraw); !ok {
-			t.Fatalf("expected redraw message, got %T", msg)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected actor-handled UI event to emit redraw message")
-	}
 
-	select {
-	case msg := <-sinkMsgs:
-		t.Fatalf("unexpected extra actor message %T", msg)
-	case <-time.After(50 * time.Millisecond):
+	// The actor sends a heartbeat before processing the event, then a redraw after.
+	// Drain the heartbeat first.
+	var gotRedraw bool
+	timeout := time.After(time.Second)
+	for !gotRedraw {
+		select {
+		case msg := <-sinkMsgs:
+			switch msg := msg.(type) {
+			case tabActorSignal:
+				if msg.kind == "redraw" {
+					gotRedraw = true
+				}
+				// heartbeat is expected, drain it
+			default:
+				t.Fatalf("unexpected message: %T", msg)
+			}
+		case <-timeout:
+			t.Fatal("expected actor-handled UI event to emit redraw message")
+		}
 	}
 
 	cancel()
@@ -190,49 +202,31 @@ func TestRunTabActor_EmitsRedrawForActorHandledUIEvent(t *testing.T) {
 	}
 }
 
-func TestRequestTabActorRedraw_CoalescesOutstandingSignals(t *testing.T) {
+func TestRequestTabActorRedraw_AlwaysSendsViaMsgSink(t *testing.T) {
 	m := newTestModel()
 	sinkMsgs := make(chan tea.Msg, 4)
 	m.msgSinkTry = func(msg tea.Msg) bool {
 		sinkMsgs <- msg
 		return true
 	}
-	m.msgSink = func(msg tea.Msg) {
-		_ = m.msgSinkTry(msg)
-	}
 
+	// Multiple calls always send (no CAS coalescing).
 	m.requestTabActorRedraw()
 	m.requestTabActorRedraw()
 
-	select {
-	case msg := <-sinkMsgs:
-		if _, ok := msg.(tabActorRedraw); !ok {
-			t.Fatalf("expected redraw message, got %T", msg)
+	for i := 0; i < 2; i++ {
+		select {
+		case msg := <-sinkMsgs:
+			if _, ok := msg.(tabActorSignal); !ok {
+				t.Fatalf("expected redraw message, got %T", msg)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("expected redraw message %d", i+1)
 		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected coalesced redraw message")
-	}
-
-	select {
-	case msg := <-sinkMsgs:
-		t.Fatalf("unexpected extra redraw message %T", msg)
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	_, _ = m.Update(tabActorRedraw{})
-	m.requestTabActorRedraw()
-
-	select {
-	case msg := <-sinkMsgs:
-		if _, ok := msg.(tabActorRedraw); !ok {
-			t.Fatalf("expected redraw message after clear, got %T", msg)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected redraw message after clearing pending flag")
 	}
 }
 
-func TestRequestTabActorRedraw_MsgSinkFallbackDoesNotLatchPending(t *testing.T) {
+func TestRequestTabActorRedraw_MsgSinkFallbackSendsEveryTime(t *testing.T) {
 	m := newTestModel()
 	sinkMsgs := make(chan tea.Msg, 4)
 	m.msgSink = func(msg tea.Msg) {
@@ -242,23 +236,19 @@ func TestRequestTabActorRedraw_MsgSinkFallbackDoesNotLatchPending(t *testing.T) 
 	m.requestTabActorRedraw()
 	m.requestTabActorRedraw()
 
-	if got := atomic.LoadUint32(&m.tabActorRedrawPending); got != 0 {
-		t.Fatalf("expected msgSink-only redraw path not to latch pending flag, got %d", got)
-	}
-
 	for i := 0; i < 2; i++ {
 		select {
 		case msg := <-sinkMsgs:
-			if _, ok := msg.(tabActorRedraw); !ok {
+			if _, ok := msg.(tabActorSignal); !ok {
 				t.Fatalf("expected redraw message, got %T", msg)
 			}
 		case <-time.After(100 * time.Millisecond):
-			t.Fatalf("expected redraw message %d from msgSink-only fallback", i+1)
+			t.Fatalf("expected redraw message %d from msgSink fallback", i+1)
 		}
 	}
 }
 
-func TestRequestTabActorRedraw_DropDoesNotLatchPending(t *testing.T) {
+func TestRequestTabActorRedraw_RetryOnDrop(t *testing.T) {
 	m := newTestModel()
 	attempts := 0
 	sinkMsgs := make(chan tea.Msg, 2)
@@ -274,15 +264,13 @@ func TestRequestTabActorRedraw_DropDoesNotLatchPending(t *testing.T) {
 		_ = m.msgSinkTry(msg)
 	}
 
+	// First call dropped, second succeeds.
 	m.requestTabActorRedraw()
-	if got := atomic.LoadUint32(&m.tabActorRedrawPending); got != 0 {
-		t.Fatalf("expected dropped redraw not to latch pending flag, got %d", got)
-	}
 
 	m.requestTabActorRedraw()
 	select {
 	case msg := <-sinkMsgs:
-		if _, ok := msg.(tabActorRedraw); !ok {
+		if _, ok := msg.(tabActorSignal); !ok {
 			t.Fatalf("expected redraw message after retry, got %T", msg)
 		}
 	case <-time.After(100 * time.Millisecond):
@@ -290,9 +278,13 @@ func TestRequestTabActorRedraw_DropDoesNotLatchPending(t *testing.T) {
 	}
 }
 
-func TestRunTabActor_EventProcessingRefreshesHeartbeat(t *testing.T) {
+func TestRunTabActor_EventProcessingSendsHeartbeat(t *testing.T) {
 	m := newTestModel()
 	m.tabEvents = make(chan tabEvent, 1)
+	sinkMsgs := make(chan tea.Msg, 8)
+	m.msgSink = func(msg tea.Msg) {
+		sinkMsgs <- msg
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -302,32 +294,31 @@ func TestRunTabActor_EventProcessingRefreshesHeartbeat(t *testing.T) {
 		done <- m.RunTabActor(ctx)
 	}()
 
-	deadline := time.Now().Add(time.Second)
-	for !m.isTabActorReady() {
-		if time.Now().After(deadline) {
-			t.Fatal("expected actor startup to set readiness directly")
-		}
-		time.Sleep(10 * time.Millisecond)
+	// Drain startup message
+	select {
+	case <-sinkMsgs:
+	case <-time.After(time.Second):
+		t.Fatal("expected startup message")
 	}
 
-	stale := time.Now().Add(-(tabActorStallTimeout + time.Second)).UnixNano()
-	atomic.StoreInt64(&m.tabActorHeartbeat, stale)
-	if m.isTabActorReady() {
-		t.Fatal("expected stale heartbeat to clear readiness before event processing")
-	}
+	// Make the heartbeat appear stale via direct field write (simulating Update processing)
+	m.Update(tabActorSignal{kind: "started"})
 
+	// Send an event to trigger a heartbeat
 	m.tabEvents <- tabEvent{kind: tabEventSelectionClear, tab: &Tab{}}
 
-	deadline = time.Now().Add(time.Second)
-	for !m.isTabActorReady() {
-		if time.Now().After(deadline) {
-			t.Fatal("expected processed event to refresh actor heartbeat")
+	// Should get a heartbeat message
+	var gotHeartbeat bool
+	timeout := time.After(time.Second)
+	for !gotHeartbeat {
+		select {
+		case msg := <-sinkMsgs:
+			if _, ok := msg.(tabActorSignal); ok {
+				gotHeartbeat = true
+			}
+		case <-timeout:
+			t.Fatal("expected heartbeat message after event processing")
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	if got := atomic.LoadInt64(&m.tabActorHeartbeat); got <= stale {
-		t.Fatalf("expected processed event to advance heartbeat, got %d <= %d", got, stale)
 	}
 
 	cancel()

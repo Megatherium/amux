@@ -67,10 +67,10 @@ type selectionTickRequest struct {
 	gen         uint64
 }
 
-type tabActorRedraw struct{}
+type tabActorSignal struct{ kind string } // "redraw", "started", "heartbeat"
 
-func (tabActorRedraw) MarkCriticalExternalMsg()            {}
-func (tabActorRedraw) MarkNonEvictingCriticalExternalMsg() {}
+func (s tabActorSignal) MarkCriticalExternalMsg()            {}
+func (s tabActorSignal) MarkNonEvictingCriticalExternalMsg() {}
 
 type tabDiffCmd struct{ cmd tea.Cmd }
 
@@ -147,7 +147,8 @@ func (m *Model) RunTabActor(ctx context.Context) error {
 	if m == nil || m.tabEvents == nil {
 		return nil
 	}
-	m.setTabActorReady()
+	// Signal readiness via TEA message loop.
+	m.sendActorSignal("started")
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -155,14 +156,23 @@ func (m *Model) RunTabActor(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case ev := <-m.tabEvents:
-			m.noteTabActorHeartbeat()
+			m.sendActorSignal("heartbeat")
 			m.handleTabEvent(ev)
 			if shouldPostTabActorRedraw(ev.kind) {
 				m.requestTabActorRedraw()
 			}
 		case <-ticker.C:
-			m.noteTabActorHeartbeat()
+			m.sendActorSignal("heartbeat")
 		}
+	}
+}
+
+func (m *Model) sendActorSignal(kind string) {
+	sig := tabActorSignal{kind: kind}
+	if m.msgSink != nil {
+		m.msgSink(sig)
+	} else if m.msgSinkTry != nil {
+		m.msgSinkTry(sig)
 	}
 }
 

@@ -1,0 +1,455 @@
+package center
+
+import (
+	"time"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/andyrewlee/amux/internal/logging"
+	"github.com/andyrewlee/amux/internal/messages"
+	"github.com/andyrewlee/amux/internal/perf"
+	"github.com/andyrewlee/amux/internal/ui/common"
+)
+
+// directSendToTerminal sends data directly to the terminal, handling errors.
+// Returns whether data was actually sent and an optional command for failures.
+func (m *Model) directSendToTerminal(tab *Tab, data, label string) (*Model, bool, tea.Cmd) {
+	if tab.Agent == nil || tab.Agent.Terminal == nil {
+		return m, false, nil
+	}
+	if err := tab.Agent.Terminal.SendString(data); err != nil {
+		logging.Warn("%s failed for tab %s: %v", label, tab.ID, err)
+		tab.mu.Lock()
+		tab.Running = false
+		tab.Detached = true
+		tab.mu.Unlock()
+		wsID := m.workspaceID()
+		return m, false, func() tea.Msg {
+			return TabInputFailed{TabID: tab.ID, WorkspaceID: wsID, Err: err}
+		}
+	}
+	return m, true, nil
+}
+
+// noteLocalInput records local typing/editing activity for activity suppression
+// and chat cursor tracking, and schedules a redraw for timer-driven cursor
+// state changes.
+func (m *Model) noteLocalInput(tab *Tab, workspaceID, data string, now time.Time) tea.Cmd {
+	if tab == nil {
+		return nil
+	}
+	recordLocalInputEchoWindow(tab, data, now)
+	return m.scheduleChatCursorRefresh(tab, workspaceID, now)
+}
+
+// Update handles messages
+func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
+	defer perf.Time("center_update")()
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		if m.draft != nil {
+			return m, nil
+		}
+		return m.updateMouseClick(msg)
+
+	case tea.MouseMotionMsg:
+		return m.updateMouseMotion(msg)
+
+	case tea.MouseReleaseMsg:
+		return m.updateMouseRelease(msg)
+
+	case tea.MouseWheelMsg:
+		if m.draft != nil {
+			return m, nil
+		}
+		return m.updateMouseWheel(msg)
+
+	case tea.PasteMsg:
+		tabs := m.getTabs()
+		activeIdx := m.getActiveTabIdx()
+		if len(tabs) > 0 && activeIdx < len(tabs) {
+			tab := tabs[activeIdx]
+			if !m.focused {
+				return m, nil
+			}
+			if m.isTabActorReady() {
+				queued := m.sendTabEvent(tabEvent{
+					tab:         tab,
+					workspaceID: m.workspaceID(),
+					tabID:       tab.ID,
+					kind:        tabEventPaste,
+					pasteText:   msg.Content,
+				})
+				// When the actor accepts the event, it will stamp local-input
+				// timing after the PTY write actually happens. Doing it here at
+				// enqueue time would make queue latency look like local echo.
+				if !queued {
+					if _, sent, cmd := m.directSendToTerminal(tab, "\x1b[200~"+msg.Content+"\x1b[201~", "Direct paste"); cmd != nil {
+						return m, cmd
+					} else if !sent {
+						return m, nil
+					}
+					now := time.Now()
+					payload := "\x1b[200~" + msg.Content + "\x1b[201~"
+					cmds = append(cmds, m.noteLocalInput(tab, m.workspaceID(), payload, now))
+				}
+				logging.Debug("Pasted %d bytes via bracketed paste", len(msg.Content))
+				cmds = append(cmds, m.userInputActivityTagCmd(tab))
+				return m, common.SafeBatch(cmds...)
+			}
+			if _, sent, cmd := m.directSendToTerminal(tab, "\x1b[200~"+msg.Content+"\x1b[201~", "Direct paste"); cmd != nil {
+				return m, cmd
+			} else if !sent {
+				return m, nil
+			}
+			logging.Debug("Pasted %d bytes via bracketed paste", len(msg.Content))
+			now := time.Now()
+			payload := "\x1b[200~" + msg.Content + "\x1b[201~"
+			cmds = append(cmds, m.noteLocalInput(tab, m.workspaceID(), payload, now))
+			cmds = append(cmds, m.userInputActivityTagCmd(tab))
+			return m, common.SafeBatch(cmds...)
+		}
+		return m, nil
+
+	case tea.KeyPressMsg:
+		if m.draft != nil {
+			newDraft, cmd := m.draft.Update(msg)
+			m.draft = newDraft
+			return m, cmd
+		}
+
+		tabs := m.getTabs()
+		activeIdx := m.getActiveTabIdx()
+		logging.Debug("Center received key: %s, focused=%v, hasTabs=%v, numTabs=%d",
+			msg.String(), m.focused, m.hasActiveAgent(), len(tabs))
+
+		// Check if this is Cmd+C (copy command)
+		k := msg.Key()
+		isCopyKey := k.Mod.Contains(tea.ModSuper) && k.Code == 'c'
+
+		// Handle explicit Cmd+C to copy current selection
+		if isCopyKey && len(tabs) > 0 && activeIdx < len(tabs) {
+			tab := tabs[activeIdx]
+			if m.isTabActorReady() {
+				if m.sendTabEvent(tabEvent{
+					tab:         tab,
+					workspaceID: m.workspaceID(),
+					tabID:       tab.ID,
+					kind:        tabEventSelectionCopy,
+					notifyCopy:  true,
+				}) {
+					return m, nil
+				}
+			}
+			tab.mu.Lock()
+			if tab.Terminal != nil && tab.Terminal.HasSelection() {
+				text := tab.Terminal.SelectedText()
+				if text != "" {
+					if err := common.CopyToClipboard(text); err != nil {
+						logging.Error("Failed to copy to clipboard: %v", err)
+					} else {
+						logging.Info("Cmd+C copied %d chars to clipboard", len(text))
+					}
+				}
+			}
+			tab.mu.Unlock()
+			return m, nil // Don't forward to terminal, don't clear selection
+		}
+
+		// Clear any selection when user types (except Cmd+C which is handled above)
+		if len(tabs) > 0 && activeIdx < len(tabs) {
+			tab := tabs[activeIdx]
+			sent := false
+			if m.isTabActorReady() {
+				sent = m.sendTabEvent(tabEvent{
+					tab:         tab,
+					workspaceID: m.workspaceID(),
+					tabID:       tab.ID,
+					kind:        tabEventSelectionClear,
+				})
+			}
+			if !sent {
+				tab.mu.Lock()
+				if tab.Terminal != nil {
+					tab.Terminal.ClearSelection()
+				}
+				tab.Selection = common.SelectionState{}
+				tab.selectionScroll.Reset()
+				tab.mu.Unlock()
+			}
+		}
+
+		if !m.focused {
+			logging.Debug("Center not focused, ignoring key")
+			return m, nil
+		}
+
+		// When we have an active agent, handle keys
+		if m.hasActiveAgent() {
+			tab := tabs[activeIdx]
+			logging.Debug("Has active agent, Agent=%v, Terminal=%v", tab.Agent != nil, tab.Agent != nil && tab.Agent.Terminal != nil)
+
+			// DiffViewer tabs: forward keys to diff viewer
+			tab.mu.Lock()
+			dv := tab.DiffViewer
+			tab.mu.Unlock()
+			if dv != nil {
+				// Handle ctrl+w for closing tab
+				if key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+w"))) {
+					return m, m.closeCurrentTab()
+				}
+				// Handle ctrl+n/p for tab switching
+				if key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+n"))) {
+					before := m.getActiveTabIdx()
+					m.nextTab()
+					return m, m.tabSelectionChangedCmd(m.getActiveTabIdx() != before)
+				}
+				if key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+p"))) {
+					before := m.getActiveTabIdx()
+					m.prevTab()
+					return m, m.tabSelectionChangedCmd(m.getActiveTabIdx() != before)
+				}
+				// Forward all other keys to diff viewer
+				if handled, cmd := m.dispatchDiffInput(tab, msg); handled {
+					return m, cmd
+				}
+				return m, nil
+			}
+
+			if tab.Agent != nil && tab.Agent.Terminal != nil {
+				// Only intercept these specific keys - everything else goes to terminal
+				switch {
+				case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+n"))):
+					before := m.getActiveTabIdx()
+					m.nextTab()
+					return m, m.tabSelectionChangedCmd(m.getActiveTabIdx() != before)
+
+				case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+p"))):
+					before := m.getActiveTabIdx()
+					m.prevTab()
+					return m, m.tabSelectionChangedCmd(m.getActiveTabIdx() != before)
+
+				case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+w"))):
+					// Close tab
+					return m, m.closeCurrentTab()
+
+				case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+]"))):
+					// Switch to next tab (escape hatch that won't conflict)
+					before := m.getActiveTabIdx()
+					m.nextTab()
+					return m, m.tabSelectionChangedCmd(m.getActiveTabIdx() != before)
+
+				case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+["))):
+					// This is Escape - let it go to terminal
+					if _, sent, cmd := m.directSendToTerminal(tab, "\x1b", "Escape key"); cmd != nil {
+						return m, cmd
+					} else if !sent {
+						return m, nil
+					}
+					now := time.Now()
+					cmds = append(cmds, m.noteLocalInput(tab, m.workspaceID(), "\x1b", now))
+					cmds = append(cmds, m.userInputActivityTagCmd(tab))
+					return m, common.SafeBatch(cmds...)
+				}
+
+				// PgUp/PgDown for scrollback (these don't conflict with embedded TUIs)
+				switch msg.Key().Code {
+				case tea.KeyPgUp:
+					if m.isTabActorReady() {
+						if m.sendTabEvent(tabEvent{
+							tab:         tab,
+							workspaceID: m.workspaceID(),
+							tabID:       tab.ID,
+							kind:        tabEventScrollPage,
+							scrollPage:  1,
+						}) {
+							return m, nil
+						}
+					}
+					tab.mu.Lock()
+					if tab.Terminal != nil {
+						tab.Terminal.ScrollView(tab.Terminal.Height / 4)
+					}
+					tab.mu.Unlock()
+					return m, nil
+
+				case tea.KeyPgDown:
+					if m.isTabActorReady() {
+						if m.sendTabEvent(tabEvent{
+							tab:         tab,
+							workspaceID: m.workspaceID(),
+							tabID:       tab.ID,
+							kind:        tabEventScrollPage,
+							scrollPage:  -1,
+						}) {
+							return m, nil
+						}
+					}
+					tab.mu.Lock()
+					if tab.Terminal != nil {
+						tab.Terminal.ScrollView(-tab.Terminal.Height / 4)
+					}
+					tab.mu.Unlock()
+					return m, nil
+				}
+
+				// If scrolled, any typing goes back to live and sends key
+				sent := false
+				if m.isTabActorReady() {
+					sent = m.sendTabEvent(tabEvent{
+						tab:         tab,
+						workspaceID: m.workspaceID(),
+						tabID:       tab.ID,
+						kind:        tabEventScrollToBottom,
+					})
+				}
+				if !sent {
+					tab.mu.Lock()
+					if tab.Terminal != nil && tab.Terminal.IsScrolled() {
+						tab.Terminal.ScrollViewToBottom()
+					}
+					tab.mu.Unlock()
+				}
+
+				// Forward ALL keys to terminal (no Ctrl interceptions)
+				input := common.KeyToBytes(msg)
+				if len(input) > 0 {
+					logging.Debug("Sending to terminal: %q (len=%d)", input, len(input))
+					queued := false
+					if m.isTabActorReady() {
+						queued = m.sendTabEvent(tabEvent{
+							tab:         tab,
+							workspaceID: m.workspaceID(),
+							tabID:       tab.ID,
+							kind:        tabEventSendInput,
+							input:       input,
+						})
+						if !queued {
+							if _, sent, cmd := m.directSendToTerminal(tab, string(input), "Direct input"); cmd != nil {
+								return m, cmd
+							} else if !sent {
+								return m, nil
+							}
+							cmds = append(cmds, m.noteLocalInput(tab, m.workspaceID(), string(input), time.Now()))
+						}
+					} else {
+						if _, sent, cmd := m.directSendToTerminal(tab, string(input), "Direct input"); cmd != nil {
+							return m, cmd
+						} else if !sent {
+							return m, nil
+						}
+						cmds = append(cmds, m.noteLocalInput(tab, m.workspaceID(), string(input), time.Now()))
+					}
+					cmds = append(cmds, m.userInputActivityTagCmd(tab))
+					return m, common.SafeBatch(cmds...)
+				}
+				logging.Debug("keyToBytes returned empty for: %s", msg.String())
+				return m, nil
+			}
+		}
+
+	case DraftComplete:
+		m.draft = nil
+		return m, func() tea.Msg {
+			return messages.LaunchAgent{
+				Assistant:   msg.Assistant,
+				Workspace:   msg.Workspace,
+				TicketID:    msg.TicketID,
+				TicketTitle: msg.TicketTitle,
+				Model:       msg.Model,
+				AgentMode:   msg.AgentMode,
+			}
+		}
+
+	case DraftCancelled:
+		m.draft = nil
+		return m, nil
+
+	case messages.LaunchAgent:
+		return m.updateLaunchAgent(msg)
+
+	case messages.OpenFileInVim:
+		return m.updateOpenFileInVim(msg)
+
+	case ptyTabCreateResult:
+		return m.updatePtyTabCreateResult(msg)
+
+	case ptyTabReattachResult:
+		return m.updatePtyTabReattachResult(msg)
+
+	case ptyTabReattachFailed:
+		return m.updatePtyTabReattachFailed(msg)
+
+	case messages.TabSessionStatus:
+		return m.updateTabSessionStatus(msg)
+
+	case messages.OpenDiff:
+		return m.updateOpenDiff(msg)
+
+	case messages.WorkspaceDeleted:
+		return m.updateWorkspaceDeleted(msg)
+
+	case tabSelectionResult:
+		return m.updateTabSelectionResult(msg)
+
+	case selectionTickRequest:
+		return m.updateSelectionTickRequest(msg)
+
+	case tabDiffCmd:
+		return m.updateTabDiffCmd(msg)
+
+	case tabActorRedraw:
+		return m, nil
+
+	case tabActorStarted:
+		m.tabActorRunning = true
+		m.tabActorLastBeat = time.Now()
+		return m, nil
+
+	case tabActorHeartbeatMsg:
+		m.tabActorLastBeat = time.Now()
+		return m, nil
+
+	case PTYOutput:
+		cmd := m.updatePTYOutput(msg)
+		cmds = append(cmds, cmd)
+
+	case PTYFlush:
+		cmd := m.updatePTYFlush(msg)
+		cmds = append(cmds, cmd)
+
+	case PTYCursorRefresh:
+		cmd := m.updatePTYCursorRefresh(msg)
+		cmds = append(cmds, cmd)
+
+	case PTYStopped:
+		cmd := m.updatePTYStopped(msg)
+		cmds = append(cmds, cmd)
+
+	case PTYRestart:
+		cmd := m.updatePTYRestart(msg)
+		cmds = append(cmds, cmd)
+
+	case selectionScrollTick:
+		cmd := m.updateSelectionScrollTick(msg)
+		cmds = append(cmds, cmd)
+
+	default:
+		// Forward unknown messages to active viewer if one exists
+		tabs := m.getTabs()
+		activeIdx := m.getActiveTabIdx()
+		if len(tabs) > 0 && activeIdx < len(tabs) {
+			tab := tabs[activeIdx]
+			if handled, cmd := m.dispatchDiffInput(tab, msg); handled {
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+	}
+
+	return m, common.SafeBatch(cmds...)
+}

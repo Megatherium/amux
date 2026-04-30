@@ -322,7 +322,7 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 		tab.mu.Unlock()
 		tab.resetActivityANSIState()
 		if oldAgent != nil && oldAgent != msg.Agent {
-			_ = m.agentManager.CloseAgent(oldAgent)
+			m.agentManager.CloseAgent(oldAgent)
 		}
 
 		// Set up response writer for terminal queries (DSR, DA, etc.)

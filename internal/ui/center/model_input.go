@@ -401,9 +401,18 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	case tabDiffCmd:
 		return m.updateTabDiffCmd(msg)
 
-	case tabActorRedraw:
-		m.clearTabActorRedrawPending()
-		return m, nil
+	case tabActorSignal:
+		switch msg.kind {
+		case "redraw":
+			return m, nil
+		case "started":
+			m.tabActorRunning = true
+			m.tabActorLastBeat = time.Now()
+			return m, nil
+		case "heartbeat":
+			m.tabActorLastBeat = time.Now()
+			return m, nil
+		}
 
 	case PTYOutput:
 		cmd := m.updatePTYOutput(msg)

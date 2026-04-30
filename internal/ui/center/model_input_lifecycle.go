@@ -217,7 +217,7 @@ func (m *Model) updateTabSessionStatus(msg messages.TabSessionStatus) (*Model, t
 	tab.Agent = nil
 	tab.mu.Unlock()
 	if agent != nil {
-		_ = m.agentManager.CloseAgent(agent)
+		m.agentManager.CloseAgent(agent)
 	}
 	tab.mu.Lock()
 	tab.Running = false

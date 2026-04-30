@@ -1,7 +1,6 @@
 package center
 
 import (
-	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -16,24 +15,23 @@ import (
 // Model is the Bubbletea model for the center pane
 type Model struct {
 	// State
-	workspace             *data.Workspace
-	workspaceIDCached     string
-	workspaceIDRepo       string
-	workspaceIDRoot       string
-	tabsByWorkspace       map[string][]*Tab // tabs per workspace ID
-	activeTabByWorkspace  map[string]int    // active tab index per workspace
-	focused               bool
-	canFocusRight         bool
-	tabsRevision          uint64
-	agentManager          *appPty.AgentManager
-	msgSink               func(tea.Msg)
-	msgSinkTry            func(tea.Msg) bool
-	tabEvents             chan tabEvent
-	tabActorReady         uint32
-	tabActorHeartbeat     int64
-	tabActorRedrawPending uint32
-	flushLoadSampleAt     time.Time
-	cachedBusyTabCount    int
+	workspace            *data.Workspace
+	workspaceIDCached    string
+	workspaceIDRepo      string
+	workspaceIDRoot      string
+	tabsByWorkspace      map[string][]*Tab // tabs per workspace ID
+	activeTabByWorkspace map[string]int    // active tab index per workspace
+	focused              bool
+	canFocusRight        bool
+	tabsRevision         uint64
+	agentManager         *appPty.AgentManager
+	msgSink              func(tea.Msg)
+	msgSinkTry           func(tea.Msg) bool
+	tabEvents            chan tabEvent
+	tabActorRunning      bool
+	tabActorLastBeat     time.Time
+	flushLoadSampleAt    time.Time
+	cachedBusyTabCount   int
 
 	// Layout
 	width           int
@@ -195,66 +193,43 @@ func (m *Model) terminalMetrics() TerminalMetrics {
 	}
 }
 
+// setTabActorReady sets the actor readiness fields directly.
+// Used by tests to simulate actor startup without requiring a real goroutine/msgSink.
+func (m *Model) setTabActorReady() {
+	m.tabActorRunning = true
+	m.tabActorLastBeat = time.Now()
+}
+
+// isTabActorReady reports whether the background tab actor is alive and responsive.
+// State is updated by TEA messages (tabActorSignal with kind="started"/"heartbeat") in Update().
 func (m *Model) isTabActorReady() bool {
-	if atomic.LoadUint32(&m.tabActorReady) == 0 {
+	if !m.tabActorRunning {
 		return false
 	}
-	lastBeat := atomic.LoadInt64(&m.tabActorHeartbeat)
-	if lastBeat == 0 {
+	if m.tabActorLastBeat.IsZero() {
 		return false
 	}
-	if time.Since(time.Unix(0, lastBeat)) > tabActorStallTimeout {
-		atomic.StoreUint32(&m.tabActorReady, 0)
+	if time.Since(m.tabActorLastBeat) > tabActorStallTimeout {
+		m.tabActorRunning = false
 		return false
 	}
 	return true
 }
 
-func (m *Model) setTabActorReady() {
-	atomic.StoreInt64(&m.tabActorHeartbeat, time.Now().UnixNano())
-	atomic.StoreUint32(&m.tabActorReady, 1)
-}
-
-func (m *Model) noteTabActorHeartbeat() {
-	observedAt := time.Now().UnixNano()
-	for {
-		prev := atomic.LoadInt64(&m.tabActorHeartbeat)
-		if observedAt <= prev {
-			observedAt = prev + 1
-		}
-		if atomic.CompareAndSwapInt64(&m.tabActorHeartbeat, prev, observedAt) {
-			break
-		}
-	}
-	if atomic.LoadUint32(&m.tabActorReady) == 0 {
-		atomic.StoreUint32(&m.tabActorReady, 1)
-	}
-}
-
+// requestTabActorRedraw sends a redraw signal to the TEA message loop.
+// Unlike the previous atomic CAS approach, we simply always enqueue —
+// Bubbletea's message queue naturally coalesces duplicate messages.
 func (m *Model) requestTabActorRedraw() {
 	if m == nil {
 		return
 	}
 	if m.msgSinkTry != nil {
-		if !atomic.CompareAndSwapUint32(&m.tabActorRedrawPending, 0, 1) {
-			return
-		}
-		if m.msgSinkTry(tabActorRedraw{}) {
-			return
-		}
-		atomic.StoreUint32(&m.tabActorRedrawPending, 0)
+		m.msgSinkTry(tabActorSignal{kind: "redraw"})
 		return
 	}
 	if m.msgSink != nil {
-		m.msgSink(tabActorRedraw{})
+		m.msgSink(tabActorSignal{kind: "redraw"})
 	}
-}
-
-func (m *Model) clearTabActorRedrawPending() {
-	if m == nil {
-		return
-	}
-	atomic.StoreUint32(&m.tabActorRedrawPending, 0)
 }
 
 func (m *Model) setWorkspace(ws *data.Workspace) {
