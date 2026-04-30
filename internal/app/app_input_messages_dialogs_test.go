@@ -25,10 +25,10 @@ func TestHandleThemePreview_PersistsOnCloseOnly(t *testing.T) {
 
 	configPath := filepath.Join(t.TempDir(), "amux-config.json")
 	h.app.config.Paths.ConfigPath = configPath
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	session := h.app.ui.settingsDialogSession
 
-	cmd := h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
+	cmd := h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 	if cmd != nil {
 		t.Fatal("expected no warning cmd during preview")
 	}
@@ -37,7 +37,7 @@ func TestHandleThemePreview_PersistsOnCloseOnly(t *testing.T) {
 		t.Fatalf("expected no config write during preview, got err=%v", err)
 	}
 
-	cmd = h.app.handleSettingsResult(common.SettingsResult{})
+	cmd = h.app.ui.HandleSettingsResult(common.SettingsResult{})
 	if cmd != nil {
 		t.Fatal("expected no warning cmd when save on close succeeds")
 	}
@@ -69,11 +69,11 @@ func TestHandleSettingsResult_SaveFailureShowsWarningToast(t *testing.T) {
 
 	// Point to a directory path so os.WriteFile fails with "is a directory".
 	h.app.config.Paths.ConfigPath = t.TempDir()
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	session := h.app.ui.settingsDialogSession
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
+	_ = h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 
-	cmd := h.app.handleSettingsResult(common.SettingsResult{})
+	cmd := h.app.ui.HandleSettingsResult(common.SettingsResult{})
 	if cmd == nil {
 		t.Fatal("expected warning toast cmd when close save fails")
 	}
@@ -101,9 +101,9 @@ func TestHandleSettingsResult_UnchangedThemeSkipsSave(t *testing.T) {
 	if err := h.app.config.SaveUISettings(); err != nil {
 		t.Fatalf("SaveUISettings returned error: %v", err)
 	}
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 
-	cmd := h.app.handleSettingsResult(common.SettingsResult{})
+	cmd := h.app.ui.HandleSettingsResult(common.SettingsResult{})
 	if cmd != nil {
 		t.Fatal("expected no cmd when closing settings without theme change")
 	}
@@ -132,9 +132,9 @@ func TestHandleTriggerUpgrade_PersistsThemeChange(t *testing.T) {
 		LatestVersion:   "v0.0.2",
 		UpdateAvailable: true,
 	}
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	session := h.app.ui.settingsDialogSession
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
+	_ = h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 
 	cmd := h.app.handleTriggerUpgrade()
 	if cmd == nil {
@@ -173,9 +173,9 @@ func TestHandleTriggerUpgrade_SaveFailureShowsWarningToast(t *testing.T) {
 		LatestVersion:   "v0.0.2",
 		UpdateAvailable: true,
 	}
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	session := h.app.ui.settingsDialogSession
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
+	_ = h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 
 	cmd := h.app.handleTriggerUpgrade()
 	if cmd == nil {
@@ -204,10 +204,10 @@ func TestHandleShowSettingsDialog_RefreshesPersistedThemeBaseline(t *testing.T) 
 
 	// First close fails to persist, leaving dirty state true.
 	h.app.config.Paths.ConfigPath = t.TempDir()
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	session := h.app.ui.settingsDialogSession
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
-	_ = h.app.handleSettingsResult(common.SettingsResult{})
+	_ = h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
+	_ = h.app.ui.HandleSettingsResult(common.SettingsResult{})
 	if !h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty state after failed close save")
 	}
@@ -220,17 +220,17 @@ func TestHandleShowSettingsDialog_RefreshesPersistedThemeBaseline(t *testing.T) 
 	}
 
 	// Re-open settings should refresh baseline from disk (tokyo-night).
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	if h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty state to reset after baseline refresh")
 	}
 
 	// Switching to gruvbox must be treated as dirty and persisted on close.
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeGruvbox, Session: h.app.ui.settingsDialogSession})
+	_ = h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeGruvbox, Session: h.app.ui.settingsDialogSession})
 	if !h.app.ui.settingsThemeDirty {
 		t.Fatal("expected dirty state for theme change away from persisted value")
 	}
-	_ = h.app.handleSettingsResult(common.SettingsResult{})
+	_ = h.app.ui.HandleSettingsResult(common.SettingsResult{})
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -257,17 +257,17 @@ func TestHandleThemePreview_DropsStaleSessionAfterClose(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "amux-config.json")
 	h.app.config.Paths.ConfigPath = configPath
 	startTheme := common.ThemeID(h.app.config.UI.Theme)
-	h.app.handleShowSettingsDialog()
+	h.app.ui.ShowSettingsDialog(h.app.updateAvailable, h.app.updateService != nil && h.app.updateService.IsHomebrewBuild(), h.app.version)
 	session := h.app.ui.settingsDialogSession
 
 	// Close immediately without preview.
-	_ = h.app.handleSettingsResult(common.SettingsResult{})
+	_ = h.app.ui.HandleSettingsResult(common.SettingsResult{})
 	if h.app.ui.settingsDialogSession == session {
 		t.Fatal("expected settings session to advance on close")
 	}
 
 	// Late preview from old session must be ignored.
-	_ = h.app.handleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
+	_ = h.app.ui.HandleThemePreview(common.ThemePreview{Theme: common.ThemeTokyoNight, Session: session})
 	if common.ThemeID(h.app.config.UI.Theme) != startTheme {
 		t.Fatalf("expected stale preview to be ignored, got %q", h.app.config.UI.Theme)
 	}

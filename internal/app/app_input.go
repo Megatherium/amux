@@ -56,13 +56,13 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	if a.handleDialogInput(msg, &cmds) {
+	if a.ui.HandleDialogInput(msg, &cmds) {
 		return a, common.SafeBatch(cmds...)
 	}
-	if a.handleFilePickerInput(msg, &cmds) {
+	if a.ui.HandleFilePickerInput(msg, &cmds) {
 		return a, common.SafeBatch(cmds...)
 	}
-	if a.handleSettingsDialogInput(msg, &cmds) {
+	if a.ui.HandleSettingsDialogInput(msg, &cmds) {
 		return a, common.SafeBatch(cmds...)
 	}
 
@@ -140,27 +140,27 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, a.gitStatusController.HandleGitStatusResult(msg)...)
 
 	case messages.ShowAddProjectDialog:
-		a.handleShowAddProjectDialog()
+		a.ui.ShowAddProjectDialog()
 
 	case messages.ShowCreateWorkspaceDialog:
-		a.handleShowCreateWorkspaceDialog(msg)
+		a.ui.ShowCreateWorkspaceDialog(msg)
 
 	case messages.ShowDeleteWorkspaceDialog:
-		a.handleShowDeleteWorkspaceDialog(msg)
+		a.ui.ShowDeleteWorkspaceDialog(msg)
 
 	case messages.ShowRemoveProjectDialog:
-		a.handleShowRemoveProjectDialog(msg)
+		a.ui.ShowRemoveProjectDialog(msg)
 
 	case messages.ShowSelectAssistantDialog:
-		a.handleShowSelectAssistantDialog()
+		a.ui.ShowSelectAssistantDialog(a.activeWorkspace)
 
 	case messages.ShowSelectTicketDialog:
-		if cmd := a.handleShowSelectTicketDialog(); cmd != nil {
+		if cmd := a.ui.ShowSelectTicketDialog(a.activeWorkspace, a.activeProject, a.ticketServices[a.activeProject.Path]); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
 	case ticketsForPickerLoaded:
-		a.handleTicketsForPickerLoaded(msg)
+		a.ui.HandleTicketsForPickerLoaded(msg)
 
 	case messages.TicketSelectedMsg:
 		cmds = append(cmds, a.handleTicketSelected(msg)...)
@@ -169,18 +169,18 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.handleTicketPreview(msg)
 
 	case messages.ShowSettingsDialog:
-		a.handleShowSettingsDialog()
+		a.ui.ShowSettingsDialog(a.updateAvailable, a.updateService != nil && a.updateService.IsHomebrewBuild(), a.version)
 
 	case messages.ShowCleanupTmuxDialog:
-		a.handleShowCleanupTmuxDialog()
+		a.ui.ShowCleanupTmuxDialog(a.tmuxOptions.ServerName)
 
 	case common.ThemePreview:
-		if cmd := a.handleThemePreview(msg); cmd != nil {
+		if cmd := a.ui.HandleThemePreview(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
 	case common.SettingsResult:
-		if cmd := a.handleSettingsResult(msg); cmd != nil {
+		if cmd := a.ui.HandleSettingsResult(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 
