@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/andyrewlee/amux/internal/perf"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -30,27 +31,34 @@ func (m *Model) View() string {
 	// Content
 	tabs := m.getTabs()
 	activeIdx := m.getActiveTabIdx()
-	if m.draft != nil {
-		b.WriteString(m.draft.View())
-	} else if len(tabs) == 0 {
+	if len(tabs) == 0 {
 		b.WriteString(m.renderEmpty())
 	} else if activeIdx < len(tabs) {
 		tab := tabs[activeIdx]
 		tab.mu.Lock()
-		if tab.DiffViewer != nil {
-			// Sync focus state with center pane focus
-			tab.DiffViewer.SetFocused(m.focused)
-			// Render native diff viewer
-			b.WriteString(tab.DiffViewer.View())
-		} else if tab.Terminal != nil {
-			// Keep cursor state in sync at render time too; Focus/Blur also set
-			// this eagerly to avoid stale frames during fast pane switches.
-			tab.Terminal.ShowCursor = m.focused
-			// Use VTerm.Render() directly - it uses dirty line caching and delta styles
-			b.WriteString(tab.Terminal.Render())
+		switch tab.Kind {
+		case DraftTab:
+			if tab.Draft != nil {
+				b.WriteString(tab.Draft.View())
+			}
+		case TicketViewTab:
+			b.WriteString(m.renderTicketView(tab))
+		case AgentTab:
+			if tab.DiffViewer != nil {
+				// Sync focus state with center pane focus
+				tab.DiffViewer.SetFocused(m.focused)
+				// Render native diff viewer
+				b.WriteString(tab.DiffViewer.View())
+			} else if tab.Terminal != nil {
+				// Keep cursor state in sync at render time too; Focus/Blur also set
+				// this eagerly to avoid stale frames during fast pane switches.
+				tab.Terminal.ShowCursor = m.focused
+				// Use VTerm.Render() directly - it uses dirty line caching and delta styles
+				b.WriteString(tab.Terminal.Render())
 
-			if status := m.terminalStatusLineLocked(tab); status != "" {
-				b.WriteString("\n" + status)
+				if status := m.terminalStatusLineLocked(tab); status != "" {
+					b.WriteString("\n" + status)
+				}
 			}
 		}
 		tab.mu.Unlock()
@@ -172,6 +180,149 @@ func (m *Model) renderEmpty() string {
 	b.WriteString(helpStyle.Render(helpText))
 
 	return b.String()
+}
+
+// renderTicketView renders ticket details for a TicketViewTab.
+func (m *Model) renderTicketView(tab *Tab) string {
+	t := tab.Ticket
+	if t == nil {
+		return ""
+	}
+
+	var b strings.Builder
+
+	// ID and Title (prominent)
+	header := m.styles.Title.Render(t.ID + ": " + t.Title)
+	b.WriteString(header)
+	b.WriteString("\n\n")
+
+	// Status badge
+	statusStyle := lipgloss.NewStyle().Bold(true)
+	switch t.Status {
+	case "open":
+		statusStyle = statusStyle.Foreground(common.ColorPrimary())
+	case "in_progress":
+		statusStyle = statusStyle.Foreground(common.ColorSecondary())
+	case "closed":
+		statusStyle = statusStyle.Foreground(common.ColorMuted())
+	case "blocked":
+		statusStyle = statusStyle.Foreground(common.ColorError())
+	default:
+		statusStyle = statusStyle.Foreground(common.ColorForeground())
+	}
+	b.WriteString(m.styles.Muted.Render("Status: "))
+	b.WriteString(statusStyle.Render(t.Status))
+
+	// Priority
+	b.WriteString("  ")
+	b.WriteString(m.styles.Muted.Render("Priority: "))
+	b.WriteString(tickets.PriorityLabel(t.Priority))
+
+	// Type
+	if t.IssueType != "" {
+		b.WriteString("  ")
+		b.WriteString(m.styles.Muted.Render("Type: "))
+		b.WriteString(t.IssueType)
+	}
+
+	b.WriteString("\n")
+
+	// Assignee
+	if t.Assignee != "" {
+		b.WriteString(m.styles.Muted.Render("Assignee: "))
+		b.WriteString(t.Assignee)
+		b.WriteString("\n")
+	}
+
+	// Dates
+	b.WriteString(m.styles.Muted.Render("Created: "))
+	b.WriteString(t.CreatedAt.Format("2006-01-02 15:04"))
+	b.WriteString("  ")
+	b.WriteString(m.styles.Muted.Render("Updated: "))
+	b.WriteString(t.UpdatedAt.Format("2006-01-02 15:04"))
+	b.WriteString("\n")
+
+	// Parent epic
+	if t.ParentID != "" {
+		b.WriteString(m.styles.Muted.Render("Epic: "))
+		b.WriteString(t.ParentID)
+		b.WriteString("\n")
+	}
+
+	// Description (word-wrapped)
+	if t.Description != "" {
+		b.WriteString("\n")
+		cw := m.contentWidth()
+		descWidth := cw - 4
+		if descWidth < 20 {
+			descWidth = 20
+		}
+		// Show as many description lines as fit above the help bar
+		maxLines := m.height - 10
+		if maxLines < 3 {
+			maxLines = 3
+		}
+		desc := truncateDesc(t.Description, descWidth, maxLines)
+		b.WriteString(m.styles.Body.Render(desc))
+	}
+
+	return b.String()
+}
+
+// truncateDesc word-wraps and truncates description text.
+func truncateDesc(desc string, width, maxLines int) string {
+	if maxLines <= 0 {
+		maxLines = 3
+	}
+	if width <= 0 {
+		width = 20
+	}
+	rawLines := strings.Split(desc, "\n")
+	var wrapped []string
+	for _, line := range rawLines {
+		wrapped = append(wrapped, wrapLineSimple(line, width)...)
+	}
+	if len(wrapped) > maxLines {
+		wrapped = wrapped[:maxLines]
+		last := wrapped[maxLines-1]
+		runes := []rune(last)
+		if len(runes) > width-3 {
+			last = string(runes[:width-3])
+		}
+		wrapped[maxLines-1] = last + "..."
+	}
+	return strings.Join(wrapped, "\n")
+}
+
+// wrapLineSimple wraps a single line to the given width by breaking at spaces.
+func wrapLineSimple(line string, width int) []string {
+	if width <= 0 || len(line) == 0 {
+		return []string{line}
+	}
+	runes := []rune(line)
+	if len(runes) <= width {
+		return []string{line}
+	}
+	var result []string
+	for len(runes) > 0 {
+		if len(runes) <= width {
+			result = append(result, string(runes))
+			break
+		}
+		breakAt := width
+		for j := width; j > width/2; j-- {
+			if j < len(runes) && (runes[j] == ' ' || runes[j] == '-') {
+				breakAt = j + 1
+				break
+			}
+		}
+		result = append(result, string(runes[:breakAt]))
+		runes = runes[breakAt:]
+		if len(runes) > 0 && runes[0] == ' ' {
+			runes = runes[1:]
+		}
+	}
+	return result
 }
 
 // TerminalViewport returns the terminal content area coordinates relative to the pane.
