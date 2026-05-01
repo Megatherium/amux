@@ -1,0 +1,2384 @@
+{
+  "metadata": {
+    "generated": "2026-05-01",
+    "total_tools": 349,
+    "categorized_tools": 323,
+    "missing_tools": [
+      "beads",
+      "cargo:blitzdenk",
+      "direnv",
+      "dust",
+      "gemini",
+      "github:Valkyrie00/bold-brew",
+      "github:Zuhaitz-dev/fat",
+      "github:domcyrus/rustnet",
+      "github:jdx/mise-test-fixtures",
+      "github:lucasgelfond/zerobrew",
+      "github:wezterm/wezterm",
+      "go:github.com/SurgeDM/Surge",
+      "go:github.com/allyring/pvw",
+      "go:github.com/bestruirui/octopus",
+      "go:github.com/muesli/duf",
+      "hexyl",
+      "npm:@anthropic-ai/claude-code",
+      "npm:@blackbox_ai/blackbox-cli",
+      "npm:@charmland/crush",
+      "npm:@continuedev/cli",
+      "npm:@jacksontian/kimi-cli",
+      "npm:@mixedbread/mgrep",
+      "npm:@openai/codex",
+      "npm:@openchamber/web",
+      "npm:@sourcegraph/amp",
+      "prettier"
+    ],
+    "extra_tools": [],
+    "total_categories": 193,
+    "description": "Tool similarity categories with deep overlapping connections. A tool can appear in multiple groups. Categories aim to capture every meaningful connection."
+  },
+  "categories": {
+    "json_processors": {
+      "description": "Tools for querying, processing, and viewing JSON data",
+      "tools": [
+        "cargo:jiq",
+        "cargo:jsongrep",
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "gojq",
+        "jaq",
+        "jiq",
+        "jless",
+        "jnv",
+        "jq",
+        "jqp"
+      ],
+      "notes": "jq/gojq/jaq are CLI JSON query processors (jq C, gojq Go, jaq Rust). jiq/jnv/jqp are interactive/TUI variants. jless is a JSON pager/viewer. jsongrep greps JSON. dasel is multi-format data query."
+    },
+    "toml_processors": {
+      "description": "Tools for querying and manipulating TOML",
+      "tools": [
+        "cargo:toml-cli",
+        "cargo:toml-path",
+        "cargo:tomq",
+        "taplo"
+      ],
+      "notes": "tomq is jq-for-TOML. taplo is a TOML toolkit (lint/format/validate). toml-cli/toml-path are TOML manipulation tools."
+    },
+    "yaml_processors": {
+      "description": "Tools for querying and manipulating YAML/JSON",
+      "tools": [
+        "yj",
+        "yq"
+      ],
+      "notes": "yq is jq-for-YAML/JSON. yj converts between YAML/JSON/TOML formats."
+    },
+    "data_query_transform": {
+      "description": "Multi-format data query and transformation tools",
+      "tools": [
+        "cargo:tomq",
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "gojq",
+        "jaq",
+        "jq",
+        "yj",
+        "yq"
+      ],
+      "notes": "All can query and/or transform structured data formats (JSON, YAML, TOML, XML). They share the concept of path-based extraction from structured data."
+    },
+    "structured_data_formatters": {
+      "description": "Tools that lint, format, or validate structured data formats",
+      "tools": [
+        "pkl",
+        "taplo",
+        "yj",
+        "yq"
+      ],
+      "notes": "taplo formats TOML. yq/yj convert between formats. pkl is a configuration language that generates JSON/YAML with validation."
+    },
+    "cli_output_to_json": {
+      "description": "Tools that convert CLI output to structured JSON",
+      "tools": [
+        "go:github.com/tmc/json-to-struct",
+        "jc"
+      ],
+      "notes": "jc converts arbitrary CLI output to JSON. json-to-struct generates Go structs from JSON."
+    },
+    "json_schema_tools": {
+      "description": "JSON Schema validation tools",
+      "tools": [
+        "npm:ajv-cli"
+      ],
+      "notes": "ajv-cli is a JSON Schema validator for the terminal."
+    },
+    "jwt_tools": {
+      "description": "JWT (JSON Web Token) tools",
+      "tools": [
+        "jwt",
+        "jwtui"
+      ],
+      "notes": "jwt is a JWT encoder/decoder CLI. jwtui is a JWT TUI tool."
+    },
+    "modern_unix_replacements": {
+      "description": "Modern drop-in replacements for classic Unix tools",
+      "tools": [
+        "atuin",
+        "bat",
+        "cargo:darya",
+        "cargo:diskonaut-ng",
+        "cargo:dysk",
+        "cargo:hck",
+        "cargo:hexhog",
+        "cargo:mcdu",
+        "cargo:ouch",
+        "cargo:parallel-disk-usage",
+        "cargo:procs",
+        "cargo:tealdeer",
+        "choose",
+        "doggo",
+        "dua",
+        "duf",
+        "eza",
+        "fd",
+        "gdu",
+        "glow",
+        "go:github.com/babarot/gomi",
+        "go:github.com/noborus/ov",
+        "go:github.com/walles/moar",
+        "go:github.com/walles/moor/v2/cmd/moor",
+        "gojq",
+        "gum",
+        "hyperfine",
+        "jaq",
+        "jq",
+        "just",
+        "rg",
+        "ripgrep",
+        "sd",
+        "yq",
+        "zoxide"
+      ],
+      "notes": "eza>ls, fd>find, rg>grep, sd>sed, choose>cut/awk, hck>cut, hexyl>hexdump, procs>ps, dust/duf/dua/dysk>du/df, zoxide>cd, atuin>history, hyperfine>time, bat>cat, jq/yq>JSON, gojq/jaq>jq, doggo>dig, tealdeer>man, ouch>tar/unzip, just>make, gum>dialog, glow>mdcat, moar/moor/ov>less/more, gomi>rm"
+    },
+    "file_listing_navigation": {
+      "description": "Tools for listing and navigating files/directories",
+      "tools": [
+        "cargo:broot",
+        "cargo:darya",
+        "cargo:diskonaut-ng",
+        "cargo:dysk",
+        "cargo:erdtree",
+        "cargo:mcdu",
+        "cargo:parallel-disk-usage",
+        "dua",
+        "eza",
+        "fd",
+        "gdu"
+      ],
+      "notes": "eza lists files. fd finds files. broot/erdtree are interactive tree navigators. dust/dua/dysk/darya/diskonaut-ng/mcdu/parallel-disk-usage/gdu show disk usage with various visualization styles."
+    },
+    "text_extraction": {
+      "description": "Tools for extracting or selecting text/fields",
+      "tools": [
+        "cargo:hck",
+        "choose",
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "jq",
+        "rg",
+        "sd",
+        "yq"
+      ],
+      "notes": "choose/hck extract columns (cut/alternatives). jq/yq/dasel extract from structured data. sd does find-and-replace. rg searches with regex."
+    },
+    "sed_alternatives": {
+      "description": "Modern sed alternatives",
+      "tools": [
+        "cargo:repgrep",
+        "sd"
+      ],
+      "notes": "sd is a simpler, more intuitive sed alternative. repgrep provides interactive search/replace with ripgrep syntax."
+    },
+    "git_tui": {
+      "description": "Git terminal user interfaces",
+      "tools": [
+        "gitui",
+        "go:github.com/dlvhdr/diffnav",
+        "jjui",
+        "lazygit"
+      ],
+      "notes": "lazygit and gitui are the two major git TUIs (Go and Rust respectively). jjui is for Jujutsu VCS. diffnav navigates git diffs."
+    },
+    "git_diff_viewers": {
+      "description": "Tools for viewing and navigating diffs",
+      "tools": [
+        "cargo:difftastic",
+        "cargo:ftdv",
+        "delta",
+        "go:github.com/dlvhdr/diffnav"
+      ],
+      "notes": "delta is a syntax-highlighting diff pager. difftastic is a structural/syntax-aware diff. diffnav navigates git diffs. ftdv is a file tree diff viewer with flexible diff tool integration."
+    },
+    "git_helpers": {
+      "description": "Git helper and utility tools",
+      "tools": [
+        "cargo:difftastic",
+        "cargo:git-cliff",
+        "cargo:mergiraf",
+        "cargo:onefetch",
+        "delta",
+        "go:github.com/chmouel/lazyworktree/cmd/lazyworktree",
+        "go:github.com/dlvhdr/diffnav",
+        "go:github.com/skalt/git-cc"
+      ],
+      "notes": "delta/difftastic are diff viewers. git-cliff generates changelogs from git history. mergiraf is a semantic git merge tool. git-cc helps with conventional commits. onefetch shows repo summary. lazyworktree manages git worktrees. act3 shows GitHub Actions workflow run results."
+    },
+    "git_security_scanners": {
+      "description": "Tools that scan git repos for secrets",
+      "tools": [
+        "gitleaks",
+        "go:github.com/brittonhayes/pillager/cmd/pillager",
+        "trufflehog"
+      ],
+      "notes": "All scan for accidentally committed secrets (API keys, passwords, tokens) in git history."
+    },
+    "git_platform_clis": {
+      "description": "CLI clients for git hosting platforms",
+      "tools": [
+        "gh",
+        "glab"
+      ],
+      "notes": "gh is GitHub CLI. glab is GitLab CLI."
+    },
+    "vcs_systems": {
+      "description": "Version control systems and their interfaces",
+      "tools": [
+        "gh",
+        "gitui",
+        "glab",
+        "go:github.com/dlvhdr/diffnav",
+        "jj",
+        "jjui",
+        "lazygit"
+      ],
+      "notes": "gh/glab interact with GitHub/GitLab. jj is Jujutsu VCS (git-compatible). lazygit/gitui/jjui are TUIs. diffnav navigates diffs."
+    },
+    "git_release_tools": {
+      "description": "Tools for managing releases and release notes",
+      "tools": [
+        "cargo:git-cliff",
+        "cargo:https://github.com/devmatteini/dra",
+        "communique",
+        "nfpm"
+      ],
+      "notes": "git-cliff generates changelogs from commits. communique uses AI to generate release notes from git history. dra downloads release assets from GitHub. nfpm builds packages (deb/rpm/apk) for releases."
+    },
+    "conventional_commits": {
+      "description": "Conventional commit helpers",
+      "tools": [
+        "cargo:git-cliff",
+        "go:github.com/skalt/git-cc",
+        "go:github.com/stefanlogue/meteor"
+      ],
+      "notes": "git-cc helps write conventional commits. meteor is a configurable conventional commit CLI. git-cliff generates changelogs from conventional commits."
+    },
+    "changelog_generators": {
+      "description": "Changelog and release notes generators",
+      "tools": [
+        "cargo:git-cliff",
+        "communique"
+      ],
+      "notes": "git-cliff generates changelogs from git history. communique uses AI to generate editorialized release notes."
+    },
+    "git_worktree_managers": {
+      "description": "Git worktree management tools",
+      "tools": [
+        "go:github.com/chmouel/lazyworktree/cmd/lazyworktree"
+      ],
+      "notes": "lazyworktree provides effortless git worktree management."
+    },
+    "repo_summary_tools": {
+      "description": "Tools that summarize git repos",
+      "tools": [
+        "cargo:onefetch",
+        "go:github.com/k1LoW/octocov"
+      ],
+      "notes": "onefetch shows git repo summary in terminal (like neofetch for repos). octocov shows code coverage metrics."
+    },
+    "system_resource_monitors": {
+      "description": "System resource monitors with TUI (CPU, memory, disk, network)",
+      "tools": [
+        "btop",
+        "cargo:bottom",
+        "cargo:cyme",
+        "cargo:macchina",
+        "cargo:zenith-cli",
+        "go:github.com/jamespwilliams/psitop",
+        "go:github.com/orhun/pkgtop/cmd",
+        "pipx:glances",
+        "pipx:s-tui",
+        "pipx:sot"
+      ],
+      "notes": "btop/bottom/cyme/zenith-cli are top-like system monitors with beautiful TUIs. sot is a system observation tool. s-tui combines CPU stress test + monitor. glances is a comprehensive system monitor. psitop is a process monitor. macchina shows system info. pkgtop is a package manager + resource monitor TUI."
+    },
+    "kernel_low_level_monitors": {
+      "description": "Low-level system monitors (kernel, eBPF, syscalls, systemd)",
+      "tools": [
+        "cargo:intentrace",
+        "cargo:kmon",
+        "cargo:strace-tui",
+        "cargo:systemd-manager-tui",
+        "cargo:systeroid-tui",
+        "github:Netflix/bpftop",
+        "pipx:isd-tui"
+      ],
+      "notes": "kmon is a Linux kernel monitor TUI. bpftop monitors eBPF programs. strace-tui wraps strace in a TUI. systemd-manager-tui/systeroid-tui/isd-tui manage systemd units and sysctl. intentrace traces system calls."
+    },
+    "network_monitors": {
+      "description": "Network monitoring and analysis tools",
+      "tools": [
+        "cargo:bandwhich",
+        "cargo:netop",
+        "cargo:netscanner",
+        "go:github.com/ramonvermeulen/whosthere",
+        "pipx:netshow"
+      ],
+      "notes": "bandwhich monitors bandwidth by process. netop is a network monitor TUI. netscanner scans networks. netshow monitors network connections. whosthere discovers LAN devices via mDNS/SSDP/ARP."
+    },
+    "wifi_bluetooth_tools": {
+      "description": "WiFi and Bluetooth network tools",
+      "tools": [
+        "cargo:bluetui",
+        "cargo:impala",
+        "go:github.com/darkhz/bluetuith",
+        "go:github.com/shazow/wifitui"
+      ],
+      "notes": "impala and wifitui are WiFi TUIs. bluetui and bluetuith are Bluetooth TUIs."
+    },
+    "vpn_tools": {
+      "description": "VPN connection tools",
+      "tools": [
+        "cargo:vortix",
+        "go:github.com/juanfont/headscale/cmd/headscale"
+      ],
+      "notes": "vortix is a WireGuard/OpenVPN TUI with real-time telemetry and leak detection. headscale is a Tailscale-compatible server."
+    },
+    "dns_tools": {
+      "description": "DNS lookup and management tools",
+      "tools": [
+        "doggo",
+        "hostctl"
+      ],
+      "notes": "doggo is a modern DNS lookup tool (dig alternative). hostctl manages /etc/hosts files."
+    },
+    "process_managers": {
+      "description": "Process management and monitoring tools",
+      "tools": [
+        "cargo:pik",
+        "cargo:procs",
+        "mprocs",
+        "pipx:hapless",
+        "process-compose"
+      ],
+      "notes": "procs is a ps replacement. pik is a process manager. hapless tracks background processes. mprocs runs multiple commands in parallel TUI. process-compose is a process orchestrator."
+    },
+    "command_watchers": {
+      "description": "Tools that watch/command output over time",
+      "tools": [
+        "hwatch",
+        "pipx:s-tui",
+        "viddy"
+      ],
+      "notes": "hwatch watches command output with history. viddy is a modern watch command with time machine mode. s-tui includes stress testing + monitoring."
+    },
+    "log_analysis": {
+      "description": "Log viewing and analysis tools",
+      "tools": [
+        "cargo:strace-tui",
+        "go:github.com/control-theory/gonzo/cmd/gonzo",
+        "hwatch",
+        "lazyjournal",
+        "viddy"
+      ],
+      "notes": "lazyjournal is a journal/log viewer TUI. gonzo is a powerful TUI log analysis tool with AI-powered insights and Kubernetes support. strace-tui traces syscalls. hwatch/viddy watch command output over time."
+    },
+    "battery_monitors": {
+      "description": "Battery and energy monitoring tools",
+      "tools": [
+        "cargo:jolt-tui"
+      ],
+      "notes": "jolt-tui is a beautiful TUI for monitoring battery and energy usage on macOS and Linux."
+    },
+    "tui_dashboard_tools": {
+      "description": "TUI dashboard/monitoring tools",
+      "tools": [
+        "btop",
+        "cargo:bottom",
+        "cargo:cyme",
+        "cargo:jolt-tui",
+        "cargo:kmon",
+        "cargo:modelsdev",
+        "cargo:osintui",
+        "cargo:strace-tui",
+        "cargo:systemd-manager-tui",
+        "cargo:systeroid-tui",
+        "cargo:zenith-cli",
+        "github:Netflix/bpftop",
+        "go:github.com/control-theory/gonzo/cmd/gonzo",
+        "go:github.com/jamespwilliams/psitop",
+        "go:github.com/marcus/sidecar/cmd/sidecar",
+        "lazyjournal",
+        "pipx:glances",
+        "pipx:isd-tui",
+        "pipx:netshow",
+        "pipx:s-tui",
+        "pipx:sot"
+      ],
+      "notes": "All provide real-time terminal UI dashboards for monitoring various system aspects."
+    },
+    "disk_usage_analyzers": {
+      "description": "Disk usage analysis and visualization tools",
+      "tools": [
+        "cargo:darya",
+        "cargo:diskonaut-ng",
+        "cargo:dysk",
+        "cargo:mcdu",
+        "cargo:parallel-disk-usage",
+        "dua",
+        "duf",
+        "gdu",
+        "go:github.com/legostin/cull"
+      ],
+      "notes": "All analyze and visualize disk usage. dust shows tree maps. duf is df alternative. dua is du alternative. dysk shows filesystem info. gdu/diskonaut-ng/mcdu/parallel-disk-usage are interactive TUI disk analyzers. darya shows live treemaps. cull is an interactive TUI disk space analyzer."
+    },
+    "duplicate_file_finders": {
+      "description": "Tools that find duplicate files",
+      "tools": [
+        "cargo:fclones"
+      ],
+      "notes": "fclones finds duplicate files using content hashing."
+    },
+    "file_recovery": {
+      "description": "File recovery tools",
+      "tools": [
+        "pipx:recoverpy"
+      ],
+      "notes": "recoverpy scans disk blocks to recover deleted files."
+    },
+    "file_renaming": {
+      "description": "Bulk file renaming tools",
+      "tools": [
+        "pipx:renux"
+      ],
+      "notes": "renux is a bulk file renamer TUI."
+    },
+    "trash_management": {
+      "description": "Trash/garbage collection for files",
+      "tools": [
+        "go:github.com/babarot/gomi"
+      ],
+      "notes": "gomi is an rm alternative that moves files to trash with restore capability."
+    },
+    "filesystem_integrity": {
+      "description": "Filesystem structure and integrity checking",
+      "tools": [
+        "cargo:drft",
+        "cargo:dysk"
+      ],
+      "notes": "drft is a structural integrity checker for linked file systems (tracks dependencies, broken links, cycles). dysk shows filesystem information."
+    },
+    "terminal_file_managers": {
+      "description": "Interactive terminal file managers and navigators",
+      "tools": [
+        "cargo:broot",
+        "cargo:darya",
+        "cargo:diskonaut-ng",
+        "cargo:dysk",
+        "cargo:erdtree",
+        "cargo:mcdu",
+        "cargo:parallel-disk-usage",
+        "dua",
+        "gdu",
+        "pipx:rovr",
+        "superfile",
+        "yazi"
+      ],
+      "notes": "yazi/vifm/superfile/rovr are full-featured file managers. broot/erdtree are tree navigators with cd-on-exit. gdu/dust/dua/dysk/darya/diskonaut-ng/mcdu/parallel-disk-usage are disk usage analyzers."
+    },
+    "file_tree_viewers": {
+      "description": "Tools that display file trees",
+      "tools": [
+        "cargo:broot",
+        "cargo:erdtree",
+        "cargo:ftdv",
+        "cargo:treemd"
+      ],
+      "notes": "broot and erdtree are interactive tree navigators. dust shows usage trees. treemd is a Markdown tree viewer. ftdv shows file tree diffs."
+    },
+    "ai_coding_agents": {
+      "description": "AI-powered coding agent CLIs",
+      "tools": [
+        "amp",
+        "claude-code",
+        "codex",
+        "github:NeuralNomadsAI/CodeNomad",
+        "github:block/goose",
+        "github:tailcallhq/forgecode",
+        "npm:@factory/cli",
+        "npm:@google/gemini-cli",
+        "npm:@kilocode/cli",
+        "npm:@qodo/command",
+        "npm:@sylphai/adal-cli",
+        "npm:cline",
+        "npm:codebuff",
+        "npm:ocx",
+        "npm:opencode-ai",
+        "npm:openportal",
+        "npm:vibe-kanban",
+        "opencode",
+        "pi",
+        "pipx:batrachianai/toad",
+        "pipx:kimi-cli"
+      ],
+      "notes": "claude-code (Anthropic), codex (OpenAI), opencode, amp (Sourcegraph), goose (Block), cline, toad, pi (badlogic), gemini (Google) are AI coding agents. kimi-cli/kilocode/cli/blackbox-cli/continuedev/cli are more AI coding tools. factory/cli/qodo/command are AI CLIs."
+    },
+    "llm_tui_interfaces": {
+      "description": "TUI interfaces for interacting with language models",
+      "tools": [
+        "cargo:aichat",
+        "go:github.com/charmbracelet/mods",
+        "npm:@vibe-kit/grok-cli",
+        "pipx:CereBro",
+        "pipx:batrachianai/toad",
+        "pipx:mistral-vibe",
+        "pipx:notebooklm-mcp-cli",
+        "pipx:parllama"
+      ],
+      "notes": "All provide terminal UIs for chatting with or managing LLMs. aichat is a general AI chat TUI. CereBro/parllama are Ollama TUIs. toad is an AI coding agent TUI. mods is Charm's AI tool for the terminal."
+    },
+    "ai_model_browsers": {
+      "description": "Tools for browsing and comparing AI models",
+      "tools": [
+        "cargo:aichat",
+        "cargo:modelsdev"
+      ],
+      "notes": "modelsdev is a TUI for browsing AI models, benchmarks, and coding agents. aichat can also browse models."
+    },
+    "ai_agent_orchestration": {
+      "description": "Tools for orchestrating multiple AI agents",
+      "tools": [
+        "cargo:bridle",
+        "gastown",
+        "npm:@th0rgal/ralph-wiggum",
+        "npm:@wonderwhy-er/desktop-commander",
+        "npm:ralph-tui",
+        "npm:vibe-kanban"
+      ],
+      "notes": "gastown is a multi-agent workspace manager (coordinates Claude Code, Codex, Gemini, etc.). bridle is a unified config manager for AI coding assistants (manages skills/MCPs across harnesses). desktop-commander provides MCP for desktop control. ralph-tui/ralph-wiggum are task runners. vibe-kanban is a kanban board for AI workflows."
+    },
+    "ai_config_management": {
+      "description": "Tools for managing AI tool configurations",
+      "tools": [
+        "cargo:bridle",
+        "cargo:mcp-cli",
+        "npm:@modelcontextprotocol/inspector"
+      ],
+      "notes": "bridle manages configs across AI coding assistants (Claude Code, OpenCode, Goose, AMP). mcp-cli is a general MCP CLI. modelcontextprotocol/inspector is an MCP debugger."
+    },
+    "opencode_ecosystem": {
+      "description": "OpenCode AI coding agent ecosystem",
+      "tools": [
+        "npm:ocx",
+        "npm:opencode-ai",
+        "npm:openportal",
+        "opencode"
+      ],
+      "notes": "opencode is the AI coding agent. ocx manages OpenCode extensions. openportal is a web UI for OpenCode."
+    },
+    "claude_ecosystem": {
+      "description": "Claude Code related tools",
+      "tools": [
+        "amp",
+        "cargo:bridle",
+        "claude-code",
+        "communique",
+        "gastown"
+      ],
+      "notes": "claude-code is Anthropic's agent. amp is Sourcegraph's agent. gastown/bridle/communique all integrate with Claude."
+    },
+    "claude_squad_tools": {
+      "description": "Claude Squad multi-agent tools",
+      "tools": [
+        "claude-squad"
+      ],
+      "notes": "claude-squad is a multi-agent orchestration tool for Claude."
+    },
+    "code_formatters": {
+      "description": "Code formatters for various languages",
+      "tools": [
+        "black",
+        "cargo:selene",
+        "gofumpt",
+        "golines",
+        "npm:prettier",
+        "shfmt",
+        "stylua",
+        "taplo"
+      ],
+      "notes": "black formats Python. gofumpt/golines format Go. prettier formats JS/TS/CSS/etc. shfmt formats shell scripts. stylua formats Lua. selene is a Lua linter. taplo formats TOML."
+    },
+    "code_linters": {
+      "description": "Code linters and static analysis tools",
+      "tools": [
+        "actionlint",
+        "cargo:selene",
+        "golangci-lint",
+        "pipx:mypy",
+        "semgrep",
+        "shellcheck",
+        "staticcheck"
+      ],
+      "notes": "shellcheck lints shell scripts. actionlint lints GitHub Actions. selene lints Lua. mypy is Python type checker. semgrep is multi-language static analysis. staticcheck/golangci-lint are Go linters."
+    },
+    "code_search_replace": {
+      "description": "Code search and replace tools",
+      "tools": [
+        "ast-grep",
+        "cargo:hck",
+        "cargo:repgrep",
+        "choose",
+        "fd",
+        "rg",
+        "sd"
+      ],
+      "notes": "ast-grep does AST-based structural code search/replace. repgrep is interactive search/replace. sd is sed alternative. choose/hck extract columns. rg/fd search files."
+    },
+    "code_metrics": {
+      "description": "Code metrics and statistics tools",
+      "tools": [
+        "cargo:loc",
+        "cargo:ocloc",
+        "cargo:tokei",
+        "go:github.com/k1LoW/octocov",
+        "npm:cloc"
+      ],
+      "notes": "loc/ocloc/cloc/tokei count lines of code. octocov is a code coverage tool."
+    },
+    "code_indexing": {
+      "description": "Code indexing and search tools",
+      "tools": [
+        "ast-grep",
+        "cargo:vtcode"
+      ],
+      "notes": "vtcode is a workspace code indexer (hashes files, stores metadata). ast-grep does AST-based code search."
+    },
+    "go_ecosystem_tools": {
+      "description": "Go language ecosystem tools",
+      "tools": [
+        "ginkgo",
+        "go",
+        "go:github.com/babarot/gomi",
+        "go:github.com/chip/pathos",
+        "go:github.com/chmouel/lazyworktree/cmd/lazyworktree",
+        "go:github.com/control-theory/gonzo/cmd/gonzo",
+        "go:github.com/davidrjenni/reftools/cmd/fillswitch",
+        "go:github.com/dlvhdr/diffnav",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi",
+        "go:github.com/eduardoagarcia/shef",
+        "go:github.com/go-delve/delve/cmd/dlv",
+        "go:github.com/jamespwilliams/psitop",
+        "go:github.com/k1LoW/octocov",
+        "go:github.com/koron/iferr",
+        "go:github.com/legostin/cull",
+        "go:github.com/marcus/sidecar/cmd/sidecar",
+        "go:github.com/marcus/td",
+        "go:github.com/marwanhawari/stew",
+        "go:github.com/noborus/ov",
+        "go:github.com/orhun/pkgtop/cmd",
+        "go:github.com/ramonvermeulen/whosthere",
+        "go:github.com/rubysolo/brows",
+        "go:github.com/sa7mon/s3scanner",
+        "go:github.com/savannahostrowski/gruyere",
+        "go:github.com/stefanlogue/meteor",
+        "go:github.com/tmc/json-to-struct",
+        "go:github.com/unkn0wn-root/resterm/cmd/resterm",
+        "go:github.com/walles/moar",
+        "go:github.com/walles/moor/v2/cmd/moor",
+        "go:github.com/wesm/msgvault/cmd/msgvault",
+        "go:github.com/xguot/difi/cmd/difi",
+        "go:github.com/zjrosen/perles",
+        "go:github.com/zyedidia/eget",
+        "gofumpt",
+        "gojq",
+        "golangci-lint",
+        "golines",
+        "gotestsum",
+        "richgo",
+        "staticcheck"
+      ],
+      "notes": "All are Go-based tools or Go-specific utilities. go/gofumpt/golines/golangci-lint/gotestsum/staticcheck/richgo are Go dev tools. ginkgo is Go testing. dlv is Go debugger. fillswitch/iferr are Go code generators. eget downloads Go binaries. octocov is coverage. act3 monitors GitHub Actions. gonzo is log analysis. diffnav navigates diffs. resterm is API client TUI. moar/moor/ov are pagers. pkgtop is package manager TUI. psitop is process monitor. whosthere is LAN scanner. brows is a GitHub releases browser. sidecar is an AI agent dashboard. td is a task tool. stew manages binaries. meteor writes conventional commits. lazyworktree manages git worktrees. cull is disk analyzer. msgvault archives email. cariddi is a web scanner. s3scanner scans S3 buckets. beads is the issue tracker."
+    },
+    "rust_ecosystem_tools": {
+      "description": "Tools written in Rust (the Rust ecosystem)",
+      "tools": [
+        "age",
+        "atuin",
+        "bat",
+        "bun",
+        "cargo:bandwhich",
+        "cargo:bluetui",
+        "cargo:bottom",
+        "cargo:broot",
+        "cargo:cyme",
+        "cargo:darya",
+        "cargo:dealve-tui",
+        "cargo:difftastic",
+        "cargo:diskonaut-ng",
+        "cargo:dysk",
+        "cargo:erdtree",
+        "cargo:essh",
+        "cargo:fclones",
+        "cargo:ftdv",
+        "cargo:halp",
+        "cargo:havn",
+        "cargo:hck",
+        "cargo:hexhog",
+        "cargo:html2md",
+        "cargo:https://github.com/boxdot/gurk-rs",
+        "cargo:https://github.com/devmatteini/dra",
+        "cargo:impala",
+        "cargo:inspect-cert-chain",
+        "cargo:intentrace",
+        "cargo:jolt-tui",
+        "cargo:jsongrep",
+        "cargo:kanha",
+        "cargo:kmon",
+        "cargo:lemmeknow",
+        "cargo:loc",
+        "cargo:lq",
+        "cargo:macchina",
+        "cargo:mcdu",
+        "cargo:mcp-cli",
+        "cargo:mergiraf",
+        "cargo:modelsdev",
+        "cargo:monolith",
+        "cargo:mq-run",
+        "cargo:ncspot",
+        "cargo:netop",
+        "cargo:netscanner",
+        "cargo:nvrs",
+        "cargo:ocloc",
+        "cargo:octotype",
+        "cargo:onefetch",
+        "cargo:osintui",
+        "cargo:ouch",
+        "cargo:oyo",
+        "cargo:parallel-disk-usage",
+        "cargo:pik",
+        "cargo:procs",
+        "cargo:rage",
+        "cargo:rage",
+        "cargo:repgrep",
+        "cargo:rgx-cli",
+        "cargo:seetui",
+        "cargo:selene",
+        "cargo:siggy",
+        "cargo:strace-tui",
+        "cargo:systemd-manager-tui",
+        "cargo:systeroid-tui",
+        "cargo:tealdeer",
+        "cargo:tmuxcc",
+        "cargo:tokei",
+        "cargo:toml-cli",
+        "cargo:toml-path",
+        "cargo:tomq",
+        "cargo:treemd",
+        "cargo:usage-cli",
+        "cargo:vortix",
+        "cargo:vtcode",
+        "cargo:zenith-cli",
+        "cargo:zeroclawlabs",
+        "chezmoi",
+        "choose",
+        "clang",
+        "croc",
+        "crush",
+        "delta",
+        "deno",
+        "doggo",
+        "dua",
+        "duf",
+        "eza",
+        "fd",
+        "gdu",
+        "gitui",
+        "glow",
+        "go",
+        "gojq",
+        "gum",
+        "hcloud",
+        "hk",
+        "hyperfine",
+        "jaq",
+        "just",
+        "lazydocker",
+        "lazygit",
+        "llvm",
+        "mdbook",
+        "mprocs",
+        "navi",
+        "nfpm",
+        "ninja",
+        "node",
+        "pandoc",
+        "pipx:glances",
+        "pkl",
+        "protoc",
+        "python",
+        "regctl",
+        "regsync",
+        "rg",
+        "ripgrep",
+        "rust",
+        "sd",
+        "skate",
+        "tinygo",
+        "ttyd",
+        "usage",
+        "websocat",
+        "yazi",
+        "zig",
+        "zoxide"
+      ],
+      "notes": "Many modern CLI tools are written in Rust. This category captures the breadth of the Rust ecosystem in the tool list."
+    },
+    "python_ecosystem_tools": {
+      "description": "Python language ecosystem tools",
+      "tools": [
+        "black",
+        "pipx:CereBro",
+        "pipx:aria2tui",
+        "pipx:batrachianai/toad",
+        "pipx:cloctui",
+        "pipx:glances",
+        "pipx:hapless",
+        "pipx:hf",
+        "pipx:hf-inference-acp",
+        "pipx:httpie",
+        "pipx:httpstat",
+        "pipx:isd-tui",
+        "pipx:kimi-cli",
+        "pipx:lue-reader",
+        "pipx:mistral-vibe",
+        "pipx:mypy",
+        "pipx:netshow",
+        "pipx:notebooklm-mcp-cli",
+        "pipx:parllama",
+        "pipx:posting",
+        "pipx:recoverpy",
+        "pipx:renux",
+        "pipx:rovr",
+        "pipx:s-tui",
+        "pipx:sot",
+        "pipx:sqlit-tui",
+        "pipx:squall-sql",
+        "python",
+        "uv"
+      ],
+      "notes": "All are Python-based tools or Python-specific utilities. python/uv/black/mypy are Python dev tools. pipx tools are Python packages installed in isolated environments."
+    },
+    "js_ts_ecosystem_tools": {
+      "description": "JavaScript/TypeScript ecosystem tools",
+      "tools": [
+        "bun",
+        "deno",
+        "node",
+        "npm:ajv-cli",
+        "npm:cloc",
+        "npm:markdownlint-cli",
+        "npm:node-gyp",
+        "npm:playwright",
+        "npm:prettier",
+        "npm:repomix",
+        "npm:socket",
+        "npm:t3",
+        "npm:ts-node"
+      ],
+      "notes": "All are JS/TS ecosystem tools. node/bun/deno are runtimes. prettier formats code. ts-node runs TypeScript. cloc counts lines. markdownlint-cli lints Markdown. ajv-cli validates JSON Schema. node-gyp builds native addons. t3 is a web framework. playwright automates browsers. repomix packages code. socket checks npm security."
+    },
+    "build_systems": {
+      "description": "Build systems and build tools",
+      "tools": [
+        "bazel",
+        "bazelisk",
+        "just",
+        "meson",
+        "ninja"
+      ],
+      "notes": "bazel/bazelisk are Google's build system. meson/ninja are build tools (often used together). just is a command runner (make alternative)."
+    },
+    "command_runners": {
+      "description": "Command runner and task execution tools",
+      "tools": [
+        "just",
+        "mprocs",
+        "process-compose"
+      ],
+      "notes": "just is a modern make alternative. mprocs runs multiple commands in parallel with TUI. process-compose is a process orchestrator."
+    },
+    "ci_cd_tools": {
+      "description": "CI/CD related tools",
+      "tools": [
+        "actionlint",
+        "hk",
+        "pre-commit"
+      ],
+      "notes": "actionlint lints GitHub Actions workflows. act3 shows GitHub Actions run results. pre-commit manages git hooks. hk is a git hook manager and project linting tool."
+    },
+    "package_builders": {
+      "description": "Tools for building packages",
+      "tools": [
+        "docker-compose",
+        "nfpm",
+        "regctl",
+        "regsync"
+      ],
+      "notes": "nfpm builds deb/rpm/apk packages. docker-compose orchestrates containers. regctl/regsync manage container registries."
+    },
+    "cargo_helpers": {
+      "description": "Cargo (Rust) helper tools",
+      "tools": [
+        "cargo-binstall",
+        "cargo:cargo-edit",
+        "cargo:cargo-insta",
+        "cargo:cargo-release",
+        "cargo:tauri-cli"
+      ],
+      "notes": "cargo-edit edits Cargo.toml dependencies. cargo-release automates Rust releases. cargo-insta is snapshot testing. cargo-binstall installs Rust binaries. tauri-cli builds desktop apps with Tauri."
+    },
+    "github_actions_tools": {
+      "description": "GitHub Actions related tools",
+      "tools": [
+        "actionlint"
+      ],
+      "notes": "actionlint lints GitHub Actions workflows. act3 shows the last 3 runs of GitHub Actions."
+    },
+    "docker_tools": {
+      "description": "Docker and container management tools",
+      "tools": [
+        "dive",
+        "docker-compose",
+        "lazydocker"
+      ],
+      "notes": "lazydocker is a Docker TUI manager. dive explores Docker image layers. docker-compose orchestrates containers."
+    },
+    "container_registry_tools": {
+      "description": "Container registry management tools",
+      "tools": [
+        "crane",
+        "regctl",
+        "regsync"
+      ],
+      "notes": "crane is a container registry CLI (Google). regctl/regsync are registry clients for copying, syncing, and managing images."
+    },
+    "iac_tools": {
+      "description": "Infrastructure as Code tools",
+      "tools": [
+        "nfpm",
+        "pkl"
+      ],
+      "notes": "yor auto-tags IaC files (Terraform, CloudFormation, Serverless). pkl is a configuration language for generating static configs. nfpm builds packages from YAML config."
+    },
+    "encryption_tools": {
+      "description": "File/data encryption tools",
+      "tools": [
+        "age",
+        "cargo:rage",
+        "sops"
+      ],
+      "notes": "age/rage are the same encryption format (rage is Rust implementation). sops manages encrypted files (for secrets in repos)."
+    },
+    "secret_scanners": {
+      "description": "Tools that scan for secrets in code",
+      "tools": [
+        "gitleaks",
+        "go:github.com/brittonhayes/pillager/cmd/pillager",
+        "semgrep",
+        "trufflehog"
+      ],
+      "notes": "gitleaks/trufflehog/pillager scan git repos for accidentally committed secrets. semgrep can also detect hardcoded secrets via static analysis."
+    },
+    "security_scanners": {
+      "description": "Security scanning and analysis tools",
+      "tools": [
+        "cargo:havn",
+        "cargo:inspect-cert-chain",
+        "cargo:intentrace",
+        "cargo:kanha",
+        "cargo:netscanner",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi",
+        "go:github.com/sa7mon/s3scanner",
+        "npm:socket",
+        "semgrep"
+      ],
+      "notes": "semgrep is multi-language static analysis. socket checks npm dependencies for security issues. cariddi is a web scanner (endpoints, secrets, tokens). s3scanner scans for misconfigured S3 buckets. inspect-cert-chain inspects TLS certificates. intentrace traces system calls. kanha is a web-app pentesting suite. havn is a port scanner. netscanner is a network scanner TUI."
+    },
+    "pentesting_tools": {
+      "description": "Penetration testing and security assessment tools",
+      "tools": [
+        "cargo:havn",
+        "cargo:kanha",
+        "cargo:osintui",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi",
+        "go:github.com/sa7mon/s3scanner"
+      ],
+      "notes": "kanha is a web-app pentesting suite (fuzzing, reverse DNS, subdomain takeover). havn is a port scanner. cariddi is a web scanner. s3scanner scans S3 buckets. osintui is an OSINT TUI tool."
+    },
+    "tls_cert_tools": {
+      "description": "TLS certificate tools",
+      "tools": [
+        "cargo:inspect-cert-chain"
+      ],
+      "notes": "inspect-cert-chain inspects TLS certificate chains."
+    },
+    "terminal_multiplexers": {
+      "description": "Terminal multiplexers and session managers",
+      "tools": [
+        "cargo:essh",
+        "cargo:tmuxcc",
+        "go:github.com/andyrewlee/amux/cmd/amux",
+        "lazyssh",
+        "tmux",
+        "zellij"
+      ],
+      "notes": "tmux/zellij are terminal multiplexers. amux is this project (terminal multiplexer TUI). tmuxcc is a tmux session manager. lazyssh is an SSH connection manager TUI. essh is an enhanced SSH client with TUI."
+    },
+    "shell_enhancements": {
+      "description": "Shell and command-line enhancements",
+      "tools": [
+        "atuin",
+        "carapace",
+        "cargo:halp",
+        "chezmoi",
+        "go:github.com/savedra1/clipse",
+        "gum",
+        "just",
+        "navi",
+        "npm:@hyperupcall/autoenv",
+        "zoxide"
+      ],
+      "notes": "atuin is shell history sync/search. zoxide is smart cd. carapace is a multi-shell completion generator. navi is an interactive cheatsheet. gum provides shell UI components. just is a command runner. chezmoi manages dotfiles. autoenv sets env vars by directory. clipse is a clipboard manager TUI. halp helps find the correct help/version flags for any CLI tool."
+    },
+    "terminal_pagers": {
+      "description": "Terminal pagers and viewers",
+      "tools": [
+        "bat",
+        "glow",
+        "go:github.com/noborus/ov",
+        "go:github.com/walles/moar",
+        "go:github.com/walles/moor/v2/cmd/moor",
+        "jless",
+        "mdbook"
+      ],
+      "notes": "bat is cat with syntax highlighting. moar/moor/ov are pagers (less/more replacements). glow renders markdown in the terminal. mdbook creates documentation books. jless is a JSON pager."
+    },
+    "terminal_recording_sharing": {
+      "description": "Terminal recording and sharing tools",
+      "tools": [
+        "cargo:essh",
+        "go:github.com/charmbracelet/vhs",
+        "ttyd"
+      ],
+      "notes": "vhs records terminal GIFs from scripted commands. ttyd shares a terminal over the web via WebSocket. essh can record SSH sessions to asciicast files."
+    },
+    "terminal_chat_collaboration": {
+      "description": "Terminal-based chat and collaboration tools",
+      "tools": [
+        "cargo:https://github.com/boxdot/gurk-rs",
+        "cargo:https://github.com/conduit-cli/conduit",
+        "cargo:siggy",
+        "crush"
+      ],
+      "notes": "crush is a terminal chat/file sharing tool from Charm. gurk is a Signal messenger TUI. conduit is a Matrix chat client. siggy is a Signal messenger tool."
+    },
+    "messaging_signal": {
+      "description": "Signal messenger tools",
+      "tools": [
+        "cargo:https://github.com/boxdot/gurk-rs",
+        "cargo:siggy",
+        "github:AsamK/signal-cli"
+      ],
+      "notes": "gurk is a Signal TUI. siggy is a Signal tool. signal-cli is the Signal CLI."
+    },
+    "messaging_matrix": {
+      "description": "Matrix chat tools",
+      "tools": [
+        "cargo:https://github.com/conduit-cli/conduit"
+      ],
+      "notes": "conduit is a Matrix chat client."
+    },
+    "ssh_enhanced_clients": {
+      "description": "Enhanced SSH client tools",
+      "tools": [
+        "cargo:essh",
+        "lazyssh"
+      ],
+      "notes": "essh is an enhanced SSH client with TUI (concurrent sessions, monitoring, fleet management). lazyssh is an SSH connection manager TUI."
+    },
+    "remote_desktop_terminal": {
+      "description": "Remote terminal access tools",
+      "tools": [
+        "cargo:essh",
+        "ttyd"
+      ],
+      "notes": "ttyd shares terminal over the web. essh is an enhanced SSH client with TUI."
+    },
+    "http_clients": {
+      "description": "HTTP/API client tools",
+      "tools": [
+        "go:github.com/unkn0wn-root/resterm/cmd/resterm",
+        "httpie-go",
+        "pipx:httpie",
+        "pipx:httpstat",
+        "pipx:posting"
+      ],
+      "notes": "httpie/httpie-go are HTTP clients with nice UX. posting is an API client TUI. resterm is a REST client TUI (supports REST, GraphQL, gRPC, WebSocket, SSE). httpstat visualizes HTTP request statistics."
+    },
+    "api_development": {
+      "description": "API development and testing tools",
+      "tools": [
+        "go:github.com/unkn0wn-root/resterm/cmd/resterm",
+        "npm:playwright",
+        "pipx:httpie",
+        "pipx:httpstat",
+        "pipx:posting"
+      ],
+      "notes": "posting/resterm are API client TUIs. httpie is an HTTP client. httpstat visualizes HTTP stats. playwright is browser automation for testing."
+    },
+    "websocket_tools": {
+      "description": "WebSocket tools",
+      "tools": [
+        "go:github.com/unkn0wn-root/resterm/cmd/resterm",
+        "ttyd",
+        "websocat"
+      ],
+      "notes": "websocat is a WebSocket CLI tool (like netcat for WebSocket). resterm supports WebSocket connections. ttyd uses WebSocket to share terminals over the web."
+    },
+    "github_downloaders": {
+      "description": "Tools for downloading from GitHub",
+      "tools": [
+        "cargo:https://github.com/devmatteini/dra",
+        "go:github.com/rubysolo/brows",
+        "go:github.com/zyedidia/eget"
+      ],
+      "notes": "dra downloads release assets from GitHub with auto-detection of OS/arch. eget downloads and extracts prebuilt binaries from GitHub. brows is a GitHub releases browser TUI."
+    },
+    "file_transfer": {
+      "description": "File transfer and sharing tools",
+      "tools": [
+        "cpz",
+        "croc",
+        "crush"
+      ],
+      "notes": "croc transfers files between computers. cpz copies files (fuc suite). crush is a terminal chat/file sharing tool."
+    },
+    "download_managers": {
+      "description": "Download manager tools",
+      "tools": [
+        "cargo:https://github.com/devmatteini/dra",
+        "go:github.com/zyedidia/eget",
+        "pipx:aria2tui",
+        "yt-dlp"
+      ],
+      "notes": "aria2tui is an Aria2 download manager TUI. yt-dlp downloads videos from YouTube and other sites. dra downloads GitHub release assets. eget downloads prebuilt binaries."
+    },
+    "video_media_download": {
+      "description": "Video and media download tools",
+      "tools": [
+        "go:github.com/charmbracelet/vhs",
+        "yt-dlp"
+      ],
+      "notes": "yt-dlp downloads videos. vhs records terminal GIFs."
+    },
+    "compression_tools": {
+      "description": "Compression and decompression tools",
+      "tools": [
+        "cargo:archivefs",
+        "cargo:ouch"
+      ],
+      "notes": "ouch is a unified compression/decompression CLI (handles zip, tar, gz, etc.). archivefs is a FUSE filesystem for browsing archives."
+    },
+    "archive_browsers": {
+      "description": "Tools for browsing archive contents",
+      "tools": [
+        "cargo:archivefs",
+        "cargo:ouch"
+      ],
+      "notes": "archivefs mounts archives as FUSE filesystems. ouch can list/extract archives."
+    },
+    "music_players": {
+      "description": "Terminal music player tools",
+      "tools": [
+        "cargo:ncspot",
+        "github:bjarneo/cliamp"
+      ],
+      "notes": "ncspot is a Spotify TUI client (ncurses). cliamp is a terminal music player."
+    },
+    "ebook_readers": {
+      "description": "Terminal eBook reader",
+      "tools": [
+        "pipx:lue-reader"
+      ],
+      "notes": "lue-reader is a terminal eBook reader with text-to-speech."
+    },
+    "gaming_deals": {
+      "description": "Gaming deal finders",
+      "tools": [
+        "cargo:dealve-tui"
+      ],
+      "notes": "dealve-tui finds game deals across Steam, GOG, Humble Bundle, Epic Games, etc."
+    },
+    "typing_test": {
+      "description": "Terminal typing test",
+      "tools": [
+        "cargo:octotype"
+      ],
+      "notes": "octotype is a typing test TUI."
+    },
+    "documentation_tools": {
+      "description": "Documentation creation and rendering tools",
+      "tools": [
+        "cargo:tealdeer",
+        "glow",
+        "mdbook",
+        "npm:t3",
+        "pandoc"
+      ],
+      "notes": "mdbook creates books from Markdown. pandoc converts between document formats. glow renders Markdown in the terminal. tealdeer is a tldr client (simplified man pages). zola is a static site generator. t3 is a web framework."
+    },
+    "document_conversion": {
+      "description": "Document format conversion tools",
+      "tools": [
+        "cargo:html2md",
+        "go:github.com/tmc/json-to-struct",
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "jc",
+        "pandoc",
+        "yj"
+      ],
+      "notes": "pandoc converts between document formats. html2md converts HTML to Markdown. yj converts between YAML/JSON/TOML. dasel queries/transforms data across formats. jc converts CLI output to JSON. json-to-struct generates Go structs from JSON."
+    },
+    "man_page_alternatives": {
+      "description": "Alternative help/documentation systems",
+      "tools": [
+        "cargo:halp",
+        "cargo:tealdeer",
+        "navi"
+      ],
+      "notes": "tealdeer provides simplified man pages (tldr). halp finds the correct help/version flags for any CLI. navi is an interactive cheatsheet."
+    },
+    "markdown_tools": {
+      "description": "Markdown processing tools",
+      "tools": [
+        "cargo:html2md",
+        "cargo:treemd",
+        "glow",
+        "mdbook",
+        "npm:markdownlint-cli"
+      ],
+      "notes": "glow renders markdown in terminal. mdbook creates books from Markdown. html2md converts HTML to Markdown. treemd is a Markdown tree viewer. markdownlint-cli lints Markdown."
+    },
+    "package_managers": {
+      "description": "Package and tool managers",
+      "tools": [
+        "aqua",
+        "bun",
+        "cargo-binstall",
+        "cargo:https://github.com/devmatteini/dra",
+        "go:github.com/marwanhawari/stew",
+        "go:github.com/zyedidia/eget",
+        "pnpm",
+        "uv"
+      ],
+      "notes": "aqua manages CLI tool versions. uv is a fast Python package manager. pnpm/bun are JS package managers. cargo-binstall installs Rust binaries. stew manages binary installations. eget downloads binaries from GitHub. dra downloads release assets."
+    },
+    "version_managers": {
+      "description": "Tool/language version managers",
+      "tools": [
+        "aqua",
+        "bazelisk",
+        "cargo:nvrs"
+      ],
+      "notes": "aqua manages CLI tool versions. bazelisk manages Bazel versions. nvrs checks for new versions of software releases."
+    },
+    "version_checkers": {
+      "description": "Tools that check for new versions of software",
+      "tools": [
+        "cargo:nvrs",
+        "go:github.com/rubysolo/brows"
+      ],
+      "notes": "nvrs is a fast new version checker for software releases. brows browses GitHub releases."
+    },
+    "issue_trackers": {
+      "description": "Issue and project tracking tools",
+      "tools": [
+        "go:github.com/Dicklesworthstone/beads_viewer/cmd/bv",
+        "npm:bdui",
+        "npm:beads-kanban-ui",
+        "npm:beads-ui",
+        "skate"
+      ],
+      "notes": "beads is the CLI issue tracker (bd). bdui/beads-ui/beads-kanban-ui are web UIs for beads. bv is a beads viewer TUI. skate is a personal key-value store (can be used for tracking)."
+    },
+    "task_runners_tui": {
+      "description": "TUI task and project runners",
+      "tools": [
+        "go:github.com/marcus/sidecar/cmd/sidecar",
+        "npm:@th0rgal/ralph-wiggum",
+        "npm:ralph-tui",
+        "npm:vibe-kanban"
+      ],
+      "notes": "ralph-tui is a task runner. ralph-wiggum is a variant. vibe-kanban is a kanban board for AI workflows. sidecar is a TUI dashboard for AI coding agents."
+    },
+    "text_editors": {
+      "description": "Text editors",
+      "tools": [
+        "cargo:neovide",
+        "neovim"
+      ],
+      "notes": "neovim is the editor. neovide is its GUI frontend."
+    },
+    "language_servers": {
+      "description": "Language servers and development tools",
+      "tools": [
+        "lua-language-server",
+        "rust-analyzer"
+      ],
+      "notes": "LSP servers for code intelligence (Rust and Lua)."
+    },
+    "mcp_tools": {
+      "description": "Model Context Protocol tools",
+      "tools": [
+        "cargo:mcp-cli",
+        "go:github.com/dolthub/dolt-mcp/mcp/cmd/dolt-mcp-server",
+        "npm:@executeautomation/database-server",
+        "npm:@modelcontextprotocol/inspector",
+        "npm:@playwright/mcp",
+        "npm:@wonderwhy-er/desktop-commander",
+        "npm:podman-mcp-server",
+        "pipx:notebooklm-mcp-cli"
+      ],
+      "notes": "All are MCP servers or clients for AI tool integration. mcp-cli is a general MCP CLI. modelcontextprotocol/inspector is an MCP debugger. Others are specific MCP servers."
+    },
+    "mcp_database_servers": {
+      "description": "MCP servers for database access",
+      "tools": [
+        "go:github.com/dolthub/dolt-mcp/mcp/cmd/dolt-mcp-server",
+        "npm:@executeautomation/database-server"
+      ],
+      "notes": "Both provide MCP interfaces to databases. executeautomation/database-server is a general database MCP server. dolt-mcp-server is for Dolt (git-for-data)."
+    },
+    "language_toolchains": {
+      "description": "Programming language toolchains and runtimes",
+      "tools": [
+        "bun",
+        "clang",
+        "deno",
+        "go",
+        "llvm",
+        "lua",
+        "node",
+        "pkl",
+        "python",
+        "rust",
+        "tinygo",
+        "zig"
+      ],
+      "notes": "Language runtimes and compilers. go/rust/python/node/bun/deno/zig are runtimes. tinygo is Go for microcontrollers. llvm/clang are C/C++ toolchain. pkl is a configuration language. lua is a scripting language."
+    },
+    "js_ts_runtimes": {
+      "description": "JavaScript/TypeScript runtimes",
+      "tools": [
+        "bun",
+        "deno",
+        "node"
+      ],
+      "notes": "node is Node.js. bun is a fast JS/TS runtime + package manager. deno is a secure JS/TS runtime."
+    },
+    "systems_languages": {
+      "description": "Systems programming languages",
+      "tools": [
+        "clang",
+        "go",
+        "llvm",
+        "rust",
+        "zig"
+      ],
+      "notes": "rust/go/zig are modern systems languages. clang/llvm are C/C++ toolchains."
+    },
+    "scripting_languages": {
+      "description": "Scripting languages",
+      "tools": [
+        "bun",
+        "deno",
+        "lua",
+        "node",
+        "python"
+      ],
+      "notes": "python/lua are scripting languages. node/bun/deno are JS/TS runtimes used for scripting."
+    },
+    "shell_scripting_tools": {
+      "description": "Shell scripting and automation tools",
+      "tools": [
+        "actionlint",
+        "bats",
+        "gum",
+        "just",
+        "shellcheck",
+        "shfmt"
+      ],
+      "notes": "shellcheck lints shell scripts. shfmt formats shell scripts. actionlint lints GitHub Actions workflows. just is a command runner. gum provides shell UI components. bats is a Bash testing framework."
+    },
+    "testing_frameworks": {
+      "description": "Testing frameworks and tools",
+      "tools": [
+        "actionlint",
+        "bats",
+        "cargo:cargo-insta",
+        "cargo:selene",
+        "ginkgo",
+        "golangci-lint",
+        "gotestsum",
+        "npm:playwright",
+        "pipx:mypy",
+        "richgo",
+        "semgrep",
+        "shellcheck",
+        "staticcheck"
+      ],
+      "notes": "bats is Bash testing. ginkgo is Go testing. gotestsum is Go test runner with formatted output. cargo-insta is Rust snapshot testing. playwright is browser testing. mypy is Python type checking. semgrep/staticcheck/shellcheck/actionlint/selene are linters. golangci-lint is Go linter aggregator. richgo provides rich output for Go tests."
+    },
+    "database_tools": {
+      "description": "Database client tools",
+      "tools": [
+        "go:github.com/dolthub/dolt-mcp/mcp/cmd/dolt-mcp-server",
+        "go:github.com/ledisdb/ledisdb/cmd/ledis-cli",
+        "npm:@executeautomation/database-server",
+        "pipx:sqlit-tui",
+        "pipx:squall-sql"
+      ],
+      "notes": "sqlit-tui is a SQL database TUI. squall-sql is a SQL tool. executeautomation/database-server is a database MCP server. dolt-mcp-server is a Dolt (git-for-data) MCP server. ledis-cli is a LedisDB CLI."
+    },
+    "key_value_stores": {
+      "description": "Key-value store tools",
+      "tools": [
+        "go:github.com/wesm/msgvault/cmd/msgvault",
+        "skate"
+      ],
+      "notes": "skate is a personal key-value store with sync. msgvault archives email with search (uses a local store)."
+    },
+    "hex_viewers": {
+      "description": "Hex viewers and binary analysis tools",
+      "tools": [
+        "cargo:hexhog"
+      ],
+      "notes": "Both are hex viewers for the terminal with nice formatting."
+    },
+    "web_automation": {
+      "description": "Web automation and browser tools",
+      "tools": [
+        "cargo:monolith",
+        "npm:playwright",
+        "pandoc"
+      ],
+      "notes": "playwright automates browsers for testing. pandoc converts documents. monolith saves web pages as single HTML files."
+    },
+    "web_scraping": {
+      "description": "Web scraping and crawling tools",
+      "tools": [
+        "cargo:monolith",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi"
+      ],
+      "notes": "monolith saves web pages as single HTML. cariddi crawls URLs scanning for endpoints, secrets, API keys, tokens."
+    },
+    "static_site_generators": {
+      "description": "Static site generators",
+      "tools": [
+        "mdbook",
+        "npm:t3"
+      ],
+      "notes": "zola is a static site generator (Rust). mdbook creates documentation books from Markdown. t3 is a web framework (TypeScript)."
+    },
+    "web_frameworks": {
+      "description": "Web development frameworks",
+      "tools": [
+        "cargo:tauri-cli",
+        "npm:t3"
+      ],
+      "notes": "t3 is a TypeScript web framework. tauri-cli builds desktop apps with web frontend."
+    },
+    "network_diagnostics": {
+      "description": "Network diagnostic tools",
+      "tools": [
+        "cargo:bandwhich",
+        "cargo:havn",
+        "cargo:netop",
+        "cargo:netscanner",
+        "doggo",
+        "go:github.com/ramonvermeulen/whosthere",
+        "pipx:netshow",
+        "websocat"
+      ],
+      "notes": "doggo is DNS lookup. websocat is WebSocket CLI. whosthere discovers LAN devices. bandwhich monitors bandwidth by process. netop/netscanner/netshow are network monitors. havn is a port scanner."
+    },
+    "port_scanners": {
+      "description": "Port scanning tools",
+      "tools": [
+        "cargo:havn",
+        "cargo:netscanner",
+        "go:github.com/ramonvermeulen/whosthere"
+      ],
+      "notes": "havn is a fast configurable port scanner. netscanner is a network scanner TUI. whosthere includes an integrated port scanner."
+    },
+    "benchmarking_tools": {
+      "description": "Benchmarking and performance tools",
+      "tools": [
+        "hyperfine",
+        "pipx:s-tui"
+      ],
+      "notes": "hyperfine benchmarks command execution time. s-tui includes CPU stress testing with monitoring."
+    },
+    "osint_tools": {
+      "description": "OSINT (Open Source Intelligence) tools",
+      "tools": [
+        "cargo:kanha",
+        "cargo:osintui",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi",
+        "go:github.com/sa7mon/s3scanner"
+      ],
+      "notes": "osintui is an OSINT TUI tool. cariddi is a web scanner. s3scanner scans S3 buckets. kanha is a web-app pentesting suite."
+    },
+    "dotfile_managers": {
+      "description": "Dotfile and configuration management tools",
+      "tools": [
+        "chezmoi",
+        "hostctl",
+        "npm:@hyperupcall/autoenv"
+      ],
+      "notes": "chezmoi manages dotfiles across machines. autoenv sets environment variables by directory. hostctl manages /etc/hosts."
+    },
+    "config_languages": {
+      "description": "Configuration languages and formats",
+      "tools": [
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "pkl",
+        "yj",
+        "yq"
+      ],
+      "notes": "pkl is a configuration language (Apple). yj converts between YAML/JSON/TOML. yq queries YAML/JSON. dasel queries multiple data formats."
+    },
+    "protobuf_tools": {
+      "description": "Protocol Buffers tools",
+      "tools": [
+        "protoc"
+      ],
+      "notes": "protoc is the Protocol Buffers compiler."
+    },
+    "charmbracelet_ecosystem": {
+      "description": "Charmbracelet TUI ecosystem (Go)",
+      "tools": [
+        "crush",
+        "glow",
+        "go:github.com/charmbracelet/mods",
+        "go:github.com/charmbracelet/vhs",
+        "gum",
+        "skate"
+      ],
+      "notes": "All are from the Charmbracelet organization, known for beautiful Go TUIs. glow renders markdown. gum provides shell UI components. mods is an AI tool. vhs records terminal GIFs. crush is terminal chat/file sharing. skate is a personal key-value store."
+    },
+    "jesseduffield_ecosystem": {
+      "description": "Jesse Duffield's Go TUI tools",
+      "tools": [
+        "lazydocker",
+        "lazygit"
+      ],
+      "notes": "Both are popular Go TUIs by Jesse Duffield for git and docker management."
+    },
+    "jdx_ecosystem": {
+      "description": "jdx (Justin Su) tools",
+      "tools": [
+        "communique",
+        "hk",
+        "usage",
+        "wait-for-gh-rate-limit"
+      ],
+      "notes": "All created by jdx. hk is a git hook manager and project linter. usage is a CLI specification format (KDL-based). communique generates AI release notes. wait-for-gh-rate-limit waits for GitHub rate limits to reset."
+    },
+    "mise_ecosystem": {
+      "description": "mise-en-place related tools",
+      "tools": [
+        "aqua",
+        "hk",
+        "usage",
+        "wait-for-gh-rate-limit"
+      ],
+      "notes": "hk/usage/wait-for-gh-rate-limit are designed to work with mise. aqua is a CLI package manager that inspired mise's backend."
+    },
+    "encoding_identification": {
+      "description": "Text encoding and format identification",
+      "tools": [
+        "cargo:lemmeknow"
+      ],
+      "notes": "lemmeknow identifies text encodings and formats."
+    },
+    "commit_message_tools": {
+      "description": "Tools for writing commit messages",
+      "tools": [
+        "go:github.com/skalt/git-cc",
+        "go:github.com/stefanlogue/meteor"
+      ],
+      "notes": "git-cc helps with conventional commits. meteor is a highly configurable CLI tool for writing conventional commits."
+    },
+    "text_encoding_conversion": {
+      "description": "Text encoding and format conversion",
+      "tools": [
+        "cargo:html2md",
+        "cargo:lemmeknow",
+        "jc",
+        "yj"
+      ],
+      "notes": "lemmeknow identifies encodings. yj converts YAML/JSON/TOML. jc converts CLI output to JSON. html2md converts HTML to Markdown."
+    },
+    "process_orchestration": {
+      "description": "Process orchestration tools",
+      "tools": [
+        "just",
+        "mprocs",
+        "process-compose"
+      ],
+      "notes": "process-compose orchestrates processes from YAML. mprocs runs multiple commands in parallel TUI. just is a command runner."
+    },
+    "email_tools": {
+      "description": "Email related tools",
+      "tools": [
+        "go:github.com/wesm/msgvault/cmd/msgvault"
+      ],
+      "notes": "msgvault archives email with analytics and search, entirely offline."
+    },
+    "clipboard_managers": {
+      "description": "Clipboard management tools",
+      "tools": [
+        "go:github.com/savedra1/clipse"
+      ],
+      "notes": "clipse is a clipboard manager TUI."
+    },
+    "interactive_tui_tools": {
+      "description": "General interactive TUI tools (non-monitoring)",
+      "tools": [
+        "cargo:aichat",
+        "cargo:bridle",
+        "cargo:broot",
+        "cargo:darya",
+        "cargo:dealve-tui",
+        "cargo:diskonaut-ng",
+        "cargo:essh",
+        "cargo:ftdv",
+        "cargo:jolt-tui",
+        "cargo:mcdu",
+        "cargo:modelsdev",
+        "cargo:ncspot",
+        "cargo:octotype",
+        "cargo:parallel-disk-usage",
+        "cargo:vortix",
+        "dua",
+        "gdu",
+        "github:bjarneo/cliamp",
+        "gitui",
+        "go:github.com/charmbracelet/mods",
+        "go:github.com/legostin/cull",
+        "go:github.com/marcus/sidecar/cmd/sidecar",
+        "go:github.com/ramonvermeulen/whosthere",
+        "go:github.com/savedra1/clipse",
+        "go:github.com/unkn0wn-root/resterm/cmd/resterm",
+        "gum",
+        "lazydocker",
+        "lazygit",
+        "lazyssh",
+        "mprocs",
+        "navi",
+        "npm:ralph-tui",
+        "npm:vibe-kanban",
+        "pipx:CereBro",
+        "pipx:batrachianai/toad",
+        "pipx:hapless",
+        "pipx:lue-reader",
+        "pipx:parllama",
+        "pipx:posting",
+        "pipx:renux",
+        "pipx:rovr",
+        "superfile",
+        "yazi"
+      ],
+      "notes": "All provide interactive terminal UIs for various purposes (file management, git, music, API testing, etc.)."
+    },
+    "tui_frameworks_libraries": {
+      "description": "TUI frameworks and libraries used to build terminal applications",
+      "tools": [
+        "cargo:basalt-tui"
+      ],
+      "notes": "basalt-tui is a TUI framework/application builder."
+    },
+    "search_tools": {
+      "description": "Search and find tools",
+      "tools": [
+        "ast-grep",
+        "cargo:https://github.com/clouedoc/hzfind",
+        "cargo:repgrep",
+        "fd",
+        "rg",
+        "ripgrep"
+      ],
+      "notes": "rg/ripgrep search file content with regex. fd finds files by name. ast-grep does AST-based code search. repgrep is interactive search/replace. hzfind is a search tool."
+    },
+    "text_processing": {
+      "description": "Text processing and manipulation tools",
+      "tools": [
+        "cargo:hck",
+        "cargo:repgrep",
+        "cargo:rgx-cli",
+        "choose",
+        "sd"
+      ],
+      "notes": "sd is sed alternative. choose/hck extract columns. repgrep is interactive search/replace. rgx-cli is a regex tool."
+    },
+    "regex_tools": {
+      "description": "Regex-related tools",
+      "tools": [
+        "cargo:jsongrep",
+        "cargo:repgrep",
+        "cargo:rgx-cli",
+        "rg",
+        "ripgrep"
+      ],
+      "notes": "rg/ripgrep search with regex. repgrep does interactive regex search/replace. rgx-cli is a regex tool. jsongrep greps JSON with regex."
+    },
+    "binary_management": {
+      "description": "Tools for managing binary installations",
+      "tools": [
+        "cargo-binstall",
+        "cargo:https://github.com/devmatteini/dra",
+        "go:github.com/marwanhawari/stew",
+        "go:github.com/zyedidia/eget"
+      ],
+      "notes": "eget downloads and extracts prebuilt binaries from GitHub. stew manages binary installations. cargo-binstall installs Rust binaries. dra downloads GitHub release assets."
+    },
+    "cloud_clis": {
+      "description": "Cloud provider CLIs",
+      "tools": [
+        "hcloud"
+      ],
+      "notes": "hcloud is the Hetzner Cloud CLI."
+    },
+    "hardware_info_tools": {
+      "description": "Hardware information tools",
+      "tools": [
+        "cargo:macchina"
+      ],
+      "notes": "macchina shows system info (neofetch alternative). hwinfo-tui shows hardware info in a TUI."
+    },
+    "logging_tools": {
+      "description": "Logging and journal tools",
+      "tools": [
+        "go:github.com/control-theory/gonzo/cmd/gonzo",
+        "lazyjournal"
+      ],
+      "notes": "lazyjournal is a journal/log viewer TUI. gonzo is a powerful TUI log analysis tool."
+    },
+    "package_manager_tui": {
+      "description": "Package manager TUI tools",
+      "tools": [
+        "go:github.com/orhun/pkgtop/cmd"
+      ],
+      "notes": "pkgtop is a package manager + resource monitor TUI."
+    },
+    "web_scanners": {
+      "description": "Web scanning and crawling tools",
+      "tools": [
+        "cargo:kanha",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi"
+      ],
+      "notes": "cariddi crawls URLs scanning for endpoints, secrets, API keys, tokens. kanha is a web-app pentesting suite."
+    },
+    "s3_tools": {
+      "description": "Amazon S3 tools",
+      "tools": [
+        "go:github.com/sa7mon/s3scanner"
+      ],
+      "notes": "s3scanner scans for misconfigured/misconfigured S3 buckets."
+    },
+    "message_queue_tools": {
+      "description": "Message queue tools",
+      "tools": [
+        "cargo:mq-run"
+      ],
+      "notes": "mq-run is a message queue runner."
+    },
+    "log_query_tools": {
+      "description": "Log query tools",
+      "tools": [
+        "cargo:lq"
+      ],
+      "notes": "lq is a log query tool."
+    },
+    "terminal_ui_tools": {
+      "description": "Terminal UI component libraries and tools",
+      "tools": [
+        "go:github.com/charmbracelet/mods",
+        "gum"
+      ],
+      "notes": "gum provides shell UI components (spinners, pickers, confirmations). mods is Charm's AI tool for the terminal."
+    },
+    "web_page_archivers": {
+      "description": "Web page archiving tools",
+      "tools": [
+        "cargo:monolith"
+      ],
+      "notes": "monolith saves web pages as single HTML files."
+    },
+    "json_navigators": {
+      "description": "Interactive JSON navigation tools",
+      "tools": [
+        "cargo:jiq",
+        "jiq",
+        "jless",
+        "jnv",
+        "jqp"
+      ],
+      "notes": "All provide interactive/TUI ways to navigate and explore JSON data."
+    },
+    "data_serialization": {
+      "description": "Data serialization format tools",
+      "tools": [
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "gojq",
+        "jaq",
+        "jq",
+        "pkl",
+        "yj",
+        "yq"
+      ],
+      "notes": "pkl generates JSON/YAML. yj converts between YAML/JSON/TOML. yq queries YAML/JSON. dasel queries multiple formats. jq/gojq/jaq query JSON."
+    },
+    "terminal_productivity": {
+      "description": "Terminal productivity tools",
+      "tools": [
+        "atuin",
+        "cargo:halp",
+        "go:github.com/savedra1/clipse",
+        "just",
+        "navi",
+        "skate",
+        "zoxide"
+      ],
+      "notes": "atuin enhances shell history. zoxide is smart cd. navi is interactive cheatsheet. just is a command runner. halp finds help flags. clipse manages clipboard. skate is a key-value store."
+    },
+    "dev_loop_tools": {
+      "description": "Inner development loop tools (format, lint, test, build)",
+      "tools": [
+        "actionlint",
+        "black",
+        "cargo:selene",
+        "go:github.com/davidrjenni/reftools/cmd/fillswitch",
+        "go:github.com/go-delve/delve/cmd/dlv",
+        "go:github.com/koron/iferr",
+        "gofumpt",
+        "golangci-lint",
+        "golines",
+        "gotestsum",
+        "npm:prettier",
+        "pipx:mypy",
+        "richgo",
+        "shellcheck",
+        "shfmt",
+        "staticcheck",
+        "stylua",
+        "taplo"
+      ],
+      "notes": "All are tools in the inner dev loop: formatters (gofumpt, golines, black, shfmt, stylua, prettier, taplo), linters (golangci-lint, staticcheck, mypy, shellcheck, actionlint, selene), test tools (gotestsum, richgo), debuggers (dlv), code generators (fillswitch, iferr)."
+    },
+    "infrastructure_tools": {
+      "description": "Infrastructure management tools",
+      "tools": [
+        "crane",
+        "docker-compose",
+        "hcloud",
+        "nfpm",
+        "pkl",
+        "process-compose",
+        "regctl",
+        "regsync"
+      ],
+      "notes": "docker-compose orchestrates containers. regctl/regsync/crane manage container registries. nfpm builds packages. yor auto-tags IaC. pkl generates configs. hcloud manages cloud servers. process-compose orchestrates processes."
+    },
+    "terminal_music_streaming": {
+      "description": "Terminal music streaming tools",
+      "tools": [
+        "cargo:ncspot"
+      ],
+      "notes": "ncspot is a Spotify TUI client."
+    },
+    "terminal_file_sharing": {
+      "description": "Terminal file sharing tools",
+      "tools": [
+        "croc",
+        "crush"
+      ],
+      "notes": "croc transfers files between computers. crush is a terminal chat/file sharing tool from Charm."
+    },
+    "git_branching_tools": {
+      "description": "Git branching tools",
+      "tools": [
+        "npm:branchlet"
+      ],
+      "notes": "branchlet is a git branch management tool."
+    },
+    "dashboard_tools": {
+      "description": "Dashboard and overview tools",
+      "tools": [
+        "cargo:seetui",
+        "go:github.com/marcus/sidecar/cmd/sidecar",
+        "go:github.com/technosophos/dashing"
+      ],
+      "notes": "sidecar is a TUI dashboard for AI coding agents. dashing is a dashboard tool. seetui is a terminal UI tool."
+    },
+    "network_discovery": {
+      "description": "Network device discovery tools",
+      "tools": [
+        "cargo:netscanner",
+        "go:github.com/ramonvermeulen/whosthere"
+      ],
+      "notes": "whosthere discovers LAN devices via mDNS/SSDP/ARP. netscanner is a network scanner TUI."
+    },
+    "ai_skill_management": {
+      "description": "AI skill and capability management",
+      "tools": [
+        "cargo:bridle",
+        "npm:agent-skills-cli"
+      ],
+      "notes": "agent-skills-cli manages AI agent skills. bridle manages configs across AI coding assistants."
+    },
+    "code_packaging": {
+      "description": "Code packaging and distribution tools",
+      "tools": [
+        "cargo-binstall",
+        "go:github.com/zyedidia/eget",
+        "nfpm",
+        "npm:repomix"
+      ],
+      "notes": "repomix packages code for AI consumption. nfpm builds system packages. cargo-binstall installs Rust binaries. eget downloads prebuilt binaries."
+    },
+    "terminal_colorizers": {
+      "description": "Terminal output colorizers and highlighters",
+      "tools": [
+        "bat",
+        "cargo:hexhog",
+        "delta",
+        "glow"
+      ],
+      "notes": "bat adds syntax highlighting to cat. delta adds syntax highlighting to diffs. glow renders markdown with colors. hexyl/hexhog are hex viewers with color output."
+    },
+    "config_generators": {
+      "description": "Configuration generation tools",
+      "tools": [
+        "cargo:usage-cli",
+        "hk",
+        "pkl"
+      ],
+      "notes": "usage-cli generates CLI usage specs. pkl generates configs. hk is a project linter that generates configs."
+    },
+    "terminal_testing": {
+      "description": "Terminal testing tools",
+      "tools": [
+        "go:github.com/charmbracelet/vhs",
+        "npm:playwright"
+      ],
+      "notes": "playwright automates browsers for testing. vhs records terminal GIFs from scripted commands (useful for testing terminal UIs)."
+    },
+    "data_analysis": {
+      "description": "Data analysis and querying tools",
+      "tools": [
+        "cargo:lq",
+        "cargo:tomq",
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "gojq",
+        "jaq",
+        "jq",
+        "yq"
+      ],
+      "notes": "All provide data analysis capabilities: jq/gojq/jaq for JSON, yq for YAML, dasel for multiple formats, tomq for TOML, lq for logs."
+    },
+    "terminal_messaging": {
+      "description": "Terminal messaging and communication",
+      "tools": [
+        "cargo:https://github.com/boxdot/gurk-rs",
+        "cargo:https://github.com/conduit-cli/conduit",
+        "cargo:siggy",
+        "crush",
+        "github:AsamK/signal-cli"
+      ],
+      "notes": "gurk/siggy/signal-cli are Signal tools. conduit is Matrix. crush is terminal chat."
+    },
+    "shell_completion": {
+      "description": "Shell completion tools",
+      "tools": [
+        "carapace"
+      ],
+      "notes": "carapace is a multi-shell completion generator."
+    },
+    "dotfile_sync": {
+      "description": "Dotfile synchronization tools",
+      "tools": [
+        "chezmoi",
+        "skate"
+      ],
+      "notes": "chezmoi manages dotfiles across machines. skate syncs a key-value store."
+    },
+    "terminal_stress_test": {
+      "description": "Terminal stress testing tools",
+      "tools": [
+        "hyperfine",
+        "pipx:s-tui"
+      ],
+      "notes": "s-tui combines CPU stress testing with monitoring. hyperfine benchmarks command performance."
+    },
+    "code_generators": {
+      "description": "Code generation tools",
+      "tools": [
+        "go:github.com/davidrjenni/reftools/cmd/fillswitch",
+        "go:github.com/koron/iferr",
+        "go:github.com/tmc/json-to-struct",
+        "pkl"
+      ],
+      "notes": "fillswitch generates Go switch statements. iferr generates Go error handling. json-to-struct generates Go structs from JSON. pkl generates code/configs."
+    },
+    "terminal_search": {
+      "description": "Terminal search tools",
+      "tools": [
+        "ast-grep",
+        "cargo:https://github.com/clouedoc/hzfind",
+        "cargo:jsongrep",
+        "cargo:repgrep",
+        "fd",
+        "rg",
+        "ripgrep"
+      ],
+      "notes": "rg/ripgrep search file content. fd finds files. ast-grep does AST search. repgrep is interactive search. hzfind is a search tool. jsongrep searches JSON."
+    },
+    "system_info_tools": {
+      "description": "System information display tools",
+      "tools": [
+        "cargo:macchina",
+        "cargo:onefetch"
+      ],
+      "notes": "macchina shows system info. hwinfo-tui shows hardware info. onefetch shows git repo info."
+    },
+    "terminal_archivers": {
+      "description": "Terminal archive tools",
+      "tools": [
+        "cargo:archivefs",
+        "cargo:ouch"
+      ],
+      "notes": "ouch handles compression/decompression. archivefs mounts archives as FUSE filesystems."
+    },
+    "git_log_tools": {
+      "description": "Git log and history tools",
+      "tools": [
+        "cargo:git-cliff",
+        "cargo:onefetch",
+        "communique",
+        "delta"
+      ],
+      "notes": "git-cliff generates changelogs. communique generates release notes. onefetch shows repo summary. delta enhances git log diffs."
+    },
+    "terminal_browsing": {
+      "description": "Terminal browsing tools",
+      "tools": [
+        "go:github.com/noborus/ov",
+        "go:github.com/rubysolo/brows",
+        "go:github.com/walles/moar",
+        "go:github.com/walles/moor/v2/cmd/moor"
+      ],
+      "notes": "brows is a GitHub releases browser. ov/moar/moor are terminal pagers for browsing file content."
+    },
+    "terminal_notetaking": {
+      "description": "Terminal note-taking and knowledge management",
+      "tools": [
+        "go:github.com/wesm/msgvault/cmd/msgvault",
+        "skate"
+      ],
+      "notes": "skate is a personal key-value store for notes. msgvault archives and searches email."
+    },
+    "terminal_scheduling": {
+      "description": "Terminal scheduling and automation",
+      "tools": [
+        "just",
+        "mprocs",
+        "process-compose"
+      ],
+      "notes": "process-compose orchestrates processes from YAML. just is a command runner. mprocs runs multiple commands in parallel."
+    },
+    "terminal_debugging": {
+      "description": "Terminal debugging tools",
+      "tools": [
+        "cargo:intentrace",
+        "cargo:strace-tui",
+        "go:github.com/go-delve/delve/cmd/dlv"
+      ],
+      "notes": "dlv is a Go debugger. strace-tui wraps strace in a TUI. intentrace traces system calls."
+    },
+    "terminal_profiling": {
+      "description": "Terminal profiling and performance analysis",
+      "tools": [
+        "github:Netflix/bpftop",
+        "hyperfine",
+        "pipx:s-tui"
+      ],
+      "notes": "hyperfine benchmarks commands. s-tui stress tests CPUs. bpftop monitors eBPF programs."
+    },
+    "terminal_networking": {
+      "description": "Terminal networking tools",
+      "tools": [
+        "cargo:bandwhich",
+        "cargo:havn",
+        "cargo:netop",
+        "cargo:netscanner",
+        "doggo",
+        "go:github.com/ramonvermeulen/whosthere",
+        "pipx:netshow",
+        "websocat"
+      ],
+      "notes": "bandwhich monitors bandwidth. netop/netscanner/netshow monitor networks. whosthere discovers LAN devices. havn scans ports. websocat is WebSocket CLI. doggo is DNS lookup."
+    },
+    "terminal_security": {
+      "description": "Terminal security tools",
+      "tools": [
+        "age",
+        "cargo:inspect-cert-chain",
+        "cargo:intentrace",
+        "cargo:rage",
+        "gitleaks",
+        "go:github.com/brittonhayes/pillager/cmd/pillager",
+        "npm:socket",
+        "semgrep",
+        "sops",
+        "trufflehog"
+      ],
+      "notes": "age/rage encrypt files. sops manages encrypted secrets. gitleaks/trufflehog/pillager scan for secrets. semgrep does static analysis. socket checks npm security. inspect-cert-chain inspects TLS certs. intentrace traces syscalls."
+    },
+    "terminal_ai": {
+      "description": "Terminal AI tools",
+      "tools": [
+        "amp",
+        "cargo:aichat",
+        "cargo:modelsdev",
+        "claude-code",
+        "codex",
+        "github:NeuralNomadsAI/CodeNomad",
+        "github:block/goose",
+        "github:tailcallhq/forgecode",
+        "go:github.com/charmbracelet/mods",
+        "npm:@factory/cli",
+        "npm:@google/gemini-cli",
+        "npm:@kilocode/cli",
+        "npm:@qodo/command",
+        "npm:@sylphai/adal-cli",
+        "npm:@vibe-kit/grok-cli",
+        "npm:cline",
+        "npm:codebuff",
+        "npm:ocx",
+        "npm:opencode-ai",
+        "npm:openportal",
+        "npm:vibe-kanban",
+        "opencode",
+        "pi",
+        "pipx:CereBro",
+        "pipx:batrachianai/toad",
+        "pipx:kimi-cli",
+        "pipx:mistral-vibe",
+        "pipx:notebooklm-mcp-cli",
+        "pipx:parllama"
+      ],
+      "notes": "All are AI-related terminal tools: coding agents (claude-code, codex, opencode, amp, goose, cline, toad, pi, gemini, factory, kimi, kilocode, blackbox, continue, adal, codebuff, CodeNomad, forgecode, qodo, ocx, openportal, opencode-ai), LLM TUIs (aichat, CereBro, parllama, mods, mistral-vibe, grok, notebooklm), model browsers (modelsdev), orchestration (vibe-kanban)."
+    },
+    "terminal_devtools": {
+      "description": "General terminal development tools",
+      "tools": [
+        "actionlint",
+        "black",
+        "bun",
+        "cargo:selene",
+        "clang",
+        "deno",
+        "go",
+        "go:github.com/go-delve/delve/cmd/dlv",
+        "gofumpt",
+        "golangci-lint",
+        "golines",
+        "gotestsum",
+        "just",
+        "llvm",
+        "mprocs",
+        "node",
+        "npm:prettier",
+        "pipx:mypy",
+        "process-compose",
+        "protoc",
+        "python",
+        "richgo",
+        "rust",
+        "semgrep",
+        "shellcheck",
+        "shfmt",
+        "staticcheck",
+        "stylua",
+        "taplo",
+        "tinygo",
+        "zig"
+      ],
+      "notes": "All are development tools: languages, formatters, linters, test tools, debuggers, build tools."
+    },
+    "terminal_monitoring": {
+      "description": "Terminal monitoring tools",
+      "tools": [
+        "btop",
+        "cargo:bottom",
+        "cargo:cyme",
+        "cargo:intentrace",
+        "cargo:jolt-tui",
+        "cargo:kmon",
+        "cargo:macchina",
+        "cargo:strace-tui",
+        "cargo:systemd-manager-tui",
+        "cargo:systeroid-tui",
+        "cargo:zenith-cli",
+        "github:Netflix/bpftop",
+        "go:github.com/control-theory/gonzo/cmd/gonzo",
+        "go:github.com/jamespwilliams/psitop",
+        "go:github.com/orhun/pkgtop/cmd",
+        "hwatch",
+        "lazyjournal",
+        "pipx:glances",
+        "pipx:isd-tui",
+        "pipx:s-tui",
+        "pipx:sot",
+        "viddy"
+      ],
+      "notes": "All provide monitoring capabilities: system monitors (btop, bottom, cyme, zenith, sot, s-tui, glances), kernel monitors (kmon, bpftop), process monitors (psitop, pkgtop), system info (macchina), low-level monitors (strace-tui, systemd-manager-tui, systeroid-tui, isd-tui, intentrace), log monitors (lazyjournal, gonzo), battery (jolt-tui), command watchers (hwatch, viddy)."
+    },
+    "terminal_file_operations": {
+      "description": "Terminal file operation tools",
+      "tools": [
+        "cargo:archivefs",
+        "cargo:broot",
+        "cargo:darya",
+        "cargo:diskonaut-ng",
+        "cargo:drft",
+        "cargo:dysk",
+        "cargo:erdtree",
+        "cargo:fclones",
+        "cargo:ftdv",
+        "cargo:mcdu",
+        "cargo:ouch",
+        "cargo:parallel-disk-usage",
+        "cargo:treemd",
+        "dua",
+        "duf",
+        "eza",
+        "fd",
+        "gdu",
+        "go:github.com/babarot/gomi",
+        "go:github.com/legostin/cull",
+        "pipx:recoverpy",
+        "pipx:renux",
+        "pipx:rovr",
+        "superfile",
+        "yazi"
+      ],
+      "notes": "All are file operation tools: listing (eza), finding (fd), managers (broot, erdtree, yazi, vifm, superfile, rovr), disk usage (dust, duf, dua, dysk, gdu, diskonaut-ng, mcdu, parallel-disk-usage, darya, cull), duplicates (fclones), recovery (recoverpy), renaming (renux), trash (gomi), compression (ouch), archive browsing (archivefs), tree viewing (treemd, ftdv), integrity (drft)."
+    },
+    "terminal_data": {
+      "description": "Terminal data processing tools",
+      "tools": [
+        "cargo:html2md",
+        "cargo:jsongrep",
+        "cargo:lemmeknow",
+        "cargo:tomq",
+        "go:github.com/tmc/json-to-struct",
+        "go:github.com/tomwright/dasel/v3/cmd/dasel",
+        "gojq",
+        "jaq",
+        "jc",
+        "jq",
+        "jwt",
+        "jwtui",
+        "npm:ajv-cli",
+        "pkl",
+        "yj",
+        "yq"
+      ],
+      "notes": "All process structured data: JSON (jq, gojq, jaq, jsongrep), YAML (yq), TOML (tomq), multi-format (dasel, yj), conversion (jc, json-to-struct, html2md), encoding ID (lemmeknow), JWT (jwt, jwtui), validation (ajv-cli), config gen (pkl)."
+    },
+    "terminal_web": {
+      "description": "Terminal web tools",
+      "tools": [
+        "cargo:monolith",
+        "cargo:tauri-cli",
+        "go:github.com/edoardottt/cariddi/cmd/cariddi",
+        "go:github.com/unkn0wn-root/resterm/cmd/resterm",
+        "httpie-go",
+        "npm:playwright",
+        "npm:t3",
+        "pipx:httpie",
+        "pipx:httpstat",
+        "pipx:posting",
+        "ttyd",
+        "websocat"
+      ],
+      "notes": "All interact with the web: HTTP clients (httpie, httpie-go, posting, resterm, httpstat), WebSocket (websocat), browser automation (playwright), archiving (monolith), scanning (cariddi), remote terminal (ttyd), frameworks (t3, tauri-cli)."
+    },
+    "terminal_git": {
+      "description": "Terminal git tools",
+      "tools": [
+        "actionlint",
+        "cargo:difftastic",
+        "cargo:ftdv",
+        "cargo:git-cliff",
+        "cargo:https://github.com/devmatteini/dra",
+        "cargo:mergiraf",
+        "cargo:onefetch",
+        "communique",
+        "delta",
+        "gh",
+        "gitleaks",
+        "gitui",
+        "glab",
+        "go:github.com/Dicklesworthstone/beads_viewer/cmd/bv",
+        "go:github.com/brittonhayes/pillager/cmd/pillager",
+        "go:github.com/chmouel/lazyworktree/cmd/lazyworktree",
+        "go:github.com/dlvhdr/diffnav",
+        "go:github.com/k1LoW/octocov",
+        "go:github.com/rubysolo/brows",
+        "go:github.com/skalt/git-cc",
+        "go:github.com/stefanlogue/meteor",
+        "go:github.com/zyedidia/eget",
+        "hk",
+        "jjui",
+        "lazygit",
+        "nfpm",
+        "npm:bdui",
+        "npm:beads-kanban-ui",
+        "npm:beads-ui",
+        "npm:branchlet",
+        "pre-commit",
+        "trufflehog"
+      ],
+      "notes": "All are git-related: TUIs (lazygit, gitui, jjui, diffnav), diff tools (delta, difftastic, ftdv), helpers (git-cliff, mergiraf, git-cc, lazyworktree, act3, meteor), platform CLIs (gh, glab), security (gitleaks, trufflehog, pillager), issue tracking (beads, bv, bdui, beads-ui, beads-kanban-ui), releases (communique, dra, eget, brows, nfpm), hooks (pre-commit, hk, actionlint), coverage (octocov), onefetch."
+    }
+  }
+}
