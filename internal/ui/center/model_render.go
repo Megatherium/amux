@@ -37,7 +37,9 @@ func (m *Model) View() string {
 	} else if activeIdx < len(tabs) {
 		tab := tabs[activeIdx]
 		tab.mu.Lock()
-		if tab.DiffViewer != nil {
+		if tab.Kind == TicketViewTab {
+			b.WriteString(m.renderTicketView(tab))
+		} else if tab.DiffViewer != nil {
 			// Sync focus state with center pane focus
 			tab.DiffViewer.SetFocused(m.focused)
 			// Render native diff viewer
@@ -129,7 +131,20 @@ func (m *Model) helpItem(key, desc string) string {
 func (m *Model) helpLines(contentWidth int) []string {
 	items := []string{}
 
-	hasTabs := len(m.getTabs()) > 0
+	// TicketViewTab gets different help
+	tabs := m.getTabs()
+	activeIdx := m.getActiveTabIdx()
+	if len(tabs) > 0 && activeIdx < len(tabs) && tabs[activeIdx].Kind == TicketViewTab {
+		items = append(items,
+			m.helpItem("Esc", "close"),
+			m.helpItem("Enter", "draft"),
+			m.helpItem("PgUp", "scroll up"),
+			m.helpItem("PgDn", "scroll down"),
+		)
+		return common.WrapHelpItems(items, contentWidth)
+	}
+
+	hasTabs := len(tabs) > 0
 	if m.workspace != nil {
 		items = append(items,
 			m.helpItem(m.pfx()+" t a", "new agent tab"),

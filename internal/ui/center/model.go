@@ -57,6 +57,9 @@ type Model struct {
 
 	// Ticket service availability (for conditional help text)
 	hasTicketSvc bool
+
+	// scrolling state for ticket view tabs
+	ticketViewScrollOffset int
 }
 
 // tmuxConfig holds tmux-related configuration

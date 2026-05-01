@@ -182,6 +182,11 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 			}
 		}
 
+		// TicketViewTab key handling
+		if len(tabs) > 0 && activeIdx < len(tabs) && tabs[activeIdx].Kind == TicketViewTab {
+			return m.handleTicketViewKey(msg)
+		}
+
 		if !m.focused {
 			logging.Debug("Center not focused, ignoring key")
 			return m, nil
