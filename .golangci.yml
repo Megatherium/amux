@@ -28,6 +28,22 @@ linters:
               desc: Use standard library errors/fmt wrapping instead.
             - pkg: io/ioutil
               desc: Use os or io packages instead of io/ioutil.
+        ui-data-boundary:
+          list-mode: lax
+          files:
+            - "**/internal/ui/**"
+          deny:
+            - pkg: github.com/andyrewlee/amux/internal/data
+              desc: UI packages must not import internal/data directly. Use internal/messages or abstracted types instead.
+        messages-circularity:
+          list-mode: lax
+          files:
+            - "**/internal/data/**"
+            - "**/internal/git/**"
+            - "**/internal/tickets/**"
+          deny:
+            - pkg: github.com/andyrewlee/amux/internal/messages
+              desc: This package must not import internal/messages (would create circular dependency via internal/messages).
     errcheck:
       check-type-assertions: true
     errorlint:
