@@ -1,4 +1,4 @@
-package app
+package workspaces
 
 import (
 	"crypto/sha256"
@@ -11,9 +11,9 @@ import (
 	"github.com/andyrewlee/amux/internal/data"
 )
 
-// WorkspaceManager encapsulates workspace persistence, dirty tracking,
+// Manager encapsulates workspace persistence, dirty tracking,
 // creation tracking, and delete-in-flight guards.
-type WorkspaceManager struct {
+type Manager struct {
 	// Workspace persistence debounce
 	dirtyWorkspaces       map[string]bool
 	deletingWorkspaceMu   sync.RWMutex
@@ -26,9 +26,9 @@ type WorkspaceManager struct {
 	creatingWorkspaceIDs map[string]bool
 }
 
-// newWorkspaceManager creates an initialized WorkspaceManager.
-func newWorkspaceManager() *WorkspaceManager {
-	return &WorkspaceManager{
+// NewManager creates an initialized Manager.
+func NewManager() *Manager {
+	return &Manager{
 		dirtyWorkspaces:       make(map[string]bool),
 		deletingWorkspaceIDs:  make(map[string]bool),
 		localWorkspaceSavesAt: make(map[string]localWorkspaceSaveMarker),
@@ -40,38 +40,38 @@ func newWorkspaceManager() *WorkspaceManager {
 // Dirty workspace tracking
 // ---------------------------------------------------------------------------
 
-// isWorkspaceDirty reports whether the given workspace ID has unsaved changes.
-func (wm *WorkspaceManager) isWorkspaceDirty(wsID string) bool {
+// IsWorkspaceDirty reports whether the given workspace ID has unsaved changes.
+func (wm *Manager) IsWorkspaceDirty(wsID string) bool {
 	return wm.dirtyWorkspaces != nil && wm.dirtyWorkspaces[wsID]
 }
 
-// markWorkspaceDirty marks a workspace as having unsaved changes.
-func (wm *WorkspaceManager) markWorkspaceDirty(wsID string) {
+// MarkWorkspaceDirty marks a workspace as having unsaved changes.
+func (wm *Manager) MarkWorkspaceDirty(wsID string) {
 	if wm.dirtyWorkspaces == nil {
 		wm.dirtyWorkspaces = make(map[string]bool)
 	}
 	wm.dirtyWorkspaces[wsID] = true
 }
 
-// clearWorkspaceDirty removes a workspace from the dirty set.
-func (wm *WorkspaceManager) clearWorkspaceDirty(wsID string) {
+// ClearWorkspaceDirty removes a workspace from the dirty set.
+func (wm *Manager) ClearWorkspaceDirty(wsID string) {
 	delete(wm.dirtyWorkspaces, wsID)
 }
 
-// clearAllDirty removes all workspaces from the dirty set.
-func (wm *WorkspaceManager) clearAllDirty() {
+// ClearAllDirty removes all workspaces from the dirty set.
+func (wm *Manager) ClearAllDirty() {
 	for k := range wm.dirtyWorkspaces {
 		delete(wm.dirtyWorkspaces, k)
 	}
 }
 
-// dirtyWorkspaceCount returns the number of dirty workspaces.
-func (wm *WorkspaceManager) dirtyWorkspaceCount() int {
+// DirtyWorkspaceCount returns the number of dirty workspaces.
+func (wm *Manager) DirtyWorkspaceCount() int {
 	return len(wm.dirtyWorkspaces)
 }
 
-// dirtyWorkspaceIDs returns a copy of the current dirty workspace ID set.
-func (wm *WorkspaceManager) dirtyWorkspaceIDs() map[string]bool {
+// DirtyWorkspaceIDs returns a copy of the current dirty workspace ID set.
+func (wm *Manager) DirtyWorkspaceIDs() map[string]bool {
 	out := make(map[string]bool, len(wm.dirtyWorkspaces))
 	for k := range wm.dirtyWorkspaces {
 		out[k] = true
@@ -79,8 +79,8 @@ func (wm *WorkspaceManager) dirtyWorkspaceIDs() map[string]bool {
 	return out
 }
 
-// migrateDirtyWorkspaceID migrates a dirty marker from oldID to newID.
-func (wm *WorkspaceManager) migrateDirtyWorkspaceID(oldID, newID string) {
+// MigrateDirtyWorkspaceID migrates a dirty marker from oldID to newID.
+func (wm *Manager) MigrateDirtyWorkspaceID(oldID, newID string) {
 	if oldID == "" || newID == "" || oldID == newID {
 		return
 	}
@@ -91,14 +91,14 @@ func (wm *WorkspaceManager) migrateDirtyWorkspaceID(oldID, newID string) {
 	delete(wm.dirtyWorkspaces, oldID)
 }
 
-// nextPersistToken increments the persist token counter and returns the new value.
-func (wm *WorkspaceManager) nextPersistToken() int {
+// NextPersistToken increments the persist token counter and returns the new value.
+func (wm *Manager) NextPersistToken() int {
 	wm.persistToken++
 	return wm.persistToken
 }
 
-// currentPersistToken returns the current persist token value.
-func (wm *WorkspaceManager) currentPersistToken() int {
+// CurrentPersistToken returns the current persist token value.
+func (wm *Manager) CurrentPersistToken() int {
 	return wm.persistToken
 }
 
@@ -106,8 +106,8 @@ func (wm *WorkspaceManager) currentPersistToken() int {
 // Delete-in-flight guard
 // ---------------------------------------------------------------------------
 
-// markWorkspaceDeleteInFlight sets or clears the delete-in-flight marker for a workspace.
-func (wm *WorkspaceManager) markWorkspaceDeleteInFlight(ws *data.Workspace, deleting bool) {
+// MarkWorkspaceDeleteInFlight sets or clears the delete-in-flight marker for a workspace.
+func (wm *Manager) MarkWorkspaceDeleteInFlight(ws *data.Workspace, deleting bool) {
 	wm.deletingWorkspaceMu.Lock()
 	defer wm.deletingWorkspaceMu.Unlock()
 
@@ -128,8 +128,8 @@ func (wm *WorkspaceManager) markWorkspaceDeleteInFlight(ws *data.Workspace, dele
 	delete(wm.deletingWorkspaceIDs, wsID)
 }
 
-// isWorkspaceDeleteInFlight reports whether the workspace is currently being deleted.
-func (wm *WorkspaceManager) isWorkspaceDeleteInFlight(wsID string) bool {
+// IsWorkspaceDeleteInFlight reports whether the workspace is currently being deleted.
+func (wm *Manager) IsWorkspaceDeleteInFlight(wsID string) bool {
 	wm.deletingWorkspaceMu.RLock()
 	defer wm.deletingWorkspaceMu.RUnlock()
 
@@ -139,11 +139,11 @@ func (wm *WorkspaceManager) isWorkspaceDeleteInFlight(wsID string) bool {
 	return wm.deletingWorkspaceIDs[wsID]
 }
 
-// runUnlessWorkspaceDeleteInFlight runs fn while holding a shared delete-state
+// RunUnlessWorkspaceDeleteInFlight runs fn while holding a shared delete-state
 // lock only when wsID is not currently marked delete-in-flight. Holding the
 // lock across fn keeps the check and side effect atomic with respect to
-// markWorkspaceDeleteInFlight updates.
-func (wm *WorkspaceManager) runUnlessWorkspaceDeleteInFlight(wsID string, fn func()) bool {
+// MarkWorkspaceDeleteInFlight updates.
+func (wm *Manager) RunUnlessWorkspaceDeleteInFlight(wsID string, fn func()) bool {
 	wm.deletingWorkspaceMu.RLock()
 	defer wm.deletingWorkspaceMu.RUnlock()
 
@@ -160,18 +160,18 @@ func (wm *WorkspaceManager) runUnlessWorkspaceDeleteInFlight(wsID string, fn fun
 // Creation tracking
 // ---------------------------------------------------------------------------
 
-// setCreatingWorkspace marks a workspace as being created.
-func (wm *WorkspaceManager) setCreatingWorkspace(wsID string) {
+// SetCreatingWorkspace marks a workspace as being created.
+func (wm *Manager) SetCreatingWorkspace(wsID string) {
 	wm.creatingWorkspaceIDs[wsID] = true
 }
 
-// clearCreatingWorkspace removes a workspace from the creation tracking set.
-func (wm *WorkspaceManager) clearCreatingWorkspace(wsID string) {
+// ClearCreatingWorkspace removes a workspace from the creation tracking set.
+func (wm *Manager) ClearCreatingWorkspace(wsID string) {
 	delete(wm.creatingWorkspaceIDs, wsID)
 }
 
-// creatingWorkspaceIDSet returns the full map of creating workspace IDs.
-func (wm *WorkspaceManager) creatingWorkspaceIDSet() map[string]bool {
+// CreatingWorkspaceIDSet returns the full map of creating workspace IDs.
+func (wm *Manager) CreatingWorkspaceIDSet() map[string]bool {
 	return wm.creatingWorkspaceIDs
 }
 
@@ -179,17 +179,17 @@ func (wm *WorkspaceManager) creatingWorkspaceIDSet() map[string]bool {
 // Local workspace save markers (reload suppression)
 // ---------------------------------------------------------------------------
 
-// markLocalWorkspaceSaveForID records a save marker for the given workspace ID.
-func (wm *WorkspaceManager) markLocalWorkspaceSaveForID(metadataRoot, wsID string) {
+// MarkLocalWorkspaceSaveForID records a save marker for the given workspace ID.
+func (wm *Manager) MarkLocalWorkspaceSaveForID(metadataRoot, wsID string) {
 	path := workspaceMetadataPath(metadataRoot, wsID)
 	if path == "" {
 		return
 	}
-	wm.markLocalWorkspaceSavePath(path)
+	wm.MarkLocalWorkspaceSavePath(path)
 }
 
-// markLocalWorkspaceSavePath records a save marker for the given file path.
-func (wm *WorkspaceManager) markLocalWorkspaceSavePath(path string) {
+// MarkLocalWorkspaceSavePath records a save marker for the given file path.
+func (wm *Manager) MarkLocalWorkspaceSavePath(path string) {
 	normalized := filepath.Clean(strings.TrimSpace(path))
 	if normalized == "" {
 		return
@@ -211,9 +211,9 @@ func (wm *WorkspaceManager) markLocalWorkspaceSavePath(path string) {
 	wm.localWorkspaceSaveMu.Unlock()
 }
 
-// shouldSuppressWorkspaceReload returns true if all given paths were recently
+// ShouldSuppressWorkspaceReload returns true if all given paths were recently
 // saved by this process and their on-disk content matches the saved fingerprint.
-func (wm *WorkspaceManager) shouldSuppressWorkspaceReload(paths []string, now time.Time) bool {
+func (wm *Manager) ShouldSuppressWorkspaceReload(paths []string, now time.Time) bool {
 	if len(paths) == 0 {
 		return false
 	}
@@ -266,7 +266,7 @@ func (wm *WorkspaceManager) shouldSuppressWorkspaceReload(paths []string, now ti
 }
 
 // ---------------------------------------------------------------------------
-// Helpers (previously on App)
+// Helpers
 // ---------------------------------------------------------------------------
 
 // workspaceMetadataPath returns the path to the workspace metadata JSON file.
@@ -282,7 +282,7 @@ func workspaceMetadataPath(metadataRoot, wsID string) string {
 // workspaceMetadataFingerprint returns a fingerprint for the file at path.
 // Note: there is a TOCTOU gap between Stat and ReadFile — if the file changes
 // between the two calls the fingerprint won't match the stored one, causing
-// shouldSuppressWorkspaceReload to return false (not suppress). This is the
+// ShouldSuppressWorkspaceReload to return false (not suppress). This is the
 // safe/conservative direction so the race is benign.
 func workspaceMetadataFingerprint(path string) (workspaceFileFingerprint, bool) {
 	info, err := os.Stat(path)

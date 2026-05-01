@@ -1,4 +1,4 @@
-package app
+package workspaces
 
 import (
 	"errors"
@@ -17,7 +17,7 @@ import (
 )
 
 // AddProject adds a new project to the registry.
-func (s *workspaceService) AddProject(path string) tea.Cmd {
+func (s *Service) AddProject(path string) tea.Cmd {
 	return func() tea.Msg {
 		logging.Info("Adding project: %s", path)
 
@@ -72,7 +72,7 @@ func (s *workspaceService) AddProject(path string) tea.Cmd {
 }
 
 // CreateWorkspace creates a new workspace.
-func (s *workspaceService) CreateWorkspace(project *data.Project, name, base string, assistant ...string) tea.Cmd {
+func (s *Service) CreateWorkspace(project *data.Project, name, base string, assistant ...string) tea.Cmd {
 	return func() (msg tea.Msg) {
 		var ws *data.Workspace
 		defer func() {
@@ -96,7 +96,7 @@ func (s *workspaceService) CreateWorkspace(project *data.Project, name, base str
 				Err: errors.New("missing project or workspace name"),
 			}
 		}
-		base = resolveBase(project.Path, base)
+		base = ResolveBase(project.Path, base)
 		ws = s.pendingWorkspace(project, name, base)
 		if ws == nil {
 			return messages.WorkspaceCreateFailed{
@@ -146,7 +146,7 @@ func (s *workspaceService) CreateWorkspace(project *data.Project, name, base str
 			}
 		}
 
-		if err := s.gitOps.CreateWorkspace(project.Path, workspacePath, branch, base); err != nil {
+		if err := s.GitOps.CreateWorkspace(project.Path, workspacePath, branch, base); err != nil {
 			return messages.WorkspaceCreateFailed{
 				Workspace: ws,
 				Err:       err,
@@ -155,8 +155,8 @@ func (s *workspaceService) CreateWorkspace(project *data.Project, name, base str
 
 		// Wait for .git file to exist (race condition from workspace creation)
 		gitPath := filepath.Join(workspacePath, ".git")
-		if err := waitForGitPath(gitPath, s.gitPathWaitTimeout); err != nil {
-			rollbackWorkspaceCreation(s.gitOps, project.Path, workspacePath, branch)
+		if err := waitForGitPath(gitPath, s.GitPathWaitTimeout); err != nil {
+			rollbackWorkspaceCreation(s.GitOps, project.Path, workspacePath, branch)
 			return messages.WorkspaceCreateFailed{
 				Workspace: ws,
 				Err:       err,
@@ -166,7 +166,7 @@ func (s *workspaceService) CreateWorkspace(project *data.Project, name, base str
 		// Save unified workspace
 		if s.store != nil {
 			if err := s.store.Save(ws); err != nil {
-				rollbackWorkspaceCreation(s.gitOps, project.Path, workspacePath, branch)
+				rollbackWorkspaceCreation(s.GitOps, project.Path, workspacePath, branch)
 				return messages.WorkspaceCreateFailed{
 					Workspace: ws,
 					Err:       err,
@@ -180,7 +180,7 @@ func (s *workspaceService) CreateWorkspace(project *data.Project, name, base str
 }
 
 // RunSetupAsync runs setup scripts asynchronously and returns a WorkspaceSetupComplete message.
-func (s *workspaceService) RunSetupAsync(ws *data.Workspace) tea.Cmd {
+func (s *Service) RunSetupAsync(ws *data.Workspace) tea.Cmd {
 	return func() tea.Msg {
 		if s == nil || s.scripts == nil {
 			return messages.WorkspaceSetupComplete{Workspace: ws}
@@ -193,7 +193,7 @@ func (s *workspaceService) RunSetupAsync(ws *data.Workspace) tea.Cmd {
 }
 
 // DeleteWorkspace deletes a workspace.
-func (s *workspaceService) DeleteWorkspace(project *data.Project, ws *data.Workspace) tea.Cmd {
+func (s *Service) DeleteWorkspace(project *data.Project, ws *data.Workspace) tea.Cmd {
 	// Defensive nil checks
 	if project == nil || ws == nil {
 		wsID := ""
@@ -274,14 +274,14 @@ func (s *workspaceService) DeleteWorkspace(project *data.Project, ws *data.Works
 			return fail("validate_managed_root", fmt.Errorf("workspace root %s is outside managed project root", ws.Root))
 		}
 
-		if err := s.gitOps.RemoveWorkspace(projectPath, ws.Root); err != nil {
+		if err := s.GitOps.RemoveWorkspace(projectPath, ws.Root); err != nil {
 			if cleanupErr := cleanupStaleWorkspacePath(ws.Root); cleanupErr != nil {
 				return fail("remove_worktree", errors.Join(err, cleanupErr))
 			}
 			logging.Warn("workspace delete stale cleanup workspace_id=%s workspace_root=%s remove_error=%v", wsID, ws.Root, err)
 		}
 
-		if err := s.gitOps.DeleteBranch(projectPath, ws.Branch); err != nil {
+		if err := s.GitOps.DeleteBranch(projectPath, ws.Branch); err != nil {
 			logging.Warn("workspace delete branch cleanup failed workspace_id=%s branch=%s error=%v", wsID, ws.Branch, err)
 		}
 		if s.store != nil {
@@ -305,7 +305,7 @@ func (s *workspaceService) DeleteWorkspace(project *data.Project, ws *data.Works
 }
 
 // RemoveProject removes a project from the registry (does not delete files).
-func (s *workspaceService) RemoveProject(project *data.Project) tea.Cmd {
+func (s *Service) RemoveProject(project *data.Project) tea.Cmd {
 	if project == nil {
 		return func() tea.Msg {
 			return messages.Error{Err: errors.New("missing project"), Context: errorContext(errorServiceWorkspace, "removing project")}
@@ -323,14 +323,16 @@ func (s *workspaceService) RemoveProject(project *data.Project) tea.Cmd {
 	}
 }
 
-func (s *workspaceService) Save(workspace *data.Workspace) error {
+// Save persists workspace metadata.
+func (s *Service) Save(workspace *data.Workspace) error {
 	if s == nil || s.store == nil {
 		return nil
 	}
 	return s.store.Save(workspace)
 }
 
-func (s *workspaceService) StopAll() {
+// StopAll stops all running scripts.
+func (s *Service) StopAll() {
 	if s == nil || s.scripts == nil {
 		return
 	}

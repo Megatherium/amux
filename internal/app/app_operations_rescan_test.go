@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -38,7 +39,7 @@ func TestRescanWorkspaces_ArchivesMissingWorkspaces(t *testing.T) {
 		t.Fatalf("Save ghost workspace: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, workspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, workspacesRoot)
 	app := &App{
 		workspaceService: workspaceService,
 	}
@@ -82,7 +83,7 @@ func TestRescanWorkspaces_IgnoresExternalWorktrees(t *testing.T) {
 	}
 	store := data.NewWorkspaceStore(filepath.Join(tmp, "workspaces-metadata"))
 
-	workspaceService := newWorkspaceService(registry, store, nil, workspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, workspacesRoot)
 	app := &App{workspaceService: workspaceService}
 
 	rescanMsg := app.rescanWorkspaces()()
@@ -137,7 +138,7 @@ func TestCreateWorkspaceMissingGitDoesNotPersist(t *testing.T) {
 	metadataRoot := filepath.Join(tmp, "workspaces-metadata")
 
 	store := data.NewWorkspaceStore(metadataRoot)
-	workspaceService := newWorkspaceService(nil, store, nil, workspacesRoot)
+	workspaceService := workspaces.NewService(nil, store, nil, workspacesRoot)
 	app := &App{
 		workspaceService: workspaceService,
 	}
@@ -146,7 +147,7 @@ func TestCreateWorkspaceMissingGitDoesNotPersist(t *testing.T) {
 
 	var removeCalled bool
 	var deleteCalled bool
-	workspaceService.gitOps = &mockGitOps{
+	workspaceService.GitOps = &mockGitOps{
 		createWorkspace: func(repoPath, workspacePath, branch, base string) error {
 			return os.MkdirAll(workspacePath, 0o755)
 		},
@@ -160,7 +161,7 @@ func TestCreateWorkspaceMissingGitDoesNotPersist(t *testing.T) {
 		},
 	}
 
-	workspaceService.gitPathWaitTimeout = 50 * time.Millisecond
+	workspaceService.GitPathWaitTimeout = 50 * time.Millisecond
 
 	msg := app.createWorkspace(project, "feature", "main", "claude")()
 	failed, ok := msg.(messages.WorkspaceCreateFailed)

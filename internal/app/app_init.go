@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/app/activity"
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/discovery"
@@ -39,9 +40,9 @@ func New(version, commit, date string) (*App, error) {
 	}
 
 	registry := data.NewRegistry(cfg.Paths.RegistryPath)
-	workspaces := data.NewWorkspaceStore(cfg.Paths.MetadataRoot)
+	workspaceStore := data.NewWorkspaceStore(cfg.Paths.MetadataRoot)
 	scripts := process.NewScriptRunner(cfg.PortStart, cfg.PortRangeSize)
-	workspaceService := newWorkspaceService(registry, workspaces, scripts, cfg.Paths.WorkspacesRoot)
+	workspaceService := workspaces.NewService(registry, workspaceStore, scripts, cfg.Paths.WorkspacesRoot)
 
 	modelReg, err := discovery.NewRegistry(cfg.Paths.Home)
 	if err != nil {
@@ -84,7 +85,7 @@ func New(version, commit, date string) (*App, error) {
 		tmuxOptions:            tmuxOpts,
 		tmuxActiveWorkspaceIDs: make(map[string]bool),
 		sessionActivityStates:  make(map[string]*activity.SessionState),
-		workspaceManager:       newWorkspaceManager(),
+		workspaceManager:       workspaces.NewManager(),
 		maxAttachedAgentTabs:   maxAttachedAgentTabsFromEnv(),
 	}
 	app.instanceID = newInstanceID()

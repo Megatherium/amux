@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -49,7 +50,7 @@ func TestLoadProjects_StoreFirstMerge(t *testing.T) {
 		t.Fatalf("Save stored workspace: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, workspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, workspacesRoot)
 	app := &App{
 		workspaceService: workspaceService,
 	}
@@ -122,7 +123,7 @@ func TestRescanWorkspaces_ImportsDiscoveredWorkspaces(t *testing.T) {
 	}
 
 	store := data.NewWorkspaceStore(filepath.Join(tmp, "workspaces-metadata"))
-	workspaceService := newWorkspaceService(registry, store, nil, workspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, workspacesRoot)
 	app := &App{
 		workspaceService: workspaceService,
 	}
@@ -246,7 +247,7 @@ func TestLoadProjects_PrimaryLegacyMetadataUsesDefaultAssistant(t *testing.T) {
 		t.Fatalf("WriteFile legacy metadata: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, "")
+	workspaceService := workspaces.NewService(registry, store, nil, "")
 	app := &App{workspaceService: workspaceService}
 
 	msg := app.loadProjects()()

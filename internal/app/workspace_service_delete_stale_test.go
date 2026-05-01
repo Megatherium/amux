@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -29,8 +30,8 @@ func TestDeleteWorkspaceStaleCleanupOnRemoveFailure(t *testing.T) {
 	project := data.NewProject(projectPath)
 	ws := data.NewWorkspace("feature", "feature", "main", projectPath, wsRoot)
 
-	svc := newWorkspaceService(nil, nil, nil, workspacesRoot)
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, workspacesRoot)
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	if _, ok := msg.(messages.WorkspaceDeleted); !ok {
@@ -64,8 +65,8 @@ func TestDeleteWorkspaceStaleCleanupRefusesWhenGitExists(t *testing.T) {
 	project := data.NewProject(projectPath)
 	ws := data.NewWorkspace("feature", "feature", "main", projectPath, wsRoot)
 
-	svc := newWorkspaceService(nil, nil, nil, workspacesRoot)
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, workspacesRoot)
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)

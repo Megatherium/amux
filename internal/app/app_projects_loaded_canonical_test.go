@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/git"
@@ -130,30 +131,27 @@ func TestHandleProjectsLoadedCanonicalRebindMigratesDirtyWorkspaceID(t *testing.
 			sidebar:         sidebar.NewTabbedSidebar(),
 			sidebarTerminal: sidebar.NewTerminalModel(),
 		},
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
+		workspaceService: workspaces.NewService(nil, nil, nil, ""),
 		projects:         []data.Project{*oldProject},
 		activeWorkspace:  activeOld,
 		activeProject:    oldProject,
 		showWelcome:      false,
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces: map[string]bool{
-				oldID: true,
-			},
-			persistToken: 1,
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DirtyWorkspaceIDs: map[string]bool{oldID: true},
+		}),
 	}
 
 	msg := messages.ProjectsLoaded{Projects: []data.Project{*newProject}}
 	app.handleProjectsLoaded(msg)
 
-	if app.wm().dirtyWorkspaces[oldID] {
+	if app.wm().IsWorkspaceDirty(oldID) {
 		t.Fatalf("expected old dirty workspace key %q to be migrated", oldID)
 	}
-	if !app.wm().dirtyWorkspaces[newID] {
+	if !app.wm().IsWorkspaceDirty(newID) {
 		t.Fatalf("expected new dirty workspace key %q after migration", newID)
 	}
 
-	cmd := app.handlePersistDebounce(persistDebounceMsg{token: app.wm().currentPersistToken()})
+	cmd := app.handlePersistDebounce(persistDebounceMsg{token: app.wm().CurrentPersistToken()})
 	if cmd == nil {
 		t.Fatal("expected persist debounce command for migrated dirty workspace")
 	}
@@ -300,7 +298,7 @@ func TestRebindActiveSelectionRewatchesActiveWorkspaceRootOnCanonicalIDChange(t 
 		ui: &UICompositor{
 			dashboard: dashboard.New(),
 		},
-		workspaceManager: &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
+		workspaceManager: workspaces.NewManager(),
 	}
 
 	app.rebindActiveSelection()

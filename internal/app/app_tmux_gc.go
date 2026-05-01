@@ -40,7 +40,7 @@ func (a *App) collectKnownWorkspaceIDs() map[string]bool {
 			ids[string(a.projects[i].Workspaces[j].ID())] = true
 		}
 	}
-	for id := range a.wm().creatingWorkspaceIDSet() {
+	for id := range a.wm().CreatingWorkspaceIDSet() {
 		ids[id] = true
 	}
 	return ids

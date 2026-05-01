@@ -4,29 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/git"
 	"github.com/andyrewlee/amux/internal/tmux"
 	"github.com/andyrewlee/amux/internal/update"
 )
-
-// ProjectRegistry is the minimal interface used by the app for project tracking.
-type ProjectRegistry interface {
-	Projects() ([]string, error)
-	AddProject(path string) error
-	RemoveProject(path string) error
-}
-
-// WorkspaceStore is the minimal interface used by the app for workspace metadata.
-type WorkspaceStore interface {
-	ListByRepo(repo string) ([]*data.Workspace, error)
-	ListByRepoIncludingArchived(repo string) ([]*data.Workspace, error)
-	LoadMetadataFor(workspace *data.Workspace) (bool, error)
-	UpsertFromDiscovery(workspace *data.Workspace) error
-	Save(workspace *data.Workspace) error
-	Delete(id data.WorkspaceID) error
-	ResolvedDefaultAssistant() string
-}
 
 // GitStatusService provides cached status reads and fresh refreshes.
 type GitStatusService interface {

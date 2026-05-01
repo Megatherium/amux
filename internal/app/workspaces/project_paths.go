@@ -1,4 +1,4 @@
-package app
+package workspaces
 
 import (
 	"path/filepath"

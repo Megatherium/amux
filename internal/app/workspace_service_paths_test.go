@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -51,7 +52,7 @@ func TestLoadProjects_SymlinkedWorkspacesRootKeepsMissingManagedWorkspace(t *tes
 		t.Fatalf("Save managed workspace: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, symlinkedWorkspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, symlinkedWorkspacesRoot)
 	app := &App{workspaceService: workspaceService}
 
 	msg := app.loadProjects()()
@@ -128,7 +129,7 @@ func TestLoadProjects_SymlinkedWorkspacesRootKeepsMissingResolvedManagedWorkspac
 		t.Fatalf("Save managed workspace: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, symlinkedWorkspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, symlinkedWorkspacesRoot)
 	app := &App{workspaceService: workspaceService}
 
 	msg := app.loadProjects()()
@@ -200,7 +201,7 @@ func TestLoadProjects_BrokenSymlinkedWorkspacesRootKeepsMissingResolvedManagedWo
 		t.Fatalf("Save managed workspace: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, symlinkedWorkspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, symlinkedWorkspacesRoot)
 	app := &App{workspaceService: workspaceService}
 
 	msg := app.loadProjects()()
@@ -277,7 +278,7 @@ func TestWorkspaceVisibilityAcrossRepoAliasBasenameChange(t *testing.T) {
 		t.Fatalf("Save managed workspace: %v", err)
 	}
 
-	workspaceService := newWorkspaceService(registry, store, nil, workspacesRoot)
+	workspaceService := workspaces.NewService(registry, store, nil, workspacesRoot)
 	app := &App{workspaceService: workspaceService}
 
 	msg := app.loadProjects()()

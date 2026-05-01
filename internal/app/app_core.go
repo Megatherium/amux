@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/app/activity"
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/discovery"
@@ -40,7 +41,7 @@ type prefixTimeoutMsg struct {
 type App struct {
 	// Configuration
 	config           *config.Config
-	workspaceService *workspaceService
+	workspaceService *workspaces.Service
 	gitStatus        GitStatusService
 	tmuxService      TmuxOps
 	updateService    UpdateService
@@ -106,7 +107,7 @@ type App struct {
 	instanceID                string                            // Immutable after init; safe for read-only access from Cmd goroutines.
 
 	// Workspace lifecycle manager
-	workspaceManager *WorkspaceManager
+	workspaceManager *workspaces.Manager
 
 	// Terminal capabilities
 	keyboardEnhancements tea.KeyboardEnhancementsMsg
@@ -127,9 +128,9 @@ type App struct {
 
 // wm returns the WorkspaceManager, lazily initializing it if nil.
 // This allows test code to construct App without explicitly setting workspaceManager.
-func (a *App) wm() *WorkspaceManager {
+func (a *App) wm() *workspaces.Manager {
 	if a.workspaceManager == nil {
-		a.workspaceManager = newWorkspaceManager()
+		a.workspaceManager = workspaces.NewManager()
 	}
 	return a.workspaceManager
 }

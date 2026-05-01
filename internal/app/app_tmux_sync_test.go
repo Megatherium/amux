@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 )
 
@@ -72,11 +73,11 @@ func TestHandleTmuxTabsSyncResult_SaveAndDeleteMarkAreAtomic(t *testing.T) {
 	}}
 
 	store := newBlockingWorkspaceStore()
-	svc := newWorkspaceService(nil, store, nil, "")
+	svc := workspaces.NewService(nil, store, nil, "")
 	app := &App{
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
-		workspaceManager: &WorkspaceManager{deletingWorkspaceIDs: make(map[string]bool)},
+		workspaceManager: workspaces.NewManager(),
 	}
 
 	cmds := app.handleTmuxTabsSyncResult(tmuxTabsSyncResult{

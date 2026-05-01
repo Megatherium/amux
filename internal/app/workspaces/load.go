@@ -1,4 +1,4 @@
-package app
+package workspaces
 
 import (
 	"path/filepath"
@@ -14,7 +14,7 @@ import (
 )
 
 // LoadProjects loads all registered projects and their workspaces.
-func (s *workspaceService) LoadProjects() tea.Cmd {
+func (s *Service) LoadProjects() tea.Cmd {
 	return func() tea.Msg {
 		if s == nil || s.registry == nil {
 			return messages.ProjectsLoaded{}
@@ -75,7 +75,7 @@ func (s *workspaceService) LoadProjects() tea.Cmd {
 						path,                // repo
 						path,                // root (same as repo for primary)
 					)
-					primaryWs.Assistant = s.resolvedDefaultAssistant()
+					primaryWs.Assistant = s.ResolvedDefaultAssistant()
 					// Load any persisted UI state (OpenTabs, etc.) for the primary checkout
 					if s.store != nil {
 						found, loadErr := s.store.LoadMetadataFor(primaryWs)
@@ -101,7 +101,7 @@ func (s *workspaceService) LoadProjects() tea.Cmd {
 }
 
 // RescanWorkspaces discovers git worktrees and updates the workspace store.
-func (s *workspaceService) RescanWorkspaces() tea.Cmd {
+func (s *Service) RescanWorkspaces() tea.Cmd {
 	return func() tea.Msg {
 		if s == nil || s.registry == nil {
 			return messages.RefreshDashboard{}
@@ -134,7 +134,7 @@ func (s *workspaceService) RescanWorkspaces() tea.Cmd {
 				// metadata takes precedence if non-empty. This is intentional — stored
 				// metadata is authoritative over the discovery default.
 				if strings.TrimSpace(ws.Assistant) == "" {
-					ws.Assistant = s.resolvedDefaultAssistant()
+					ws.Assistant = s.ResolvedDefaultAssistant()
 				}
 				discoveredSet[string(ws.ID())] = true
 				if s.store != nil {

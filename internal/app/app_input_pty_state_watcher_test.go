@@ -10,6 +10,8 @@ import (
 
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/messages"
+
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 )
 
 func TestHandleStateWatcherEvent_SuppressesSelfOriginatedWorkspaceReload(t *testing.T) {
@@ -22,7 +24,7 @@ func TestHandleStateWatcherEvent_SuppressesSelfOriginatedWorkspaceReload(t *test
 		t.Fatalf("WriteFile(localPath): %v", err)
 	}
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
+		workspaceService: workspaces.NewService(nil, nil, nil, ""),
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
@@ -62,7 +64,7 @@ func TestHandleStateWatcherEvent_DoesNotSuppressExternalWorkspaceReload(t *testi
 		t.Fatalf("WriteFile(localPath): %v", err)
 	}
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
+		workspaceService: workspaces.NewService(nil, nil, nil, ""),
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},
@@ -106,7 +108,7 @@ func TestHandleStateWatcherEvent_DoesNotSuppressSamePathWhenFileChanged(t *testi
 	}
 
 	app := &App{
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
+		workspaceService: workspaces.NewService(nil, nil, nil, ""),
 		config: &config.Config{
 			Paths: &config.Paths{MetadataRoot: metadataRoot},
 		},

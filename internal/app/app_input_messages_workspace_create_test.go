@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/dashboard"
@@ -16,7 +17,7 @@ func TestHandleCreateWorkspaceSkipsPendingTrackingWithoutService(t *testing.T) {
 		ui: &UICompositor{
 			dashboard: dashboard.New(),
 		},
-		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
+		workspaceManager: workspaces.NewManager(),
 		// workspaceService intentionally nil
 	}
 
@@ -30,8 +31,8 @@ func TestHandleCreateWorkspaceSkipsPendingTrackingWithoutService(t *testing.T) {
 
 	cmds := app.handleCreateWorkspace(msg)
 	// Should not panic and should not track any pending IDs
-	if len(app.wm().creatingWorkspaceIDs) != 0 {
-		t.Fatalf("expected no pending IDs without workspace service, got %d", len(app.wm().creatingWorkspaceIDs))
+	if len(app.wm().CreatingWorkspaceIDSet()) != 0 {
+		t.Fatalf("expected no pending IDs without workspace service, got %d", len(app.wm().CreatingWorkspaceIDSet()))
 	}
 	// Should still return the createWorkspace cmd (which will be nil since service is nil)
 	_ = cmds
@@ -42,9 +43,9 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 
 	workspacesRoot := "/tmp/workspaces"
 	store := data.NewWorkspaceStore(t.TempDir())
-	svc := newWorkspaceService(nil, store, nil, workspacesRoot)
-	svc.gitPathWaitTimeout = 50 * time.Millisecond
-	svc.gitOps = &mockGitOps{
+	svc := workspaces.NewService(nil, store, nil, workspacesRoot)
+	svc.GitPathWaitTimeout = 50 * time.Millisecond
+	svc.GitOps = &mockGitOps{
 		createWorkspace: func(repoPath, workspacePath, branch, base string) error {
 			return gitErr
 		},
@@ -54,7 +55,7 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 		ui: &UICompositor{
 			dashboard: dashboard.New(),
 		},
-		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
+		workspaceManager: workspaces.NewManager(),
 		workspaceService: svc,
 	}
 
@@ -68,19 +69,19 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 
 	// Step 1: handleCreateWorkspace should track the pending ID
 	cmds := app.handleCreateWorkspace(msg)
-	if len(app.wm().creatingWorkspaceIDs) != 1 {
-		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.wm().creatingWorkspaceIDs))
+	if len(app.wm().CreatingWorkspaceIDSet()) != 1 {
+		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.wm().CreatingWorkspaceIDSet()))
 	}
 
 	// Capture the tracked ID
 	var trackedID string
-	for id := range app.wm().creatingWorkspaceIDs {
+	for id := range app.wm().CreatingWorkspaceIDSet() {
 		trackedID = id
 	}
 
 	// Verify tracked ID matches expected path
 	expectedPath := filepath.Join(workspacesRoot, project.Name, "feature")
-	pending := svc.pendingWorkspace(project, "feature", "main")
+	pending := svc.PendingWorkspace(project, "feature", "main")
 	if pending == nil {
 		t.Fatal("expected non-nil pending workspace")
 	}
@@ -103,8 +104,8 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 		if failed, ok := result.(messages.WorkspaceCreateFailed); ok {
 			// Step 3: handleWorkspaceCreateFailed should clear the pending ID
 			app.handleWorkspaceCreateFailed(failed)
-			if len(app.wm().creatingWorkspaceIDs) != 0 {
-				t.Fatalf("expected 0 pending IDs after failure, got %d", len(app.wm().creatingWorkspaceIDs))
+			if len(app.wm().CreatingWorkspaceIDSet()) != 0 {
+				t.Fatalf("expected 0 pending IDs after failure, got %d", len(app.wm().CreatingWorkspaceIDSet()))
 			}
 			// Verify the failure workspace ID matches what was tracked
 			if failed.Workspace != nil && string(failed.Workspace.ID()) != trackedID {
@@ -120,13 +121,13 @@ func TestHandleCreateWorkspaceTracksAndClearsPendingIDOnFailure(t *testing.T) {
 func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 	workspacesRoot := "/tmp/workspaces"
 	store := data.NewWorkspaceStore(t.TempDir())
-	svc := newWorkspaceService(nil, store, nil, workspacesRoot)
+	svc := workspaces.NewService(nil, store, nil, workspacesRoot)
 
 	app := &App{
 		ui: &UICompositor{
 			dashboard: dashboard.New(),
 		},
-		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: make(map[string]bool)},
+		workspaceManager: workspaces.NewManager(),
 		workspaceService: svc,
 	}
 
@@ -139,8 +140,8 @@ func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 	}
 
 	cmds := app.handleCreateWorkspace(msg)
-	if len(app.wm().creatingWorkspaceIDs) != 1 {
-		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.wm().creatingWorkspaceIDs))
+	if len(app.wm().CreatingWorkspaceIDSet()) != 1 {
+		t.Fatalf("expected 1 pending ID after handleCreateWorkspace, got %d", len(app.wm().CreatingWorkspaceIDSet()))
 	}
 
 	for _, cmd := range cmds {
@@ -156,8 +157,8 @@ func TestHandleCreateWorkspaceClearsPendingIDOnValidationFailure(t *testing.T) {
 			t.Fatal("expected workspace in validation failure")
 		}
 		app.handleWorkspaceCreateFailed(failed)
-		if len(app.wm().creatingWorkspaceIDs) != 0 {
-			t.Fatalf("expected 0 pending IDs after validation failure, got %d", len(app.wm().creatingWorkspaceIDs))
+		if len(app.wm().CreatingWorkspaceIDSet()) != 0 {
+			t.Fatalf("expected 0 pending IDs after validation failure, got %d", len(app.wm().CreatingWorkspaceIDSet()))
 		}
 		return
 	}

@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/ui/common"
@@ -29,7 +30,7 @@ func (a *App) persistAllWorkspacesNow() {
 			}
 			ws.OpenTabs = tabs
 			ws.ActiveTabIndex = activeIdx
-			snap := snapshotWorkspaceForSave(ws)
+			snap := workspaces.SnapshotWorkspaceForSave(ws)
 			if err := a.workspaceService.Save(snap); err != nil {
 				logging.Warn("Failed to persist workspace on shutdown: %v", err)
 			} else {
@@ -38,7 +39,7 @@ func (a *App) persistAllWorkspacesNow() {
 		}
 	}
 	// Clear dirty set since we just saved everything
-	wm.clearAllDirty()
+	wm.ClearAllDirty()
 }
 
 // persistDebounceMsg is sent after the debounce period to trigger actual save.
@@ -52,18 +53,18 @@ func (a *App) persistWorkspaceTabs(wsID string) tea.Cmd {
 		return nil
 	}
 	wm := a.wm()
-	if wm.isWorkspaceDeleteInFlight(wsID) {
+	if wm.IsWorkspaceDeleteInFlight(wsID) {
 		return nil
 	}
-	wm.markWorkspaceDirty(wsID)
-	token := wm.nextPersistToken()
+	wm.MarkWorkspaceDirty(wsID)
+	token := wm.NextPersistToken()
 	return common.SafeTick(persistDebounce, func(t time.Time) tea.Msg {
 		return persistDebounceMsg{token: token}
 	})
 }
 
 func (a *App) migrateDirtyWorkspaceID(oldID, newID string) {
-	a.wm().migrateDirtyWorkspaceID(oldID, newID)
+	a.wm().MigrateDirtyWorkspaceID(oldID, newID)
 }
 
 // persistActiveWorkspaceTabs is a convenience that persists the active workspace's tabs.
@@ -77,22 +78,22 @@ func (a *App) persistActiveWorkspaceTabs() tea.Cmd {
 func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
 	wm := a.wm()
 	// Ignore stale tokens (newer persist request superseded this one)
-	if msg.token != wm.currentPersistToken() {
+	if msg.token != wm.CurrentPersistToken() {
 		return nil
 	}
 	if a.ui.center == nil || a.workspaceService == nil {
 		return nil
 	}
-	if wm.dirtyWorkspaceCount() == 0 {
+	if wm.DirtyWorkspaceCount() == 0 {
 		return nil
 	}
 
 	// Collect snapshots for all dirty workspaces
-	dirty := wm.dirtyWorkspaceIDs()
+	dirty := wm.DirtyWorkspaceIDs()
 	var snapshots []*data.Workspace
 	processed := make(map[string]bool, len(dirty))
 	for wsID := range dirty {
-		if wm.isWorkspaceDeleteInFlight(wsID) {
+		if wm.IsWorkspaceDeleteInFlight(wsID) {
 			// Keep dirty marker while delete is in flight. If delete fails, the
 			// marker must remain so pending workspace state can still be saved.
 			continue
@@ -106,12 +107,12 @@ func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
 		tabs, activeIdx := a.ui.center.GetTabsInfoForWorkspace(wsID)
 		ws.OpenTabs = tabs
 		ws.ActiveTabIndex = activeIdx
-		snapshots = append(snapshots, snapshotWorkspaceForSave(ws))
+		snapshots = append(snapshots, workspaces.SnapshotWorkspaceForSave(ws))
 		processed[wsID] = true
 	}
 	// Clear only workspaces processed above; keep in-flight delete markers dirty.
 	for wsID := range processed {
-		wm.clearWorkspaceDirty(wsID)
+		wm.ClearWorkspaceDirty(wsID)
 	}
 
 	if len(snapshots) == 0 {
@@ -122,7 +123,7 @@ func (a *App) handlePersistDebounce(msg persistDebounceMsg) tea.Cmd {
 		for _, snap := range snapshots {
 			wsID := string(snap.ID())
 			var saveErr error
-			saved := wm.runUnlessWorkspaceDeleteInFlight(wsID, func() {
+			saved := wm.RunUnlessWorkspaceDeleteInFlight(wsID, func() {
 				saveErr = service.Save(snap)
 			})
 			if !saved {

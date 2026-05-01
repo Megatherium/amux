@@ -1,8 +1,9 @@
-package app
+package workspaces
 
 import "github.com/andyrewlee/amux/internal/data"
 
-func snapshotWorkspaceForSave(ws *data.Workspace) *data.Workspace {
+// SnapshotWorkspaceForSave creates a shallow copy of a workspace safe for serialization.
+func SnapshotWorkspaceForSave(ws *data.Workspace) *data.Workspace {
 	if ws == nil {
 		return nil
 	}

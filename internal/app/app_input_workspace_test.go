@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/center"
@@ -21,10 +22,10 @@ func TestHandleWorkspaceDeletedClearsDirtyWorkspaceMarker(t *testing.T) {
 			sidebar:         sidebar.NewTabbedSidebar(),
 			sidebarTerminal: sidebar.NewTerminalModel(),
 		},
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      map[string]bool{wsID: true},
-			deletingWorkspaceIDs: map[string]bool{wsID: true},
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DirtyWorkspaceIDs:    map[string]bool{wsID: true},
+			DeletingWorkspaceIDs: map[string]bool{wsID: true},
+		}),
 	}
 
 	app.handleWorkspaceDeleted(messages.WorkspaceDeleted{Workspace: ws})
@@ -32,7 +33,7 @@ func TestHandleWorkspaceDeletedClearsDirtyWorkspaceMarker(t *testing.T) {
 	if app.isWorkspaceDeleteInFlight(wsID) {
 		t.Fatal("expected delete-in-flight marker to be cleared on delete success")
 	}
-	if app.wm().isWorkspaceDirty(wsID) {
+	if app.wm().IsWorkspaceDirty(wsID) {
 		t.Fatal("expected dirty workspace marker to be cleared on delete success")
 	}
 }

@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
 
 func TestCreateWorkspaceNilProjectReturnsFailed(t *testing.T) {
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
 	cmd := svc.CreateWorkspace(nil, "feature", "main")
 	msg := cmd()
 	failed, ok := msg.(messages.WorkspaceCreateFailed)
@@ -29,7 +30,7 @@ func TestCreateWorkspaceNilProjectReturnsFailed(t *testing.T) {
 
 func TestCreateWorkspaceEmptyNameReturnsFailed(t *testing.T) {
 	project := data.NewProject("/tmp/repo")
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
 	cmd := svc.CreateWorkspace(project, "  ", "main")
 	msg := cmd()
 	failed, ok := msg.(messages.WorkspaceCreateFailed)
@@ -48,8 +49,8 @@ func TestCreateWorkspaceGitFailureIncludesPendingWorkspace(t *testing.T) {
 	gitErr := errors.New("git worktree add failed")
 
 	project := data.NewProject("/tmp/repo")
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = &mockGitOps{
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = &mockGitOps{
 		createWorkspace: func(repoPath, workspacePath, branch, base string) error {
 			return gitErr
 		},
@@ -75,8 +76,8 @@ func TestCreateWorkspaceGitFailureIncludesPendingWorkspace(t *testing.T) {
 }
 
 func TestCreateWorkspaceEmptyBaseDefaultsToDefaultBranch(t *testing.T) {
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = &mockGitOps{
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = &mockGitOps{
 		createWorkspace: func(repoPath, workspacePath, branch, base string) error {
 			return errors.New("stop")
 		},
@@ -101,7 +102,7 @@ func TestCreateWorkspaceEmptyBaseDefaultsToDefaultBranch(t *testing.T) {
 
 func TestResolveBaseReturnsExplicitOverride(t *testing.T) {
 	// An explicit base is returned as-is, regardless of the repo.
-	got := resolveBase("/nonexistent", "feature")
+	got := workspaces.ResolveBase("/nonexistent", "feature")
 	if got != "feature" {
 		t.Fatalf("expected 'feature', got %q", got)
 	}
@@ -109,7 +110,7 @@ func TestResolveBaseReturnsExplicitOverride(t *testing.T) {
 
 func TestResolveBaseFallsBackToHEADForNonRepo(t *testing.T) {
 	// A non-repo path can't determine a default branch; fallback is HEAD.
-	got := resolveBase("/nonexistent", "")
+	got := workspaces.ResolveBase("/nonexistent", "")
 	if got != "HEAD" {
 		t.Fatalf("expected 'HEAD', got %q", got)
 	}
@@ -128,7 +129,7 @@ func TestResolveBaseDetectsMainBranch(t *testing.T) {
 
 	// With a real repo that has a "main" branch, empty base should resolve
 	// to "main" — not "HEAD".
-	got := resolveBase(repo, "")
+	got := workspaces.ResolveBase(repo, "")
 	if got != "main" {
 		t.Fatalf("expected 'main', got %q", got)
 	}
@@ -150,8 +151,8 @@ func TestCreateWorkspaceEmptyBaseResolvesToMainBranch(t *testing.T) {
 	runGit(t, repo, "checkout", "-b", "feature-ui")
 
 	var capturedBase string
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = &mockGitOps{
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = &mockGitOps{
 		createWorkspace: func(repoPath, workspacePath, branch, base string) error {
 			capturedBase = base
 			return errors.New("stop")
@@ -172,16 +173,16 @@ func TestCreateWorkspacePendingMatchesAppSidePath(t *testing.T) {
 
 	workspacesRoot := "/tmp/workspaces"
 	project := data.NewProject("/tmp/repo")
-	svc := newWorkspaceService(nil, nil, nil, workspacesRoot)
-	svc.gitPathWaitTimeout = 50 * time.Millisecond
-	svc.gitOps = &mockGitOps{
+	svc := workspaces.NewService(nil, nil, nil, workspacesRoot)
+	svc.GitPathWaitTimeout = 50 * time.Millisecond
+	svc.GitOps = &mockGitOps{
 		createWorkspace: func(repoPath, workspacePath, branch, base string) error {
 			return gitErr
 		},
 	}
 
 	// Get the pending workspace the app side would use
-	pending := svc.pendingWorkspace(project, "feature", "main")
+	pending := svc.PendingWorkspace(project, "feature", "main")
 	if pending == nil {
 		t.Fatal("expected non-nil pending workspace")
 	}

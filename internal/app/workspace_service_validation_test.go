@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -13,7 +14,7 @@ import (
 func TestAddProjectRejectsInvalidPath(t *testing.T) {
 	tmp := t.TempDir()
 	registry := data.NewRegistry(filepath.Join(tmp, "projects.json"))
-	service := newWorkspaceService(registry, nil, nil, "")
+	service := workspaces.NewService(registry, nil, nil, "")
 	app := &App{workspaceService: service}
 
 	filePath := filepath.Join(tmp, "not-a-directory")
@@ -41,7 +42,7 @@ func TestAddProjectRegistersGitRepo(t *testing.T) {
 
 	tmp := t.TempDir()
 	registry := data.NewRegistry(filepath.Join(tmp, "projects.json"))
-	service := newWorkspaceService(registry, nil, nil, "")
+	service := workspaces.NewService(registry, nil, nil, "")
 	app := &App{workspaceService: service}
 
 	msg := app.addProject(repo)()
@@ -72,7 +73,7 @@ func TestAddProjectExpandsTildePath(t *testing.T) {
 
 	tmp := t.TempDir()
 	registry := data.NewRegistry(filepath.Join(tmp, "projects.json"))
-	service := newWorkspaceService(registry, nil, nil, "")
+	service := workspaces.NewService(registry, nil, nil, "")
 	app := &App{workspaceService: service}
 
 	msg := app.addProject("~/repo")()
@@ -101,8 +102,8 @@ func TestCreateWorkspaceRejectsInvalidName(t *testing.T) {
 	}
 
 	project := data.NewProject("/tmp/repo")
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.CreateWorkspace(project, "bad/name", "main")()
 
 	failed, ok := msg.(messages.WorkspaceCreateFailed)
@@ -130,8 +131,8 @@ func TestCreateWorkspaceRejectsInvalidBaseRef(t *testing.T) {
 	}
 
 	project := data.NewProject("/tmp/repo")
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.CreateWorkspace(project, "feature", "bad ref")()
 
 	failed, ok := msg.(messages.WorkspaceCreateFailed)
@@ -161,8 +162,8 @@ func TestCreateWorkspaceRejectsPathOutsideManagedRoot(t *testing.T) {
 	// Use a project name with ".." to try to escape the managed root.
 	// projectNameSegment rejects ".." in the name, so isManagedWorkspacePathForProject fails.
 	project := &data.Project{Name: "../escape", Path: "/tmp/repo"}
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.CreateWorkspace(project, "feature", "main")()
 
 	failed, ok := msg.(messages.WorkspaceCreateFailed)

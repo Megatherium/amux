@@ -3,6 +3,7 @@ package app
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -77,7 +78,7 @@ func (a *App) handleTmuxTabsSyncResult(msg tmuxTabsSyncResult) []tea.Cmd {
 		}
 	}
 	if changed {
-		wsSnapshot := snapshotWorkspaceForSave(ws)
+		wsSnapshot := workspaces.SnapshotWorkspaceForSave(ws)
 		wsID := string(wsSnapshot.ID())
 		cmds = append(cmds, func() tea.Msg {
 			var saveErr error

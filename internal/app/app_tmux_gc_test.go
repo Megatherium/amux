@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/tmux"
 )
@@ -63,7 +64,9 @@ func TestCollectKnownWorkspaceIDs_IncludesCreating(t *testing.T) {
 	ws := data.Workspace{Repo: "/repo-c", Root: "/repo-c/ws-create"}
 	creatingID := string(ws.ID())
 	app := &App{
-		workspaceManager: &WorkspaceManager{creatingWorkspaceIDs: map[string]bool{creatingID: true}},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			CreatingWorkspaceIDs: map[string]bool{creatingID: true},
+		}),
 	}
 
 	ids := app.collectKnownWorkspaceIDs()

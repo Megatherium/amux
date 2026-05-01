@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/center"
@@ -45,7 +46,7 @@ func TestPersistAllWorkspacesNowSavesExplicitlyEmptyTabs(t *testing.T) {
 		t.Fatal("expected HasWorkspaceState=true after close")
 	}
 
-	svc := newWorkspaceService(nil, store, nil, "")
+	svc := workspaces.NewService(nil, store, nil, "")
 
 	// Clear old tabs from in-memory workspace before persist
 	ws.OpenTabs = nil
@@ -55,7 +56,7 @@ func TestPersistAllWorkspacesNowSavesExplicitlyEmptyTabs(t *testing.T) {
 		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "p", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
-		workspaceManager: &WorkspaceManager{dirtyWorkspaces: make(map[string]bool)},
+		workspaceManager: workspaces.NewManager(),
 	}
 
 	app.persistAllWorkspacesNow()
@@ -86,17 +87,16 @@ func TestPersistAllWorkspacesNowSavesDeleteInFlightWorkspace(t *testing.T) {
 	}
 	c.AddTab(tab)
 
-	svc := newWorkspaceService(nil, store, nil, "")
+	svc := workspaces.NewService(nil, store, nil, "")
 	app := &App{
 		ui: &UICompositor{
 			center: c,
 		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "p", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      make(map[string]bool),
-			deletingWorkspaceIDs: map[string]bool{wsID: true},
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DeletingWorkspaceIDs: map[string]bool{wsID: true},
+		}),
 	}
 
 	app.persistAllWorkspacesNow()
@@ -119,27 +119,25 @@ func TestPersistWorkspaceTabsInitializesDirtyMap(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected a debounce command, got nil")
 	}
-	if app.wm().dirtyWorkspaces == nil {
-		t.Fatal("expected dirtyWorkspaces to be initialized")
-	}
-	if !app.wm().dirtyWorkspaces["ws-123"] {
+	// wm() lazily initializes when nil, so dirty workspaces will be initialized
+	_ = app.wm().DirtyWorkspaceCount()
+	if !app.wm().IsWorkspaceDirty("ws-123") {
 		t.Fatal("expected ws-123 to be marked dirty")
 	}
 }
 
 func TestPersistWorkspaceTabsSkipsDeleteInFlightWorkspace(t *testing.T) {
 	app := &App{
-		workspaceManager: &WorkspaceManager{
-			dirtyWorkspaces:      make(map[string]bool),
-			deletingWorkspaceIDs: map[string]bool{"ws-123": true},
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DeletingWorkspaceIDs: map[string]bool{"ws-123": true},
+		}),
 	}
 
 	cmd := app.persistWorkspaceTabs("ws-123")
 	if cmd != nil {
 		t.Fatal("expected no debounce command for deleting workspace")
 	}
-	if app.wm().dirtyWorkspaces["ws-123"] {
+	if app.wm().IsWorkspaceDirty("ws-123") {
 		t.Fatal("did not expect deleting workspace to be marked dirty")
 	}
 }
@@ -150,13 +148,15 @@ func TestHandlePersistDebounceSkipsWhenPersistenceDependenciesMissing(t *testing
 		ui: &UICompositor{
 			center: nil,
 		},
-		workspaceService: newWorkspaceService(nil, nil, nil, ""),
-		workspaceManager: &WorkspaceManager{
-			persistToken:    1,
-			dirtyWorkspaces: map[string]bool{"ws": true},
-		},
+		workspaceService: workspaces.NewService(nil, nil, nil, ""),
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DirtyWorkspaceIDs: map[string]bool{"ws": true},
+		}),
 	}
-	cmd := app.handlePersistDebounce(persistDebounceMsg{token: 1})
+	// Force persist token
+	_ = app.wm().NextPersistToken()
+
+	cmd := app.handlePersistDebounce(persistDebounceMsg{token: app.wm().CurrentPersistToken()})
 	if cmd != nil {
 		t.Fatal("expected nil cmd when center is nil")
 	}
@@ -167,12 +167,13 @@ func TestHandlePersistDebounceSkipsWhenPersistenceDependenciesMissing(t *testing
 			center: center.New(nil),
 		},
 		workspaceService: nil,
-		workspaceManager: &WorkspaceManager{
-			persistToken:    1,
-			dirtyWorkspaces: map[string]bool{"ws": true},
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DirtyWorkspaceIDs: map[string]bool{"ws": true},
+		}),
 	}
-	cmd2 := app2.handlePersistDebounce(persistDebounceMsg{token: 1})
+	_ = app2.wm().NextPersistToken()
+
+	cmd2 := app2.handlePersistDebounce(persistDebounceMsg{token: app2.wm().CurrentPersistToken()})
 	if cmd2 != nil {
 		t.Fatal("expected nil cmd when workspaceService is nil")
 	}
@@ -184,7 +185,7 @@ func TestHandlePersistDebounceSkipsDeleteInFlightWorkspace(t *testing.T) {
 
 	storeRoot := t.TempDir()
 	store := data.NewWorkspaceStore(storeRoot)
-	svc := newWorkspaceService(nil, store, nil, "")
+	svc := workspaces.NewService(nil, store, nil, "")
 
 	app := &App{
 		ui: &UICompositor{
@@ -192,19 +193,17 @@ func TestHandlePersistDebounceSkipsDeleteInFlightWorkspace(t *testing.T) {
 		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
-		workspaceManager: &WorkspaceManager{
-			persistToken:          1,
-			dirtyWorkspaces:       map[string]bool{wsID: true},
-			deletingWorkspaceIDs:  map[string]bool{wsID: true},
-			localWorkspaceSavesAt: make(map[string]localWorkspaceSaveMarker),
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DirtyWorkspaceIDs:    map[string]bool{wsID: true},
+			DeletingWorkspaceIDs: map[string]bool{wsID: true},
+		}),
 	}
 
 	cmd := app.handlePersistDebounce(persistDebounceMsg{token: 1})
 	if cmd != nil {
 		t.Fatal("expected nil cmd when only dirty workspace is delete-in-flight")
 	}
-	if !app.wm().dirtyWorkspaces[wsID] {
+	if !app.wm().IsWorkspaceDirty(wsID) {
 		t.Fatal("expected dirty marker to remain while workspace delete is in-flight")
 	}
 	if _, err := store.Load(ws.ID()); !os.IsNotExist(err) {
@@ -218,7 +217,7 @@ func TestDeleteFailureRequeuesAndDebouncedPersistSavesWorkspace(t *testing.T) {
 
 	storeRoot := t.TempDir()
 	store := data.NewWorkspaceStore(storeRoot)
-	svc := newWorkspaceService(nil, store, nil, "")
+	svc := workspaces.NewService(nil, store, nil, "")
 
 	c := center.New(nil)
 	c.SetWorkspace(ws)
@@ -235,18 +234,16 @@ func TestDeleteFailureRequeuesAndDebouncedPersistSavesWorkspace(t *testing.T) {
 		},
 		workspaceService: svc,
 		projects:         []data.Project{{Name: "repo", Path: "/repo", Workspaces: []data.Workspace{*ws}}},
-		workspaceManager: &WorkspaceManager{
-			persistToken:          1,
-			dirtyWorkspaces:       map[string]bool{wsID: true},
-			deletingWorkspaceIDs:  map[string]bool{wsID: true},
-			localWorkspaceSavesAt: make(map[string]localWorkspaceSaveMarker),
-		},
+		workspaceManager: workspaces.NewManagerWithConfig(workspaces.ManagerConfig{
+			DirtyWorkspaceIDs:    map[string]bool{wsID: true},
+			DeletingWorkspaceIDs: map[string]bool{wsID: true},
+		}),
 	}
 
 	if cmd := app.handlePersistDebounce(persistDebounceMsg{token: 1}); cmd != nil {
 		t.Fatal("expected nil cmd while workspace delete is in-flight")
 	}
-	if !app.wm().dirtyWorkspaces[wsID] {
+	if !app.wm().IsWorkspaceDirty(wsID) {
 		t.Fatal("expected dirty marker to remain while delete is in-flight")
 	}
 
@@ -260,7 +257,7 @@ func TestDeleteFailureRequeuesAndDebouncedPersistSavesWorkspace(t *testing.T) {
 		t.Fatal("expected delete-in-flight marker to be cleared on delete failure")
 	}
 
-	persistCmd := app.handlePersistDebounce(persistDebounceMsg{token: app.wm().currentPersistToken()})
+	persistCmd := app.handlePersistDebounce(persistDebounceMsg{token: app.wm().CurrentPersistToken()})
 	if persistCmd == nil {
 		t.Fatal("expected debounced persistence command after delete failure requeue")
 	}
@@ -275,7 +272,7 @@ func TestDeleteFailureRequeuesAndDebouncedPersistSavesWorkspace(t *testing.T) {
 	if len(loaded.OpenTabs) == 0 {
 		t.Fatal("expected workspace tabs to be persisted after delete failure requeue")
 	}
-	if app.wm().dirtyWorkspaces[wsID] {
+	if app.wm().IsWorkspaceDirty(wsID) {
 		t.Fatal("expected workspace to be cleared from dirty set after save")
 	}
 }

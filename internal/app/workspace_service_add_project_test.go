@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -18,7 +19,7 @@ func TestAddProjectRejectsFakeGitDirectory(t *testing.T) {
 	}
 
 	registry := data.NewRegistry(filepath.Join(root, "projects.json"))
-	service := newWorkspaceService(registry, nil, nil, "")
+	service := workspaces.NewService(registry, nil, nil, "")
 	app := &App{workspaceService: service}
 
 	msg := app.addProject(fakeRepo)()

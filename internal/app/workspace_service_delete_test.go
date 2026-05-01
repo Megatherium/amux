@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -56,8 +57,8 @@ func TestDeleteWorkspaceRejectsMissingProjectPath(t *testing.T) {
 	project := &data.Project{Name: "repo", Path: ""}
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo", "/tmp/workspaces/repo/feature")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)
@@ -87,8 +88,8 @@ func TestDeleteWorkspaceRejectsMissingWorkspaceRepo(t *testing.T) {
 	project := data.NewProject("/tmp/repo")
 	ws := data.NewWorkspace("feature", "feature", "main", "", "/tmp/workspaces/repo/feature")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)
@@ -118,8 +119,8 @@ func TestDeleteWorkspaceRejectsRepoMismatch(t *testing.T) {
 	project := data.NewProject("/tmp/repo-a")
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo-b", "/tmp/workspaces/repo-a/feature")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)
@@ -150,8 +151,8 @@ func TestDeleteWorkspaceRejectsPathOutsideManagedProjectRoot(t *testing.T) {
 	// Repo matches but root is outside managed project root.
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo", "/tmp/other/feature")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)
@@ -181,8 +182,8 @@ func TestDeleteWorkspaceAllowsManagedPathWhenProjectNameDriftsFromRepoBasename(t
 	project := &data.Project{Name: "repo-link", Path: "/tmp/repo-real"}
 	ws := data.NewWorkspace("cursor-blink", "cursor-blink", "main", "/tmp/repo-real", "/tmp/workspaces/repo-real/cursor-blink")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	if _, ok := msg.(messages.WorkspaceDeleted); !ok {
@@ -205,8 +206,8 @@ func TestDeleteWorkspaceRejectsUnsafeProjectNameSegment(t *testing.T) {
 	project := &data.Project{Name: "../unsafe", Path: "/tmp/repo"}
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo", "/tmp/workspaces/../unsafe/feature")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)
@@ -235,8 +236,8 @@ func TestDeleteWorkspaceRejectsSameNameDifferentProjectScope(t *testing.T) {
 	project.Name = "repo"
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo-owner-b", "/tmp/workspaces/repo/feature")
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)
@@ -275,8 +276,8 @@ func TestDeleteWorkspaceRejectsAliasCollisionWhenRepoDoesNotMatch(t *testing.T) 
 		"/tmp/workspaces/repo-real/feature",
 	)
 
-	svc := newWorkspaceService(nil, nil, nil, "/tmp/workspaces")
-	svc.gitOps = mock
+	svc := workspaces.NewService(nil, nil, nil, "/tmp/workspaces")
+	svc.GitOps = mock
 	msg := svc.DeleteWorkspace(project, ws)()
 
 	failed, ok := msg.(messages.WorkspaceDeleteFailed)

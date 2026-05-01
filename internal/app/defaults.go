@@ -17,18 +17,11 @@ const (
 	// tmuxSyncDefaultInterval is the fallback interval for tmux session reconciliation.
 	tmuxSyncDefaultInterval = 7 * time.Second
 
-	// gitPathWaitInterval is the polling interval when waiting for a new worktree to expose .git.
-	gitPathWaitInterval = 100 * time.Millisecond
-
 	// persistDebounce controls workspace metadata save debouncing.
 	persistDebounce = 500 * time.Millisecond
 
 	// stateWatcherDebounce controls filesystem event coalescing for registry/workspace updates.
 	stateWatcherDebounce = 200 * time.Millisecond
-
-	// localWorkspaceReloadSuppressWindow suppresses watcher-driven workspace reloads
-	// immediately after this process saves workspace metadata.
-	localWorkspaceReloadSuppressWindow = 800 * time.Millisecond
 
 	// tmuxActivityPrefilter controls the activity scan window for tmux sessions.
 	tmuxActivityPrefilter = 120 * time.Second

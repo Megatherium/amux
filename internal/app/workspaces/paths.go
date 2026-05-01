@@ -1,4 +1,4 @@
-package app
+package workspaces
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 
 // shouldSurfaceWorkspace returns true for workspaces managed by amux for this
 // project and for the primary checkout.
-func (s *workspaceService) shouldSurfaceWorkspace(_ string, ws *data.Workspace) bool {
+func (s *Service) shouldSurfaceWorkspace(_ string, ws *data.Workspace) bool {
 	if ws == nil {
 		return false
 	}
@@ -26,7 +26,8 @@ func (s *workspaceService) shouldSurfaceWorkspace(_ string, ws *data.Workspace) 
 	return pathWithinAliases(workspacePathAliases(managedRoot), workspacePathAliases(wsRoot))
 }
 
-func (s *workspaceService) managedProjectRoot() string {
+// ManagedProjectRoot returns the resolved managed project root path.
+func (s *Service) ManagedProjectRoot() string {
 	base := strings.TrimSpace(s.workspacesRoot)
 	if base == "" {
 		return ""
@@ -34,7 +35,31 @@ func (s *workspaceService) managedProjectRoot() string {
 	return lexicalWorkspacePath(base)
 }
 
-func (s *workspaceService) pendingProjectRoot(project *data.Project) string {
+func (s *Service) managedProjectRoot() string {
+	base := strings.TrimSpace(s.workspacesRoot)
+	if base == "" {
+		return ""
+	}
+	return lexicalWorkspacePath(base)
+}
+
+// PendingProjectRoot returns the pending project root for a workspace being created.
+func (s *Service) PendingProjectRoot(project *data.Project) string {
+	base := strings.TrimSpace(s.workspacesRoot)
+	if base == "" {
+		return ""
+	}
+	projectName := strings.TrimSpace(project.Name)
+	if projectName == "" {
+		projectName = filepath.Base(strings.TrimSpace(project.Path))
+	}
+	if projectName == "" {
+		return ""
+	}
+	return filepath.Join(base, projectName)
+}
+
+func (s *Service) pendingProjectRoot(project *data.Project) string {
 	base := strings.TrimSpace(s.workspacesRoot)
 	if base == "" {
 		return ""
@@ -52,7 +77,7 @@ func (s *workspaceService) pendingProjectRoot(project *data.Project) string {
 // resolveBase returns the base branch to use for a new workspace. If base is
 // non-empty (after trimming) it is returned as-is; otherwise GetBaseBranch is
 // consulted, falling back to "HEAD" on error.
-func resolveBase(projectPath, base string) string {
+func ResolveBase(projectPath, base string) string {
 	base = strings.TrimSpace(base)
 	if base != "" {
 		return base
@@ -64,7 +89,8 @@ func resolveBase(projectPath, base string) string {
 	return resolved
 }
 
-func (s *workspaceService) pendingWorkspace(project *data.Project, name, base string) *data.Workspace {
+// PendingWorkspace creates a workspace stub for a pending creation.
+func (s *Service) PendingWorkspace(project *data.Project, name, base string) *data.Workspace {
 	if project == nil {
 		return nil
 	}
@@ -81,6 +107,10 @@ func (s *workspaceService) pendingWorkspace(project *data.Project, name, base st
 		return nil
 	}
 	return data.NewWorkspace(name, name, base, project.Path, filepath.Join(projectRoot, name))
+}
+
+func (s *Service) pendingWorkspace(project *data.Project, name, base string) *data.Workspace {
+	return s.PendingWorkspace(project, name, base)
 }
 
 func lexicalWorkspacePath(path string) string {
