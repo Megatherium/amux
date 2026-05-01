@@ -13,6 +13,7 @@ import (
 
 	"github.com/andyrewlee/amux/internal/data" //nolint:depguard // existing architectural import, see bmx-zlc.2
 	appPty "github.com/andyrewlee/amux/internal/pty"
+	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 	"github.com/andyrewlee/amux/internal/ui/compositor"
 	"github.com/andyrewlee/amux/internal/ui/diff"
@@ -64,7 +65,9 @@ type Tab struct {
 	Agent       *appPty.Agent
 	SessionName string
 	Detached    bool
-	Kind        TabKind // discriminates tab type for input/view dispatch
+	Kind        TabKind         // discriminates tab type for input/view dispatch
+	Draft       *Draft          // set only when Kind == DraftTab
+	Ticket      *tickets.Ticket // set only when Kind == TicketViewTab
 	// Ticket metadata — carried from TabInfo so that persistence round-trips
 	// (TabInfo → Tab → GetTabsInfo → TabInfo) preserve ticket context.
 	// AgentMode maps to TabInfo.Agent (string) and SessionTags.AgentMode.
