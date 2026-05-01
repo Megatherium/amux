@@ -19,6 +19,15 @@ import (
 	"github.com/andyrewlee/amux/internal/vterm"
 )
 
+// TabKind discriminates between tab types in the center pane.
+type TabKind int
+
+const (
+	AgentTab      TabKind = iota // terminal output (existing behavior)
+	DraftTab                     // draft flow wizard
+	TicketViewTab                // ticket detail view
+)
+
 // TabID is a unique identifier for a tab that survives slice reordering
 type TabID string
 
@@ -45,15 +54,6 @@ func generateTabID() TabID {
 	id := atomic.AddUint64(&tabIDCounter, 1)
 	return formatTabID(tabIDPrefix, id)
 }
-
-// TabKind discriminates between tab types in the center pane.
-type TabKind int
-
-const (
-	AgentTab      TabKind = iota // terminal output (existing behavior)
-	DraftTab                     // draft flow wizard
-	TicketViewTab                // ticket detail view
-)
 
 // Tab represents a single tab in the center pane
 type Tab struct {

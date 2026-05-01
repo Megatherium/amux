@@ -41,6 +41,10 @@ type TabInfo struct {
 	Status      string `json:"status,omitempty"`
 	CreatedAt   int64  `json:"created_at,omitempty"`
 
+	// Tab kind discriminator. Zero value (AgentTab) is default for backward
+	// compatibility with workspace.json files written before this field existed.
+	Kind int `json:"kind,omitempty"`
+
 	// Ticket metadata — populated when a tab is launched from a ticket selection.
 	// These use omitempty so existing workspace.json files without ticket context
 	// load cleanly (zero-value strings are omitted from serialization).

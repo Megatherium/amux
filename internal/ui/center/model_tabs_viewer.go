@@ -148,6 +148,7 @@ func (m *Model) createDiffTab(change *git.Change, mode git.DiffMode, ws *data.Wo
 		Assistant:     "diff",
 		Workspace:     ws,
 		DiffViewer:    dv,
+		Kind:          AgentTab,
 		lastFocusedAt: time.Now(),
 	}
 
