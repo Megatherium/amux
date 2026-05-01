@@ -50,7 +50,9 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
-		if m.draft != nil {
+		tabs := m.getTabs()
+		activeIdx := m.getActiveTabIdx()
+		if len(tabs) > 0 && activeIdx < len(tabs) && tabs[activeIdx].Kind == DraftTab {
 			return m, nil
 		}
 		return m.updateMouseClick(msg)
@@ -62,7 +64,9 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		return m.updateMouseRelease(msg)
 
 	case tea.MouseWheelMsg:
-		if m.draft != nil {
+		tabs := m.getTabs()
+		activeIdx := m.getActiveTabIdx()
+		if len(tabs) > 0 && activeIdx < len(tabs) && tabs[activeIdx].Kind == DraftTab {
 			return m, nil
 		}
 		return m.updateMouseWheel(msg)
@@ -115,14 +119,28 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if m.draft != nil {
-			newDraft, cmd := m.draft.Update(msg)
-			m.draft = newDraft
-			return m, cmd
-		}
-
 		tabs := m.getTabs()
 		activeIdx := m.getActiveTabIdx()
+
+		// Route to active tab based on Kind
+		if len(tabs) > 0 && activeIdx < len(tabs) {
+			tab := tabs[activeIdx]
+			switch tab.Kind {
+			case DraftTab:
+				if tab.Draft != nil {
+					newDraft, cmd := tab.Draft.Update(msg)
+					tab.Draft = newDraft
+					return m, cmd
+				}
+				return m, nil
+			case TicketViewTab:
+				if key.Matches(msg, key.NewBinding(key.WithKeys("esc"))) {
+					return m, m.closeCurrentTab()
+				}
+				return m, nil
+			}
+		}
+
 		logging.Debug("Center received key: %s, focused=%v, hasTabs=%v, numTabs=%d",
 			msg.String(), m.focused, m.hasActiveAgent(), len(tabs))
 
