@@ -46,6 +46,15 @@ func generateTabID() TabID {
 	return formatTabID(tabIDPrefix, id)
 }
 
+// TabKind discriminates between tab types in the center pane.
+type TabKind int
+
+const (
+	AgentTab      TabKind = iota // terminal output (existing behavior)
+	DraftTab                     // draft flow wizard
+	TicketViewTab                // ticket detail view
+)
+
 // Tab represents a single tab in the center pane
 type Tab struct {
 	ID          TabID // Unique identifier that survives slice reordering
@@ -55,6 +64,7 @@ type Tab struct {
 	Agent       *appPty.Agent
 	SessionName string
 	Detached    bool
+	Kind        TabKind // discriminates tab type for input/view dispatch
 	// Ticket metadata — carried from TabInfo so that persistence round-trips
 	// (TabInfo → Tab → GetTabsInfo → TabInfo) preserve ticket context.
 	// AgentMode maps to TabInfo.Agent (string) and SessionTags.AgentMode.

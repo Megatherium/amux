@@ -258,6 +258,7 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 			createdTerminal = true
 		}
 		tab.Assistant = msg.Assistant
+		tab.Kind = AgentTab
 		tab.TicketID = msg.TicketID
 		tab.TicketTitle = msg.TicketTitle
 		tab.Model = msg.Model
@@ -380,6 +381,7 @@ func (m *Model) handlePtyTabCreated(msg ptyTabCreateResult) tea.Cmd {
 		Agent:         msg.Agent,
 		SessionName:   msg.Agent.Session,
 		Terminal:      term,
+		Kind:          AgentTab,
 		Running:       true, // Agent/viewer starts running
 		createdAt:     now.Unix(),
 		lastFocusedAt: now,
