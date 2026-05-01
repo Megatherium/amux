@@ -1,6 +1,8 @@
 package center
 
 import (
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/config"
@@ -54,9 +56,28 @@ func (m *Model) Focused() bool {
 
 // StartDraft begins a draft flow for the given ticket.
 func (m *Model) StartDraft(ticket *tickets.Ticket, ws *data.Workspace) {
-	m.draft = NewDraft(ticket, ws, m.config, m.styles)
-	m.draft.SetSize(m.contentWidth(), m.height-4)
-	m.draft.Focus()
+	draft := NewDraft(ticket, ws, m.config, m.styles)
+	draft.SetSize(m.contentWidth(), m.height-4)
+	draft.Focus()
+	m.draft = draft
+
+	// Create DraftTab in the tab system
+	now := time.Now()
+	tabID := generateTabID()
+	tab := &Tab{
+		ID:            tabID,
+		Name:          "Draft",
+		Kind:          DraftTab,
+		Draft:         draft,
+		Workspace:     ws,
+		createdAt:     now.Unix(),
+		lastFocusedAt: now,
+	}
+	wsID := string(ws.ID())
+	m.tabsByWorkspace[wsID] = append(m.tabsByWorkspace[wsID], tab)
+	newIdx := len(m.tabsByWorkspace[wsID]) - 1
+	m.setActiveTabIdxForWorkspace(wsID, newIdx)
+	m.noteTabsChanged()
 }
 
 // CancelDraft removes the active draft.
