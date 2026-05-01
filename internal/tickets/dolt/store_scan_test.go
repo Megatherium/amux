@@ -1,7 +1,9 @@
 package dolt
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -298,5 +300,112 @@ func TestStore_DB_NilDB(t *testing.T) {
 
 	if store.DB() != nil {
 		t.Error("Expected DB() to return nil for nil db")
+	}
+}
+
+func TestVerifySchema(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM ready_issues LIMIT 1`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	if err := verifySchema(context.Background(), db); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestVerifySchema_Failure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM ready_issues LIMIT 1`).
+		WillReturnError(errors.New("table not found"))
+
+	err = verifySchema(context.Background(), db)
+	if err == nil {
+		t.Fatal("expected error for schema verification failure")
+	}
+
+	if !strings.Contains(err.Error(), "schema verification failed") {
+		t.Errorf("error should mention schema verification, got: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestStore_LatestUpdate_ConnectionError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+
+	store := &ServerStore{
+		db:        db,
+		mode:      ServerMode,
+		closed:    false,
+		autostart: true,
+	}
+
+	mock.ExpectQuery(`SELECT MAX\(updated_at\) FROM ready_issues`).
+		WillReturnError(&ErrServerNotRunningStore{Message: "Dolt server connection failed"})
+
+	_, err = store.LatestUpdate(context.Background())
+
+	if err == nil {
+		t.Fatal("expected error for connection failure")
+	}
+
+	if !strings.Contains(err.Error(), "connection failed") {
+		t.Errorf("error should mention connection failure, got: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestStore_LatestUpdate_ConnectionError_WithoutAutostart(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create mock: %v", err)
+	}
+	defer db.Close()
+
+	store := &ServerStore{
+		db:        db,
+		mode:      ServerMode,
+		closed:    false,
+		autostart: false,
+	}
+
+	mock.ExpectQuery(`SELECT MAX\(updated_at\) FROM ready_issues`).
+		WillReturnError(&ErrServerNotRunningStore{Message: "Dolt server connection failed"})
+
+	_, err = store.LatestUpdate(context.Background())
+
+	if err == nil {
+		t.Fatal("expected error for connection failure")
+	}
+
+	if !strings.Contains(err.Error(), "connection failed") {
+		t.Errorf("error should mention connection failure, got: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }

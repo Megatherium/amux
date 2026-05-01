@@ -381,3 +381,74 @@ assistants: {}
 		t.Errorf("Expected 0 assistants, got %d", len(config.Assistants))
 	}
 }
+
+func TestYAMLLoader_Load_OptionalFieldsOmitted(t *testing.T) {
+	yamlContent := `
+assistants:
+  minimal:
+    command_template: "minimal"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	loader := NewYAMLLoader()
+	config, err := loader.Load(configPath)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	asst, ok := config.Assistants["minimal"]
+	if !ok {
+		t.Fatal("Expected minimal assistant to exist")
+	}
+	if asst.PromptTemplate != "" {
+		t.Errorf("Expected empty prompt_template, got %q", asst.PromptTemplate)
+	}
+	if len(asst.SupportedModels) != 0 {
+		t.Errorf("Expected empty models, got %d items", len(asst.SupportedModels))
+	}
+	if len(asst.SupportedAgents) != 0 {
+		t.Errorf("Expected empty agents, got %d items", len(asst.SupportedAgents))
+	}
+	if len(asst.Env) != 0 {
+		t.Errorf("Expected empty env, got %d items", len(asst.Env))
+	}
+}
+
+func TestYAMLLoader_Load_FileBasedTemplates_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	templatesDir := filepath.Join(tmpDir, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("Failed to create templates dir: %v", err)
+	}
+
+	emptyPath := filepath.Join(templatesDir, "empty.txt")
+	if err := os.WriteFile(emptyPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("Failed to write empty template: %v", err)
+	}
+
+	yamlContent := `
+assistants:
+  test:
+    command_template: "@./templates/empty.txt"
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	loader := NewYAMLLoader()
+	_, err := loader.Load(configPath)
+
+	if err == nil {
+		t.Fatal("Expected error for empty command template (required field)")
+	}
+
+	if !strings.Contains(err.Error(), "command_template is required") {
+		t.Errorf("Error should mention 'command_template is required', got: %v", err)
+	}
+}
