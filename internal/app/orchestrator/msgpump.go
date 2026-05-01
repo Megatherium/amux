@@ -12,9 +12,16 @@ import (
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/perf"
 	"github.com/andyrewlee/amux/internal/safego"
-	"github.com/andyrewlee/amux/internal/ui/center"
-	"github.com/andyrewlee/amux/internal/ui/common"
 )
+
+// CriticalMessageDetector classifies messages for queue routing.
+// IsCritical returns whether the message should bypass the normal lossy
+// external queue and go through the critical path instead, and whether
+// it is non-evicting (should drop itself rather than evict a normal
+// message when the critical queue is full).
+type CriticalMessageDetector interface {
+	IsCritical(msg tea.Msg) (critical, nonEvicting bool)
+}
 
 const (
 	// ExternalMsgBuffer is the size of the external message channel.
@@ -31,6 +38,10 @@ type MessagePump struct {
 	critical chan tea.Msg
 	sender   func(tea.Msg)
 	once     sync.Once
+
+	// detector classifies messages for queue routing.
+	// When nil, all messages go to the normal queue.
+	detector CriticalMessageDetector
 }
 
 // NewMessagePump creates an initialized MessagePump with default buffer sizes.
@@ -50,6 +61,13 @@ func NewMessagePumpWithSize(normalSize, criticalSize int) *MessagePump {
 // The caller must set up reading from these channels.
 func (mp *MessagePump) Channels() (normal, critical chan tea.Msg) {
 	return mp.msgs, mp.critical
+}
+
+// SetCriticalDetector sets the message classifier for queue routing.
+// Must be called before messages are enqueued. When nil, all messages
+// go to the normal (lossy) queue.
+func (mp *MessagePump) SetCriticalDetector(d CriticalMessageDetector) {
+	mp.detector = d
 }
 
 // SetSender installs the send function that delivers messages into
@@ -78,8 +96,8 @@ func (mp *MessagePump) tryEnqueue(msg tea.Msg) bool {
 	if msg == nil {
 		return false
 	}
-	if isCriticalExternalMsg(msg) {
-		_, nonEvicting := msg.(common.NonEvictingCriticalExternalMsg)
+	critical, nonEvicting := mp.isMsgCritical(msg)
+	if critical {
 		select {
 		case mp.critical <- msg:
 			return true
@@ -110,6 +128,15 @@ func (mp *MessagePump) tryEnqueue(msg tea.Msg) bool {
 		perf.Count("external_msg_drop", 1)
 		return false
 	}
+}
+
+// isMsgCritical delegates to the detector. When no detector is installed,
+// all messages go to the normal (lossy) queue.
+func (mp *MessagePump) isMsgCritical(msg tea.Msg) (critical, nonEvicting bool) {
+	if mp.detector == nil {
+		return false, false
+	}
+	return mp.detector.IsCritical(msg)
 }
 
 // Run pumps messages from the external channels to the installed sender.
@@ -199,16 +226,4 @@ func (mp *MessagePump) InstallErrorHandler(handler SetErrorHandlerFunc) {
 			Context: "supervisor:worker",
 		})
 	})
-}
-
-func isCriticalExternalMsg(msg tea.Msg) bool {
-	if _, ok := msg.(common.CriticalExternalMsg); ok {
-		return true
-	}
-	switch msg.(type) {
-	case messages.Error, messages.SidebarPTYStopped, center.PTYStopped:
-		return true
-	default:
-		return false
-	}
 }

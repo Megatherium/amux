@@ -32,11 +32,6 @@ const (
 	DialogCleanupTmux     = "cleanup_tmux"
 )
 
-// prefixTimeoutMsg is sent when the prefix mode timer expires.
-type prefixTimeoutMsg struct {
-	token int
-}
-
 // App is the root Bubbletea model.
 type App struct {
 	// Configuration

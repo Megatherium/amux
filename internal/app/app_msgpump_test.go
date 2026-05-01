@@ -74,6 +74,7 @@ func TestEnqueueExternalMsgDropsWhenFull(t *testing.T) {
 
 func TestEnqueueExternalMsgRoutesCriticalInterfaceToCriticalQueue(t *testing.T) {
 	a := &App{orch: orchestrator.New()}
+	a.oc().Pump.SetCriticalDetector(criticalMsgDetector{})
 	normal, critical := a.oc().Pump.Channels()
 
 	msg := criticalTestMsg{}
@@ -99,6 +100,7 @@ func TestNonEvictingCriticalInterfaceImpliesCriticalRouting(t *testing.T) {
 
 func TestEnqueueExternalMsg_NonEvictingCriticalDoesNotDropNormalQueue(t *testing.T) {
 	a := &App{orch: orchestrator.New()}
+	a.oc().Pump.SetCriticalDetector(criticalMsgDetector{})
 	normal, critical := a.oc().Pump.Channels()
 
 	normal <- testMsg("normal")

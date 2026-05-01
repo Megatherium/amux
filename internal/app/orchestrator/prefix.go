@@ -4,8 +4,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
 // PrefixMatch describes the result of processing a key in prefix mode.
@@ -187,7 +185,7 @@ func (pe *PrefixEngine) matchingCommands(seq []string) []PrefixCommand {
 func (pe *PrefixEngine) refreshTimeout() tea.Cmd {
 	pe.Token++
 	token := pe.Token
-	return common.SafeTick(PrefixTimeout(), func(t time.Time) tea.Msg {
+	return tea.Tick(PrefixTimeout(), func(t time.Time) tea.Msg {
 		return PrefixTimeoutMsg{Token: token}
 	})
 }

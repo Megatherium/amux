@@ -64,6 +64,7 @@ func New(version, commit, date string) (*App, error) {
 	common.SetCurrentTheme(common.ThemeID(cfg.UI.Theme))
 	styles := common.DefaultStyles()
 	orch := orchestrator.New()
+	orch.Pump.SetCriticalDetector(criticalMsgDetector{})
 	orch.Prefix.Label = PrefixKeyLabel()
 	orch.Prefix.HelpLabel = PrefixHelpLabel()
 

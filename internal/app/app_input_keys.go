@@ -161,8 +161,8 @@ func (a *App) handlePaste(msg tea.PasteMsg) tea.Cmd {
 	return nil
 }
 
-func (a *App) handlePrefixTimeout(msg prefixTimeoutMsg) {
-	if msg.token == a.oc().Prefix.Token && a.oc().Prefix.Active {
+func (a *App) handlePrefixTimeout(msg orchestrator.PrefixTimeoutMsg) {
+	if msg.Token == a.oc().Prefix.Token && a.oc().Prefix.Active {
 		a.exitPrefix()
 	}
 }
