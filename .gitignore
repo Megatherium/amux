@@ -13,3 +13,6 @@ polecats/
 .dolt/
 *.db
 .beads-credential-key
+
+.pi/
+.runtime/
