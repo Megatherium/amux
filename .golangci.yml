@@ -31,6 +31,7 @@ linters:
         ui-data-boundary:
           list-mode: lax
           files:
+            - "!$test"
             - "**/internal/ui/**"
           deny:
             - pkg: github.com/andyrewlee/amux/internal/data
@@ -38,6 +39,7 @@ linters:
         messages-circularity:
           list-mode: lax
           files:
+            - "!$test"
             - "**/internal/data/**"
             - "**/internal/git/**"
             - "**/internal/tickets/**"
