@@ -4,6 +4,11 @@
 /.cache/
 /tickets
 
+# Gastown runtime dirs
+witness/
+refinery/
+polecats/
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
