@@ -1,0 +1,110 @@
+# amux assistant configuration (YAML)
+# Place at ~/.amux/config.yaml to override built-in assistant defaults.
+# JSON config at ~/.amux/config.json acts as an override layer on top of YAML.
+# See README.md for the full configuration reference.
+
+# Per-assistant definitions. Each key under "assistants" is a harness identifier
+# (e.g., "claude", "codex", "opencode").
+assistants:
+  # OpenCode with ticket-aware launch.
+  # Command templates receive a TemplateContext (Go text/template) with fields:
+  #   {{.TicketID}}, {{.TicketTitle}}, {{.TicketDescription}}, {{.TicketStatus}},
+  #   {{.TicketPriority}}, {{.TicketIssueType}}, {{.TicketAssignee}},
+  #   {{.TicketParentID}}, {{.TicketCreatedAt}}, {{.TicketUpdatedAt}}
+  #   {{.Assistant}}, {{.Model}}, {{.Model.Provider}}, {{.Model.Org}}, {{.Model.Name}},
+  #   {{.Agent}}, {{.WorkDir}}, {{.RepoPath}}, {{.Branch}}, {{.User}}, {{.Hostname}}
+  #   {{.Prompt}} — rendered prompt template (available in command_template only)
+  opencode:
+    # command_template is required. It defines the shell command to launch the assistant.
+    # Template variables (Go text/template) are expanded at launch time from the
+    # selected ticket, model, and agent context.
+    command_template: |
+      opencode --model {{.Model}} --agent {{.Agent}}
+
+    # prompt_template is optional. When set, it renders a prompt that becomes
+    # available as {{.Prompt}} in the command_template. Useful for composing
+    # ticket-specific prompts that get injected into the assistant's CLI.
+    prompt_template: |
+      Work on {{.TicketID}}: {{.TicketTitle}}
+
+    # models: List of model identifiers supported by this assistant.
+    # These populate the model selector in the draft flow.
+    # Format: "provider/org/name" (e.g., "anthropic/claude/claude-sonnet-4").
+    # Shorthand forms ("claude-sonnet-4") are also supported.
+    models:
+      - anthropic/claude/claude-sonnet-4
+      - anthropic/claude/claude-opus-4
+      - anthropic/claude/claude-haiku-4
+
+    # agents: List of agent types this assistant supports.
+    # Shown in the agent selector during draft configuration.
+    agents:
+      - coder
+      - architect
+
+    # env: Environment variables set when launching this assistant.
+    env:
+      LOG_LEVEL: debug
+
+  # Claude Code with ticket-aware context injection.
+  # Demonstrates inline prompt with file-based template via @ notation.
+  claude:
+    # Templates can be inline strings or file references with the @ prefix.
+    # @./templates/claude-command.txt loads the file relative to config.yaml.
+    # @/absolute/path/to/template.txt loads from an absolute path.
+    command_template: |
+      claude --model {{.Model}} --agent {{.Agent}}
+
+    prompt_template: |
+      Ticket {{.TicketID}}: {{.TicketTitle}}
+      Priority: {{.TicketPriority}}
+      Status: {{.TicketStatus}}
+      {{.TicketDescription}}
+
+    models:
+      - anthropic/claude/claude-sonnet-4
+      - anthropic/claude/claude-opus-4
+
+    agents:
+      - coder
+      - general-purpose
+
+  # Gemini with per-assistant environment variables.
+  gemini:
+    command_template: |
+      gemini --model {{.Model}} --agent {{.Agent}}
+
+    models:
+      - google/gemini/gemini-2.5-pro
+      - google/gemini/gemini-2.5-flash
+
+    agents:
+      - coder
+
+    env:
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+
+  # Codex (OpenAI) assistant.
+  codex:
+    command_template: |
+      codex --model {{.Model}} --agent {{.Agent}}
+
+    models:
+      - openai/codex/o3
+      - openai/codex/o4-mini
+
+    agents:
+      - coder
+
+  # Minimal assistant definition — command_template is the only required field.
+  # Models and agents will be unrestricted (empty list = no filtering).
+  pi:
+    command_template: |
+      pi --model {{.Model}}
+
+# Defaults: Set preferred harness, model, and agent to pre-select in the
+# draft flow. Users can override these per-launch.
+defaults:
+  harness: claude       # Pre-selected assistant in the harness selector
+  model: anthropic/claude/claude-sonnet-4
+  agent: coder
