@@ -144,6 +144,7 @@ func (m *Model) createDiffTab(change *git.Change, mode git.DiffMode, ws *data.Wo
 
 	tab := &Tab{
 		ID:            generateTabID(),
+		Kind:          AgentTab,
 		Name:          displayName,
 		Assistant:     "diff",
 		Workspace:     ws,

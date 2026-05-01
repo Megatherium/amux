@@ -38,6 +38,7 @@ func (m *Model) addDetachedTab(ws *data.Workspace, info data.TabInfo) {
 	}
 	tab := &Tab{
 		ID:            generateTabID(),
+		Kind:          AgentTab,
 		Name:          displayName,
 		Assistant:     info.Assistant,
 		Workspace:     ws,
@@ -92,6 +93,7 @@ func (m *Model) addPlaceholderTab(ws *data.Workspace, info data.TabInfo) (TabID,
 	}
 	tab := &Tab{
 		ID:               tabID,
+		Kind:             AgentTab,
 		Name:             displayName,
 		Assistant:        info.Assistant,
 		Workspace:        ws,

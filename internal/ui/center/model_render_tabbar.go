@@ -8,7 +8,7 @@ import (
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
-// renderTabBar renders the tab bar with activity indicators
+// renderTabBar renders the tab bar with kind-specific indicators.
 func (m *Model) renderTabBar() string {
 	m.tabHits = m.tabHits[:0]
 	currentTabs := m.getTabs()
@@ -36,30 +36,39 @@ func (m *Model) renderTabBar() string {
 	x := 0
 
 	for i, tab := range currentTabs {
-		name := tab.Name
-		if name == "" {
-			name = tab.Assistant
-		}
+		// Resolve display name based on tab kind.
+		name := resolveTabName(tab)
 
 		// Check if tab is disconnected (detached or stopped)
 		tab.mu.Lock()
 		tabDisconnected := tab.Detached || !tab.Running
 		tab.mu.Unlock()
 
-		// Add brand color indicator for agent tabs (not file viewers)
+		// Compute indicator and activity state based on tab kind.
 		var indicator string
 		var tabActive bool
-		isChat := m.isChatTab(tab)
-		if isChat {
-			if tabDisconnected {
-				indicator = common.Icons.Idle + " " // Disconnected indicator
-			} else {
-				indicator = common.Icons.Running + " " // Brand color dot
+		useMutedIndicator := false
+		switch tab.Kind {
+		case DraftTab:
+			indicator = "✏️ "
+			useMutedIndicator = true
+		case TicketViewTab:
+			indicator = "🎫 "
+			useMutedIndicator = true
+		default: // AgentTab — existing behavior
+			isChat := m.isChatTab(tab)
+			if isChat {
+				if tabDisconnected {
+					indicator = common.Icons.Idle + " " // Disconnected indicator
+				} else {
+					indicator = common.Icons.Running + " " // Brand color dot
+				}
+				tabActive = m.IsTabActive(tab)
 			}
-			tabActive = m.IsTabActive(tab)
 		}
 
 		agentStyle := lipgloss.NewStyle().Foreground(common.AgentColor(tab.Assistant))
+		mutedStyle := m.styles.Muted
 
 		// Build tab content with close affordance
 		closeLabel := m.styles.Muted.Render("×")
@@ -69,15 +78,20 @@ func (m *Model) renderTabBar() string {
 			// Active tab - each part styled with same background
 			bg := common.ColorSurface2()
 			pad := lipgloss.NewStyle().Background(bg).Render(" ")
-			// Use muted color for disconnected tabs
-			indicatorFg := agentStyle.GetForeground()
-			if tabDisconnected {
-				indicatorFg = common.ColorMuted()
+			// Indicator color: muted for draft/ticket, agent-color (or muted when disconnected) for agent tabs
+			var indicatorFg lipgloss.Style
+			if useMutedIndicator {
+				indicatorFg = mutedStyle.Background(bg)
+			} else {
+				indicatorFg = lipgloss.NewStyle().Foreground(agentStyle.GetForeground()).Background(bg)
+				if tabDisconnected {
+					indicatorFg = lipgloss.NewStyle().Foreground(common.ColorMuted()).Background(bg)
+				}
 			}
-			indicatorPart := lipgloss.NewStyle().Foreground(indicatorFg).Background(bg).Render(indicator)
-			// Use primary color and bold when actively working, muted when disconnected
+			indicatorPart := indicatorFg.Render(indicator)
+			// Name style: muted for draft/ticket, with foreground/primary for agent tabs
 			nameStyle := lipgloss.NewStyle().Foreground(common.ColorForeground()).Background(bg)
-			if tabDisconnected {
+			if useMutedIndicator || tabDisconnected {
 				nameStyle = nameStyle.Foreground(common.ColorMuted())
 			} else if tabActive {
 				nameStyle = nameStyle.Foreground(common.ColorPrimary()).Bold(true)
@@ -90,16 +104,16 @@ func (m *Model) renderTabBar() string {
 		} else {
 			// Inactive tab - muted with colored indicator, or primary color + bold when active
 			var nameStyled string
-			if tabDisconnected {
+			if useMutedIndicator || tabDisconnected {
 				nameStyled = m.styles.Muted.Render(name)
 			} else if tabActive {
 				nameStyled = lipgloss.NewStyle().Foreground(common.ColorPrimary()).Bold(true).Render(name)
 			} else {
 				nameStyled = m.styles.Muted.Render(name)
 			}
-			// Use muted indicator color for disconnected tabs
+			// Indicator: muted for draft/ticket, agent-color (or muted when disconnected) for agent tabs
 			var indicatorStyled string
-			if tabDisconnected {
+			if useMutedIndicator || tabDisconnected {
 				indicatorStyled = m.styles.Muted.Render(indicator)
 			} else {
 				indicatorStyled = agentStyle.Render(indicator)
@@ -165,6 +179,30 @@ func (m *Model) renderTabBar() string {
 
 	// Join tabs horizontally at the bottom so borders align
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, renderedTabs...)
+}
+
+// resolveTabName returns the display name for a tab based on its kind.
+func resolveTabName(tab *Tab) string {
+	switch tab.Kind {
+	case DraftTab:
+		if tab.TicketID != "" {
+			return "Draft: " + tab.TicketID
+		}
+		return "Draft"
+	case TicketViewTab:
+		if tab.TicketID != "" {
+			return tab.TicketID
+		}
+		if tab.Name != "" {
+			return tab.Name
+		}
+		return "Ticket"
+	default: // AgentTab
+		if tab.Name != "" {
+			return tab.Name
+		}
+		return tab.Assistant
+	}
 }
 
 func (m *Model) handleTabBarClick(msg tea.MouseClickMsg) tea.Cmd {

@@ -57,14 +57,14 @@ const (
 
 // Tab represents a single tab in the center pane
 type Tab struct {
-	ID          TabID // Unique identifier that survives slice reordering
+	ID          TabID   // Unique identifier that survives slice reordering
+	Kind        TabKind // discriminates tab type for input/view dispatch
 	Name        string
 	Assistant   string
 	Workspace   *data.Workspace
 	Agent       *appPty.Agent
 	SessionName string
 	Detached    bool
-	Kind        TabKind // discriminates tab type for input/view dispatch
 	// Ticket metadata — carried from TabInfo so that persistence round-trips
 	// (TabInfo → Tab → GetTabsInfo → TabInfo) preserve ticket context.
 	// AgentMode maps to TabInfo.Agent (string) and SessionTags.AgentMode.
