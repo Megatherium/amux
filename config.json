@@ -1,0 +1,10 @@
+{
+  "type": "rig",
+  "version": 1,
+  "name": "badmux",
+  "git_url": "git@github.com:Megatherium/amux.git",
+  "created_at": "2026-04-29T20:51:29.994739269+02:00",
+  "beads": {
+    "prefix": "ba"
+  }
+}
