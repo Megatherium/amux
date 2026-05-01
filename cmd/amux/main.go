@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -20,6 +21,7 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"github.com/andyrewlee/amux/internal/app"
+	"github.com/andyrewlee/amux/internal/discovery"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/safego"
 )
@@ -36,6 +38,11 @@ func main() {
 
 	if isVersionInvocation(args) {
 		fmt.Printf("amux %s (commit: %s, built: %s)\n", version, commit, date)
+		os.Exit(0)
+	}
+
+	if isUpdateModelsInvocation(args) {
+		runUpdateModels()
 		os.Exit(0)
 	}
 
@@ -60,6 +67,10 @@ func isVersionInvocation(args []string) bool {
 	return len(args) == 1 && (args[0] == "--version" || args[0] == "-v")
 }
 
+func isUpdateModelsInvocation(args []string) bool {
+	return len(args) == 1 && args[0] == "update-models"
+}
+
 func shouldLaunchTUI(stdinIsTTY, stdoutIsTTY, stderrIsTTY bool) bool {
 	return stdinIsTTY && stdoutIsTTY && stderrIsTTY
 }
@@ -68,11 +79,29 @@ func unsupportedInvocationMessage(arg string) string {
 	if arg == "tui" {
 		return "run `amux` directly to start the terminal UI."
 	}
-	return fmt.Sprintf("unexpected argument %q. Run `amux` to start the terminal UI or `amux --version`.", arg)
+	return fmt.Sprintf("unexpected argument %q. Run `amux` to start the terminal UI, `amux update-models`, or `amux --version`.", arg)
 }
 
 func nonInteractiveMessage() string {
 	return "amux starts an interactive terminal UI and requires stdin, stdout, and stderr to be TTYs."
+}
+
+func runUpdateModels() {
+	reg, err := discovery.NewRegistry("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing model registry: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := reg.Refresh(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error updating models cache: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Models cache updated successfully.\nCache: %s\n", reg.GetCachePath())
 }
 
 func runTUI() {

@@ -65,6 +65,28 @@ func TestIsVersionInvocation(t *testing.T) {
 	}
 }
 
+func TestIsUpdateModelsInvocation(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "update-models", args: []string{"update-models"}, want: true},
+		{name: "extra args", args: []string{"update-models", "extra"}, want: false},
+		{name: "different command", args: []string{"status"}, want: false},
+		{name: "no args", args: nil, want: false},
+		{name: "version flag", args: []string{"--version"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isUpdateModelsInvocation(tt.args); got != tt.want {
+				t.Fatalf("isUpdateModelsInvocation() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUnsupportedInvocationMessage(t *testing.T) {
 	tests := []struct {
 		name string
@@ -73,6 +95,7 @@ func TestUnsupportedInvocationMessage(t *testing.T) {
 	}{
 		{name: "unexpected command", arg: "status", want: `unexpected argument "status"`},
 		{name: "tui subcommand hint", arg: "tui", want: "run `amux` directly to start the terminal UI"},
+		{name: "suggests update-models", arg: "status", want: "amux update-models"},
 	}
 
 	for _, tt := range tests {
