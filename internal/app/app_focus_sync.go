@@ -46,7 +46,7 @@ func (a *App) syncPaneFocusFlags() {
 		}
 	}
 
-	switch a.focusedPane {
+	switch a.oc().Focus.FocusedPane {
 	case messages.PaneDashboard:
 		focusDashboard()
 		blurCenter()

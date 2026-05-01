@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -12,10 +13,10 @@ import (
 func TestPrefixCommand_tb_MatchesNewAgentTab(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
 
-	app.prefixActive = true
-	app.prefixSequence = []string{"t"}
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"t"}
 	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'b', Text: "b"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("prefix 't b' should complete, got %v", status)
 	}
 }
@@ -23,10 +24,10 @@ func TestPrefixCommand_tb_MatchesNewAgentTab(t *testing.T) {
 func TestPrefixCommand_ta_MatchesNewAgentTabDirect(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
 
-	app.prefixActive = true
-	app.prefixSequence = []string{"t"}
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"t"}
 	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'a', Text: "a"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("prefix 't a' should complete, got %v", status)
 	}
 }

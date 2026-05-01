@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
@@ -34,8 +35,7 @@ func newPrefixTestApp(t *testing.T) (*App, *data.Workspace, *center.Model) {
 		ui: &UICompositor{
 			center: centerModel,
 		},
-		keymap:      DefaultKeyMap(),
-		focusedPane: messages.PaneCenter,
+		keymap: DefaultKeyMap(),
 	}
 	return app, ws, centerModel
 }
@@ -58,8 +58,7 @@ func newLayoutTestApp(t *testing.T) *App {
 			sidebarTerminal: sidebar.NewTerminalModel(),
 			layout:          layout.NewManager(),
 		},
-		keymap:      DefaultKeyMap(),
-		focusedPane: messages.PaneCenter,
+		keymap: DefaultKeyMap(),
 	}
 	app.ui.layout.Resize(200, 40)
 	app.updateLayout()
@@ -78,7 +77,7 @@ func TestHandlePrefixNumericTabSelection_InvalidIndexNoOp(t *testing.T) {
 	})
 
 	status, cmd := app.handlePrefixCommand(tea.KeyPressMsg{Code: '9', Text: "9"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("expected numeric shortcut to complete, got %v", status)
 	}
 	if cmd != nil {
@@ -107,7 +106,7 @@ func TestHandlePrefixNumericTabSelection_ValidIndexTriggersReattach(t *testing.T
 	})
 
 	status, cmd := app.handlePrefixCommand(tea.KeyPressMsg{Code: '2', Text: "2"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("expected numeric shortcut to complete, got %v", status)
 	}
 	if cmd == nil {
@@ -127,7 +126,7 @@ func TestHandlePrefixNextTab_SingleTabNoOp(t *testing.T) {
 	})
 
 	status, cmd := app.handlePrefixCommand(tea.KeyPressMsg{Code: 't', Text: "t"})
-	if status != prefixMatchPartial {
+	if status != orchestrator.PrefixMatchPartial {
 		t.Fatalf("expected first key to narrow prefix sequence, got %v", status)
 	}
 	if cmd != nil {
@@ -135,7 +134,7 @@ func TestHandlePrefixNextTab_SingleTabNoOp(t *testing.T) {
 	}
 
 	status, cmd = app.handlePrefixCommand(tea.KeyPressMsg{Code: 'n', Text: "n"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("expected next-tab sequence to complete, got %v", status)
 	}
 	if cmd != nil {
@@ -155,7 +154,7 @@ func TestHandlePrefixPrevTab_SingleTabNoOp(t *testing.T) {
 	})
 
 	status, cmd := app.handlePrefixCommand(tea.KeyPressMsg{Code: 't', Text: "t"})
-	if status != prefixMatchPartial {
+	if status != orchestrator.PrefixMatchPartial {
 		t.Fatalf("expected first key to narrow prefix sequence, got %v", status)
 	}
 	if cmd != nil {
@@ -163,7 +162,7 @@ func TestHandlePrefixPrevTab_SingleTabNoOp(t *testing.T) {
 	}
 
 	status, cmd = app.handlePrefixCommand(tea.KeyPressMsg{Code: 'p', Text: "p"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("expected prev-tab sequence to complete, got %v", status)
 	}
 	if cmd != nil {
@@ -175,50 +174,50 @@ func TestHandlePrefixCommand_BackspaceAtRootNoop(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
 
 	status, cmd := app.handlePrefixCommand(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	if status != prefixMatchPartial {
+	if status != orchestrator.PrefixMatchPartial {
 		t.Fatalf("expected backspace at root to keep prefix active, got %v", status)
 	}
 	if cmd != nil {
 		t.Fatalf("expected backspace at root to return nil command")
 	}
-	if len(app.prefixSequence) != 0 {
-		t.Fatalf("expected empty prefix sequence after root backspace, got %v", app.prefixSequence)
+	if len(app.oc().Prefix.Sequence) != 0 {
+		t.Fatalf("expected empty prefix sequence after root backspace, got %v", app.oc().Prefix.Sequence)
 	}
 }
 
 func TestHandlePrefixCommand_BackspaceUndoesLastToken(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.prefixSequence = []string{"t", "n"}
+	app.oc().Prefix.Sequence = []string{"t", "n"}
 
 	status, cmd := app.handlePrefixCommand(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	if status != prefixMatchPartial {
+	if status != orchestrator.PrefixMatchPartial {
 		t.Fatalf("expected backspace undo to keep prefix active, got %v", status)
 	}
 	if cmd != nil {
 		t.Fatalf("expected backspace undo to return nil command")
 	}
-	if len(app.prefixSequence) != 1 || app.prefixSequence[0] != "t" {
-		t.Fatalf("expected sequence to be reduced to [t], got %v", app.prefixSequence)
+	if len(app.oc().Prefix.Sequence) != 1 || app.oc().Prefix.Sequence[0] != "t" {
+		t.Fatalf("expected sequence to be reduced to [t], got %v", app.oc().Prefix.Sequence)
 	}
 }
 
 func TestHandleKeyPress_BackspaceAtRootRefreshesPrefixTimeout(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.prefixActive = true
-	beforeToken := app.prefixToken
+	app.oc().Prefix.Active = true
+	beforeToken := app.oc().Prefix.Token
 
 	cmd := app.handleKeyPress(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	if cmd == nil {
 		t.Fatalf("expected timeout refresh command")
 	}
-	if !app.prefixActive {
+	if !app.oc().Prefix.Active {
 		t.Fatalf("expected prefix mode to remain active")
 	}
-	if len(app.prefixSequence) != 0 {
-		t.Fatalf("expected prefix sequence to remain empty, got %v", app.prefixSequence)
+	if len(app.oc().Prefix.Sequence) != 0 {
+		t.Fatalf("expected prefix sequence to remain empty, got %v", app.oc().Prefix.Sequence)
 	}
-	if app.prefixToken != beforeToken+1 {
-		t.Fatalf("expected prefix token increment, got %d want %d", app.prefixToken, beforeToken+1)
+	if app.oc().Prefix.Token != beforeToken+1 {
+		t.Fatalf("expected prefix token increment, got %d want %d", app.oc().Prefix.Token, beforeToken+1)
 	}
 }
 
@@ -240,50 +239,50 @@ func TestOpenCommandsPalette_EntersPrefixMode(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected command palette to open")
 	}
-	if !app.prefixActive {
+	if !app.oc().Prefix.Active {
 		t.Fatal("expected prefix mode to become active")
 	}
 }
 
 func TestOpenCommandsPalette_ResetsActiveSequence(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.prefixActive = true
-	app.prefixSequence = []string{"t"}
-	beforeToken := app.prefixToken
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"t"}
+	beforeToken := app.oc().Prefix.Token
 
 	cmd := app.openCommandsPalette()
 	if cmd == nil {
 		t.Fatal("expected palette reset command")
 	}
-	if !app.prefixActive {
+	if !app.oc().Prefix.Active {
 		t.Fatal("expected prefix mode to remain active")
 	}
-	if len(app.prefixSequence) != 0 {
-		t.Fatalf("expected prefix sequence reset, got %v", app.prefixSequence)
+	if len(app.oc().Prefix.Sequence) != 0 {
+		t.Fatalf("expected prefix sequence reset, got %v", app.oc().Prefix.Sequence)
 	}
-	if app.prefixToken != beforeToken+1 {
-		t.Fatalf("expected prefix token increment, got %d want %d", app.prefixToken, beforeToken+1)
+	if app.oc().Prefix.Token != beforeToken+1 {
+		t.Fatalf("expected prefix token increment, got %d want %d", app.oc().Prefix.Token, beforeToken+1)
 	}
 }
 
 func TestOpenCommandsPalette_AtRootKeepsPrefixActive(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.prefixActive = true
-	app.prefixSequence = nil
-	beforeToken := app.prefixToken
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = nil
+	beforeToken := app.oc().Prefix.Token
 
 	cmd := app.openCommandsPalette()
 	if cmd == nil {
 		t.Fatal("expected palette refresh command")
 	}
-	if !app.prefixActive {
+	if !app.oc().Prefix.Active {
 		t.Fatal("expected prefix mode to remain active")
 	}
-	if len(app.prefixSequence) != 0 {
-		t.Fatalf("expected prefix sequence to remain empty, got %v", app.prefixSequence)
+	if len(app.oc().Prefix.Sequence) != 0 {
+		t.Fatalf("expected prefix sequence to remain empty, got %v", app.oc().Prefix.Sequence)
 	}
-	if app.prefixToken != beforeToken+1 {
-		t.Fatalf("expected prefix token increment, got %d want %d", app.prefixToken, beforeToken+1)
+	if app.oc().Prefix.Token != beforeToken+1 {
+		t.Fatalf("expected prefix token increment, got %d want %d", app.oc().Prefix.Token, beforeToken+1)
 	}
 }
 
@@ -297,36 +296,36 @@ func TestHandleKeyPress_PrefixKeyResetsWhenActive(t *testing.T) {
 		SessionName: "sess-1",
 		Detached:    true,
 	})
-	app.focusedPane = messages.PaneCenter
-	app.prefixActive = true
-	app.prefixSequence = []string{"t"}
-	beforeToken := app.prefixToken
+	app.oc().Focus.FocusedPane = messages.PaneCenter
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"t"}
+	beforeToken := app.oc().Prefix.Token
 
 	cmd := app.handleKeyPress(tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("expected prefix reset command while palette is open")
 	}
-	if !app.prefixActive {
+	if !app.oc().Prefix.Active {
 		t.Fatal("expected prefix mode to remain active")
 	}
-	if len(app.prefixSequence) != 0 {
-		t.Fatalf("expected prefix sequence reset, got %v", app.prefixSequence)
+	if len(app.oc().Prefix.Sequence) != 0 {
+		t.Fatalf("expected prefix sequence reset, got %v", app.oc().Prefix.Sequence)
 	}
-	if app.prefixToken != beforeToken+1 {
-		t.Fatalf("expected prefix token increment, got %d want %d", app.prefixToken, beforeToken+1)
+	if app.oc().Prefix.Token != beforeToken+1 {
+		t.Fatalf("expected prefix token increment, got %d want %d", app.oc().Prefix.Token, beforeToken+1)
 	}
 }
 
 func TestHandleKeyPress_PrefixKeyAtRootExitsPrefixMode(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.prefixActive = true
-	app.prefixSequence = nil
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = nil
 
 	cmd := app.handleKeyPress(tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl})
 	if cmd != nil {
 		t.Fatal("expected no command when sending literal Ctrl+Space")
 	}
-	if app.prefixActive {
+	if app.oc().Prefix.Active {
 		t.Fatal("expected prefix mode to exit after prefix key at root")
 	}
 }

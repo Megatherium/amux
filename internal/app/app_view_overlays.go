@@ -44,7 +44,7 @@ func (a *App) composeOverlays(canvas *lipgloss.Canvas) {
 	}
 
 	// Prefix command palette
-	if a.prefixActive {
+	if a.oc().Prefix.Active {
 		palette := a.renderPrefixPalette()
 		_, paletteHeight := viewDimensions(palette)
 		prefixOverlayHeight = paletteHeight
@@ -209,7 +209,7 @@ func (a *App) overlayVisible() bool {
 	return (a.ui.dialog != nil && a.ui.dialog.Visible()) ||
 		(a.ui.filePicker != nil && a.ui.filePicker.Visible()) ||
 		(a.ui.settingsDialog != nil && a.ui.settingsDialog.Visible()) ||
-		a.prefixActive ||
+		a.oc().Prefix.Active ||
 		a.err != nil
 }
 
@@ -222,7 +222,7 @@ func (a *App) toastCoversPoint(x, y int) bool {
 		return false
 	}
 	prefixOverlayHeight := 0
-	if a.prefixActive {
+	if a.oc().Prefix.Active {
 		_, prefixOverlayHeight = viewDimensions(a.renderPrefixPalette())
 	}
 	toastWidth, toastHeight := viewDimensions(toastView)

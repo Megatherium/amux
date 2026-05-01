@@ -11,7 +11,7 @@ import (
 )
 
 func (a *App) renderPrefixPalette() string {
-	if !a.prefixActive || a.ui.width <= 0 || a.ui.height <= 0 {
+	if !a.oc().Prefix.Active || a.ui.width <= 0 || a.ui.height <= 0 {
 		return ""
 	}
 
@@ -21,9 +21,9 @@ func (a *App) renderPrefixPalette() string {
 		contentWidth = 1
 	}
 
-	sequence := a.prefixLabel
-	if len(a.prefixSequence) > 0 {
-		sequence += " " + strings.Join(a.prefixSequence, " ")
+	sequence := a.oc().Prefix.Label
+	if len(a.oc().Prefix.Sequence) > 0 {
+		sequence += " " + strings.Join(a.oc().Prefix.Sequence, " ")
 	}
 	sections := a.prefixPaletteSections()
 	totalChoices := 0
@@ -46,7 +46,7 @@ func (a *App) renderPrefixPalette() string {
 	header := joinWithRightEdge(headerLeft, headerRight, contentWidth)
 
 	lines := []string{header}
-	if len(a.prefixSequence) == 0 {
+	if len(a.oc().Prefix.Sequence) == 0 {
 		lines = append(lines, a.renderSectionColumns(sections, contentWidth)...)
 	} else {
 		for _, section := range sections {
@@ -61,7 +61,7 @@ func (a *App) renderPrefixPalette() string {
 
 	footer := lipgloss.NewStyle().
 		Foreground(common.ColorMuted()).
-		Render(fmt.Sprintf("Esc cancel | Backspace undo | %s reset | %s %s sends literal", a.prefixLabel, a.prefixLabel, a.prefixLabel))
+		Render(fmt.Sprintf("Esc cancel | Backspace undo | %s reset | %s %s sends literal", a.oc().Prefix.Label, a.oc().Prefix.Label, a.oc().Prefix.Label))
 
 	maxLines := a.ui.height - 3
 	if maxLines < 2 {
@@ -96,7 +96,7 @@ type prefixPaletteSection struct {
 const prefixPaletteColumnGutterWidth = 3 // " │ "
 
 func (a *App) prefixPaletteSections() []prefixPaletteSection {
-	if len(a.prefixSequence) == 0 {
+	if len(a.oc().Prefix.Sequence) == 0 {
 		return a.rootPrefixPaletteSections()
 	}
 
@@ -104,7 +104,7 @@ func (a *App) prefixPaletteSections() []prefixPaletteSection {
 	if len(choices) > 0 {
 		return []prefixPaletteSection{
 			{
-				Title:   prefixPaletteGroupTitle(a.prefixSequence[0]),
+				Title:   prefixPaletteGroupTitle(a.oc().Prefix.Sequence[0]),
 				Choices: choices,
 			},
 		}
@@ -191,12 +191,12 @@ func (a *App) rootPrefixPaletteSections() []prefixPaletteSection {
 }
 
 func (a *App) nextPrefixPaletteChoices() []prefixPaletteChoice {
-	matches := a.matchingPrefixCommands(a.prefixSequence)
+	matches := a.matchingPrefixCommands(a.oc().Prefix.Sequence)
 	if len(matches) == 0 {
 		return nil
 	}
 
-	seqLen := len(a.prefixSequence)
+	seqLen := len(a.oc().Prefix.Sequence)
 	order := make([]string, 0, len(matches))
 	descByKey := map[string]string{}
 	hasLeaf := map[string]bool{}
@@ -418,17 +418,17 @@ func (a *App) choiceKeyWidth(choices []prefixPaletteChoice) int {
 }
 
 func (a *App) prefixKeyLabel(actionKey string) string {
-	if len(a.prefixSequence) == 0 {
+	if len(a.oc().Prefix.Sequence) == 0 {
 		return actionKey
 	}
-	return strings.Join(a.prefixSequence, " ") + " " + actionKey
+	return strings.Join(a.oc().Prefix.Sequence, " ") + " " + actionKey
 }
 
 func (a *App) renderChoiceKey(actionKey string, keyWidth int) string {
-	if len(a.prefixSequence) == 0 {
+	if len(a.oc().Prefix.Sequence) == 0 {
 		return a.ui.styles.HelpKey.Width(keyWidth).Render(actionKey)
 	}
-	prefix := strings.Join(a.prefixSequence, " ")
+	prefix := strings.Join(a.oc().Prefix.Sequence, " ")
 	prefixStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
 	actionStyle := lipgloss.NewStyle().Foreground(common.ColorPrimary()).Bold(true)
 	key := prefixStyle.Render(prefix) + " " + actionStyle.Render(actionKey)

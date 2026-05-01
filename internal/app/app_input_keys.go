@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/logging"
 	"github.com/andyrewlee/amux/internal/messages"
 )
@@ -35,23 +36,23 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 
 	// 1. Handle prefix key
 	if a.isPrefixKey(msg) {
-		if a.prefixActive {
-			if len(a.prefixSequence) == 0 {
+		if a.oc().Prefix.Active {
+			if len(a.oc().Prefix.Sequence) == 0 {
 				// Prefix + Prefix = send literal prefix key to terminal.
 				a.sendPrefixToTerminal()
 				a.exitPrefix()
 				return nil
 			}
 			// Restart narrowing from the root command list.
-			a.prefixSequence = nil
-			return a.refreshPrefixTimeout()
+			a.oc().Prefix.Sequence = nil
+			return a.oc().Prefix.RefreshTimeout()
 		}
 		// Enter prefix mode
 		return a.enterPrefix()
 	}
 
 	// 2. If prefix is active, handle mux commands
-	if a.prefixActive {
+	if a.oc().Prefix.Active {
 		// Esc cancels prefix mode without forwarding
 		code := msg.Key().Code
 		if code == tea.KeyEsc || code == tea.KeyEscape {
@@ -61,12 +62,12 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 
 		status, cmd := a.handlePrefixCommand(msg)
 		switch status {
-		case prefixMatchComplete:
+		case orchestrator.PrefixMatchComplete:
 			a.exitPrefix()
 			return cmd
-		case prefixMatchPartial:
+		case orchestrator.PrefixMatchPartial:
 			// Keep prefix mode open while the sequence narrows.
-			return a.refreshPrefixTimeout()
+			return a.oc().Prefix.RefreshTimeout()
 		}
 		// Unknown key in prefix mode: exit prefix and pass through
 		a.exitPrefix()
@@ -75,7 +76,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 
 	// 3. Passthrough mode - route keys to focused pane
 	// Handle button navigation when center pane is focused and showing welcome/workspace info (no tabs, no draft)
-	if a.focusedPane == messages.PaneCenter && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
+	if a.oc().Focus.FocusedPane == messages.PaneCenter && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
 		maxIndex := a.centerButtonCount() - 1
 		switch {
 		case key.Matches(msg, a.keymap.Left), key.Matches(msg, a.keymap.Up):
@@ -112,7 +113,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	// Route to focused pane
-	switch a.focusedPane {
+	switch a.oc().Focus.FocusedPane {
 	case messages.PaneDashboard:
 		newDashboard, cmd := a.ui.dashboard.Update(msg)
 		a.ui.dashboard = newDashboard
@@ -147,7 +148,7 @@ func (a *App) handleWindowSize(msg tea.WindowSizeMsg) {
 }
 
 func (a *App) handlePaste(msg tea.PasteMsg) tea.Cmd {
-	switch a.focusedPane {
+	switch a.oc().Focus.FocusedPane {
 	case messages.PaneCenter:
 		newCenter, cmd := a.ui.center.Update(msg)
 		a.ui.center = newCenter
@@ -161,7 +162,7 @@ func (a *App) handlePaste(msg tea.PasteMsg) tea.Cmd {
 }
 
 func (a *App) handlePrefixTimeout(msg prefixTimeoutMsg) {
-	if msg.token == a.prefixToken && a.prefixActive {
+	if msg.token == a.oc().Prefix.Token && a.oc().Prefix.Active {
 		a.exitPrefix()
 	}
 }

@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/app/activity"
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
@@ -62,7 +63,12 @@ func New(version, commit, date string) (*App, error) {
 	// Apply saved theme before creating styles
 	common.SetCurrentTheme(common.ThemeID(cfg.UI.Theme))
 	styles := common.DefaultStyles()
+	orch := orchestrator.New()
+	orch.Prefix.Label = PrefixKeyLabel()
+	orch.Prefix.HelpLabel = PrefixHelpLabel()
+
 	app := &App{
+		orch:                   orch,
 		config:                 cfg,
 		workspaceService:       workspaceService,
 		gitStatus:              gitStatus,
@@ -71,16 +77,11 @@ func New(version, commit, date string) (*App, error) {
 		modelRegistry:          modelReg,
 		ticketRenderer:         ticketRenderer,
 		ui:                     newUICompositor(cfg, styles),
-		focusedPane:            messages.PaneDashboard,
 		showWelcome:            true,
 		keymap:                 kmap,
-		prefixLabel:            PrefixKeyLabel(),
-		prefixHelpLabel:        PrefixHelpLabel(),
 		version:                version,
 		commit:                 commit,
 		buildDate:              date,
-		externalMsgs:           make(chan tea.Msg, externalMsgBuffer),
-		externalCritical:       make(chan tea.Msg, externalCriticalBuffer),
 		ctx:                    ctx,
 		tmuxOptions:            tmuxOpts,
 		tmuxActiveWorkspaceIDs: make(map[string]bool),
@@ -90,7 +91,9 @@ func New(version, commit, date string) (*App, error) {
 	}
 	app.instanceID = newInstanceID()
 	app.supervisor = supervisor.New(ctx)
-	app.installSupervisorErrorHandler()
+	app.oc().Pump.InstallErrorHandler(func(handler func(name string, err error)) {
+		app.supervisor.SetErrorHandler(handler)
+	})
 
 	// Initialize the git status controller (file + state watchers).
 	app.gitStatusController = newGitStatusController(
@@ -113,9 +116,9 @@ func New(version, commit, date string) (*App, error) {
 			StartTicker:          func() tea.Cmd { return app.startGitStatusTicker() },
 		},
 	)
-	// Route PTY messages through the app-level pump.
-	app.ui.center.SetMsgSinkTry(app.tryEnqueueExternalMsg)
-	app.ui.sidebarTerminal.SetMsgSink(app.enqueueExternalMsg)
+	// Route PTY messages through the orchestrator pump.
+	app.ui.center.SetMsgSinkTry(func(msg tea.Msg) bool { return app.oc().Pump.TryEnqueue(msg) })
+	app.ui.sidebarTerminal.SetMsgSink(func(msg tea.Msg) { app.oc().Pump.Enqueue(msg) })
 	app.ui.center.SetInstanceID(app.instanceID)
 	app.ui.sidebarTerminal.SetInstanceID(app.instanceID)
 	// Propagate styles to all components (they were created with default theme)
@@ -126,12 +129,14 @@ func New(version, commit, date string) (*App, error) {
 	app.ui.toast.SetStyles(styles)
 	app.setKeymapHintsEnabled(cfg.UI.ShowKeymapHints)
 	// Propagate prefix key label to components for help bars
-	app.ui.dashboard.SetPrefixHelpLabel(app.prefixHelpLabel)
-	app.ui.center.SetPrefixHelpLabel(app.prefixHelpLabel)
-	app.ui.sidebarTerminal.SetPrefixHelpLabel(app.prefixHelpLabel)
+	app.ui.dashboard.SetPrefixHelpLabel(app.oc().Prefix.HelpLabel)
+	app.ui.center.SetPrefixHelpLabel(app.oc().Prefix.HelpLabel)
+	app.ui.sidebarTerminal.SetPrefixHelpLabel(app.oc().Prefix.HelpLabel)
 	// Propagate tmux config to components
 	app.ui.center.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
 	app.ui.sidebarTerminal.SetTmuxConfig(tmuxOpts.ServerName, tmuxOpts.ConfigPath)
+	// Register prefix commands with the orchestrator.
+	app.oc().Prefix.SetCommands(app.buildPrefixCommands())
 	app.supervisor.Start("center.tab_actor", app.ui.center.RunTabActor, supervisor.WithRestartPolicy(supervisor.RestartAlways))
 	if app.gitStatus != nil {
 		app.supervisor.Start("git.status_manager", app.gitStatus.Run)

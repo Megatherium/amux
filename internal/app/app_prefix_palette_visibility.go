@@ -10,9 +10,9 @@ func (a *App) prefixActionVisible(action string) bool {
 
 	switch action {
 	case "focus_left":
-		return a.focusedPane != messages.PaneDashboard
+		return a.oc().Focus.FocusedPane != messages.PaneDashboard
 	case "focus_right":
-		switch a.focusedPane {
+		switch a.oc().Focus.FocusedPane {
 		case messages.PaneSidebar, messages.PaneSidebarTerminal:
 			return false
 		case messages.PaneCenter:
@@ -30,7 +30,7 @@ func (a *App) prefixActionVisible(action string) bool {
 	case "delete_workspace":
 		return a.activeWorkspace != nil && a.activeProject != nil
 	case "next_tab", "prev_tab":
-		switch a.focusedPane {
+		switch a.oc().Focus.FocusedPane {
 		case messages.PaneSidebarTerminal:
 			return a.ui.sidebarTerminal.HasMultipleTabs()
 		case messages.PaneSidebar:
@@ -39,7 +39,7 @@ func (a *App) prefixActionVisible(action string) bool {
 			return a.ui.center.HasTabs()
 		}
 	case "close_tab", "detach_tab", "reattach_tab", "restart_tab":
-		if a.focusedPane == messages.PaneSidebarTerminal {
+		if a.oc().Focus.FocusedPane == messages.PaneSidebarTerminal {
 			return true
 		}
 		return a.ui.center.HasTabs()

@@ -8,11 +8,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andyrewlee/amux/internal/app/activity"
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/app/workspaces"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/discovery"
-	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/supervisor"
 	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/tickets/dolt"
@@ -58,7 +58,6 @@ type App struct {
 	projects        []data.Project
 	activeWorkspace *data.Workspace
 	activeProject   *data.Project
-	focusedPane     messages.PaneType
 	showWelcome     bool
 
 	// Update state
@@ -74,6 +73,9 @@ type App struct {
 	// Git status management
 	gitStatusController *GitStatusController
 
+	// UI orchestration (focus, prefix, message pump)
+	orch *orchestrator.Orchestrator
+
 	// Layout
 	keymap KeyMap
 	// Lifecycle
@@ -81,12 +83,6 @@ type App struct {
 	shutdownOnce sync.Once
 	ctx          context.Context
 	supervisor   *supervisor.Supervisor
-	// Prefix mode (leader key)
-	prefixActive    bool
-	prefixToken     int
-	prefixSequence  []string
-	prefixLabel     string
-	prefixHelpLabel string
 
 	tmuxSyncToken             int
 	tmuxActivityToken         int
@@ -116,12 +112,6 @@ type App struct {
 	lastInputAt         time.Time
 	pendingInputLatency bool
 
-	// External message pump (for PTY readers)
-	externalMsgs     chan tea.Msg
-	externalCritical chan tea.Msg
-	externalSender   func(tea.Msg)
-	externalOnce     sync.Once
-
 	// Ticket auto-refresh: supervisor worker that polls LatestUpdate() off-thread.
 	ticketPoller *ticketPoller
 }
@@ -133,4 +123,13 @@ func (a *App) wm() *workspaces.Manager {
 		a.workspaceManager = workspaces.NewManager()
 	}
 	return a.workspaceManager
+}
+
+// oc returns the Orchestrator, lazily initializing it if nil.
+// This allows test code to construct App without explicitly setting orch.
+func (a *App) oc() *orchestrator.Orchestrator {
+	if a.orch == nil {
+		a.orch = orchestrator.New()
+	}
+	return a.orch
 }

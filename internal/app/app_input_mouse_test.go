@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/git"
@@ -94,12 +95,13 @@ func assertPaneAt(t *testing.T, app *App, x, y int, want messages.PaneType, want
 
 func TestPrefixPaletteContainsPoint(t *testing.T) {
 	app := &App{
-		prefixActive: true,
+		orch: orchestrator.New(),
 		ui: &UICompositor{
 			width:  120,
 			height: 40,
 		},
 	}
+	app.oc().Prefix.Active = true
 
 	if !app.prefixPaletteContainsPoint(10, 39) {
 		t.Fatal("expected point in bottom overlay area to hit prefix palette")
@@ -114,7 +116,6 @@ func TestRouteMouseClick_PrefixPaletteConsumesClicks(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		prefixActive: true,
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
@@ -124,7 +125,6 @@ func TestRouteMouseClick_PrefixPaletteConsumesClicks(t *testing.T) {
 			width:           140,
 			height:          40,
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 
 	_, paletteHeight := viewDimensions(app.renderPrefixPalette())
@@ -141,8 +141,8 @@ func TestRouteMouseClick_PrefixPaletteConsumesClicks(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected palette click to be consumed without command")
 	}
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focus to remain dashboard, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus to remain dashboard, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -151,7 +151,6 @@ func TestRouteMouseWheel_PrefixPaletteConsumesWheel(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
-		prefixActive: true,
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
@@ -161,7 +160,6 @@ func TestRouteMouseWheel_PrefixPaletteConsumesWheel(t *testing.T) {
 			width:           140,
 			height:          40,
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 
 	sidebarStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX() + l.CenterWidth() + l.GapX()
@@ -182,8 +180,8 @@ func TestRouteMouseWheel_PrefixPaletteConsumesWheel(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected palette wheel input to be consumed without command")
 	}
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focus to remain dashboard, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus to remain dashboard, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -192,6 +190,7 @@ func TestRouteMouseWheel_FocusesHoveredSidebarAndScrollsChanges(t *testing.T) {
 	l.Resize(140, 40)
 
 	app := &App{
+		orch: orchestrator.New(),
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
@@ -213,7 +212,7 @@ func TestRouteMouseWheel_FocusesHoveredSidebarAndScrollsChanges(t *testing.T) {
 	}
 	app.ui.sidebar.SetGitStatus(status)
 
-	app.focusPane(messages.PaneCenter)
+	app.oc().Focus.FocusedPane = messages.PaneCenter
 
 	before := app.ui.sidebar.ContentView()
 	if strings.Contains(before, "file-20.txt") {
@@ -231,8 +230,8 @@ func TestRouteMouseWheel_FocusesHoveredSidebarAndScrollsChanges(t *testing.T) {
 	}
 
 	after := app.ui.sidebar.ContentView()
-	if app.focusedPane != messages.PaneSidebar {
-		t.Fatalf("expected wheel to focus sidebar, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneSidebar {
+		t.Fatalf("expected wheel to focus sidebar, got %v", app.oc().Focus.FocusedPane)
 	}
 	if !strings.Contains(after, "file-20.txt") {
 		t.Fatalf("expected hovered sidebar wheel scroll to reveal later files; got view:\n%s", after)
@@ -244,6 +243,7 @@ func TestRouteMouseWheel_HoverSidebarTerminalSkipsFocusSideEffects(t *testing.T)
 	l.Resize(140, 40)
 
 	app := &App{
+		orch: orchestrator.New(),
 		ui: &UICompositor{
 			layout:          l,
 			dashboard:       dashboard.New(),
@@ -256,7 +256,7 @@ func TestRouteMouseWheel_HoverSidebarTerminalSkipsFocusSideEffects(t *testing.T)
 
 	ws := data.NewWorkspace("feature", "feature", "main", "/tmp/repo", "/tmp/repo/feature")
 	app.ui.sidebarTerminal.SetWorkspacePreview(ws)
-	app.focusPane(messages.PaneCenter)
+	app.oc().Focus.SetFocusedPane(messages.PaneCenter)
 
 	sidebarStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX() + l.CenterWidth() + l.GapX()
 	topPaneHeight, _ := sidebarPaneHeights(l.Height())
@@ -268,8 +268,8 @@ func TestRouteMouseWheel_HoverSidebarTerminalSkipsFocusSideEffects(t *testing.T)
 	if cmd != nil {
 		t.Fatal("expected empty sidebar terminal hover wheel to avoid terminal-creation command")
 	}
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("expected focus to remain center for empty sidebar terminal, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("expected focus to remain center for empty sidebar terminal, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -305,7 +305,7 @@ func TestRouteMouseWheel_HoverCenterPreservesDetachedReattach(t *testing.T) {
 	if cmd := centerModel.RestoreTabsFromWorkspace(ws); cmd != nil {
 		t.Fatal("expected detached tab restore to be synchronous")
 	}
-	app.focusPane(messages.PaneDashboard)
+	app.oc().Focus.SetFocusedPane(messages.PaneDashboard)
 
 	centerStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX()
 	cmd := app.routeMouseWheel(tea.MouseWheelMsg{
@@ -316,8 +316,8 @@ func TestRouteMouseWheel_HoverCenterPreservesDetachedReattach(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected wheel focus retarget into center to queue detached-tab reattach")
 	}
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("expected wheel to retarget focus to center, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("expected wheel to retarget focus to center, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -335,7 +335,7 @@ func TestRouteMouseWheel_HoverDashboardDoesNotRetargetFromFocusedPane(t *testing
 		},
 	}
 	app.updateLayout()
-	app.focusPane(messages.PaneCenter)
+	app.oc().Focus.SetFocusedPane(messages.PaneCenter)
 
 	cmd := app.routeMouseWheel(tea.MouseWheelMsg{
 		Button: tea.MouseWheelDown,
@@ -345,8 +345,8 @@ func TestRouteMouseWheel_HoverDashboardDoesNotRetargetFromFocusedPane(t *testing
 	if cmd != nil {
 		t.Fatal("expected dashboard hover wheel to avoid activating dashboard rows")
 	}
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("expected focus to remain center, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("expected focus to remain center, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -364,7 +364,7 @@ func TestRouteMouseWheel_HoverEmptyCenterDoesNotStealFocus(t *testing.T) {
 		},
 	}
 	app.updateLayout()
-	app.focusPane(messages.PaneDashboard)
+	app.oc().Focus.SetFocusedPane(messages.PaneDashboard)
 
 	centerStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX()
 	_ = app.routeMouseWheel(tea.MouseWheelMsg{
@@ -372,8 +372,8 @@ func TestRouteMouseWheel_HoverEmptyCenterDoesNotStealFocus(t *testing.T) {
 		X:      centerStartX + 3,
 		Y:      l.TopGutter() + 2,
 	})
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focus to remain dashboard for empty center hover, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus to remain dashboard for empty center hover, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -393,7 +393,7 @@ func TestRouteMouseWheel_DialogOverlayPreventsRetarget(t *testing.T) {
 	}
 	app.ui.dialog.Show()
 	app.updateLayout()
-	app.focusPane(messages.PaneDashboard)
+	app.oc().Focus.SetFocusedPane(messages.PaneDashboard)
 
 	centerStartX := l.LeftGutter() + l.DashboardWidth() + l.GapX()
 	_ = app.routeMouseWheel(tea.MouseWheelMsg{
@@ -401,8 +401,8 @@ func TestRouteMouseWheel_DialogOverlayPreventsRetarget(t *testing.T) {
 		X:      centerStartX + 3,
 		Y:      l.TopGutter() + 2,
 	})
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected dialog overlay to preserve dashboard focus, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected dialog overlay to preserve dashboard focus, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -441,7 +441,7 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 	if cmd := centerModel.RestoreTabsFromWorkspace(ws); cmd != nil {
 		t.Fatal("expected detached tab restore to be synchronous")
 	}
-	app.focusPane(messages.PaneDashboard)
+	app.oc().Focus.SetFocusedPane(messages.PaneDashboard)
 
 	_ = app.ui.toast.ShowInfo(strings.Repeat("toast ", 12))
 	toastView := app.ui.toast.View()
@@ -480,7 +480,7 @@ func TestRouteMouseWheel_ToastOverlayPreventsRetarget(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected toast-covered wheel input to avoid retarget side effects")
 	}
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected toast overlay to preserve dashboard focus, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected toast overlay to preserve dashboard focus, got %v", app.oc().Focus.FocusedPane)
 	}
 }

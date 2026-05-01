@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/perf"
 	"github.com/andyrewlee/amux/internal/ui/center"
@@ -39,10 +40,8 @@ func TestSoakHarnessPTY(t *testing.T) {
 		t.Fatalf("harness init: %v", err)
 	}
 
-	app := &App{
-		externalMsgs:     make(chan tea.Msg, 64),
-		externalCritical: make(chan tea.Msg, 16),
-	}
+	app := &App{orch: orchestrator.New()}
+	normalMsgs, criticalMsgs := app.oc().Pump.Channels()
 
 	var sent int64
 	app.SetMsgSender(func(msg tea.Msg) {
@@ -91,8 +90,8 @@ func TestSoakHarnessPTY(t *testing.T) {
 
 	close(stop)
 	<-done
-	close(app.externalMsgs)
-	close(app.externalCritical)
+	close(normalMsgs)
+	close(criticalMsgs)
 
 	stats, counters := perf.Snapshot()
 	logSoakPerf(t, stats, counters, sent)

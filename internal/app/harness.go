@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/config"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
@@ -150,8 +151,9 @@ func newCenterHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 			width:           opts.Width,
 			height:          opts.Height,
 		},
-		focusedPane: messages.PaneCenter,
+		orch: orchestrator.New(),
 	}
+	app.oc().Focus.FocusedPane = messages.PaneCenter
 
 	app.ui.layout.Resize(opts.Width, opts.Height)
 	app.updateLayout()
@@ -208,8 +210,9 @@ func newSidebarHarness(cfg *config.Config, opts HarnessOptions) *Harness {
 			width:           opts.Width,
 			height:          opts.Height,
 		},
-		focusedPane: messages.PaneSidebarTerminal,
+		orch: orchestrator.New(),
 	}
+	app.oc().Focus.FocusedPane = messages.PaneSidebarTerminal
 
 	app.ui.layout.Resize(opts.Width, opts.Height)
 	app.updateLayout()

@@ -4,7 +4,7 @@ golangci-lint = "2.11.4"
 [env]
 CONFIG="./.beads/dolt/config.yaml"
 
-[tasksbeads_dolt]
+[tasks.beads_dolt]
 #run="cd .beads/dolt && dolt sql-server --config $CONFIG & yq '.listener.port' $CONFIG > ./.beads/dolt-server.port"
 run="start_beads"
 description="Start beads dolt server via dolt sql-server and set dolt-server.port"

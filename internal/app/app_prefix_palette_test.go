@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
@@ -26,13 +27,14 @@ func TestRenderChoiceColumns_RespectsSeparatorGutterInFitLoop(t *testing.T) {
 
 func TestRenderPrefixPalette_RootSectionsShareHeaderRow(t *testing.T) {
 	app := &App{
-		prefixActive: true,
+		orch: orchestrator.New(),
 		ui: &UICompositor{
 			width:  120,
 			height: 24,
 			styles: common.DefaultStyles(),
 		},
 	}
+	app.oc().Prefix.Active = true
 
 	lines := strings.Split(ansi.Strip(app.renderPrefixPalette()), "\n")
 	for _, line := range lines {
@@ -49,13 +51,14 @@ func TestRenderPrefixPalette_RootSectionsShareHeaderRow(t *testing.T) {
 
 func TestRenderPrefixPalette_RootSectionsShareFirstCommandRow(t *testing.T) {
 	app := &App{
-		prefixActive: true,
+		orch: orchestrator.New(),
 		ui: &UICompositor{
 			width:  120,
 			height: 24,
 			styles: common.DefaultStyles(),
 		},
 	}
+	app.oc().Prefix.Active = true
 
 	lines := strings.Split(ansi.Strip(app.renderPrefixPalette()), "\n")
 	for _, line := range lines {
@@ -77,7 +80,7 @@ func TestRenderPrefixPalette_FiltersUnavailableRootCommands(t *testing.T) {
 		Tabs:   1,
 	})
 	app := h.app
-	app.prefixActive = true
+	app.oc().Prefix.Active = true
 
 	content := ansi.Strip(app.renderPrefixPalette())
 	if strings.Contains(content, "1-9") {
@@ -97,8 +100,8 @@ func TestRenderPrefixPalette_HidesFocusLeftFromDashboard(t *testing.T) {
 		Tabs:   1,
 	})
 	app := h.app
-	app.prefixActive = true
-	app.focusedPane = messages.PaneDashboard
+	app.oc().Prefix.Active = true
+	app.oc().Focus.FocusedPane = messages.PaneDashboard
 
 	content := ansi.Strip(app.renderPrefixPalette())
 	if strings.Contains(content, "focus left") {
@@ -113,7 +116,7 @@ func TestNextPrefixPaletteChoices_FiltersUnavailableSubcommands(t *testing.T) {
 		Tabs:   0,
 	})
 	app := h.app
-	app.prefixSequence = []string{"t"}
+	app.oc().Prefix.Sequence = []string{"t"}
 
 	choices := app.nextPrefixPaletteChoices()
 	if len(choices) != 0 {

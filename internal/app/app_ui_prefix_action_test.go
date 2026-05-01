@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/data"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/layout"
@@ -62,7 +63,10 @@ func TestRunPrefixAction_DeleteWorkspaceRequiresSelection(t *testing.T) {
 
 func TestRunPrefixAction_FocusLeftPartialApp_NoPanic(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.focusedPane = messages.PaneCenter
+	app.oc().Focus.FocusedPane = messages.PaneCenter
+	// Set up a layout that shows dashboard so focus can move left.
+	app.ui.layout = layout.NewManager()
+	app.ui.layout.Resize(140, 40)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -74,14 +78,14 @@ func TestRunPrefixAction_FocusLeftPartialApp_NoPanic(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("expected nil follow-up command, got %v", cmd)
 	}
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focused pane dashboard, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focused pane dashboard, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_FocusRightPartialApp_NoPanic(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
-	app.focusedPane = messages.PaneDashboard
+	app.oc().Focus.FocusedPane = messages.PaneDashboard
 	app.ui.layout = layout.NewManager()
 	app.ui.layout.Resize(140, 40) // Ensures center pane is visible.
 
@@ -92,8 +96,8 @@ func TestRunPrefixAction_FocusRightPartialApp_NoPanic(t *testing.T) {
 	}()
 
 	_ = app.runPrefixAction("focus_right")
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("expected focused pane center, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("expected focused pane center, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -169,88 +173,88 @@ func TestRunPrefixAction_ToggleSidebar(t *testing.T) {
 
 func TestRunPrefixAction_ToggleBoth_RelocatesFocusFromDashboard(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneDashboard
+	app.oc().Focus.FocusedPane = messages.PaneDashboard
 
 	app.runPrefixAction("toggle_both_sidebars")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("focus should relocate to center, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_ToggleBoth_KeepsCenterFocus(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneCenter
+	app.oc().Focus.FocusedPane = messages.PaneCenter
 
 	app.runPrefixAction("toggle_both_sidebars")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("center focus should be preserved, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("center focus should be preserved, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_ToggleBoth_RelocatesFocusFromSidebar(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneSidebar
+	app.oc().Focus.FocusedPane = messages.PaneSidebar
 
 	app.runPrefixAction("toggle_both_sidebars")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_ToggleBoth_RelocatesFocusFromSidebarTerminal(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneSidebarTerminal
+	app.oc().Focus.FocusedPane = messages.PaneSidebarTerminal
 
 	app.runPrefixAction("toggle_both_sidebars")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("focus should relocate to center when sidebar terminal is hidden, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar terminal is hidden, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_ToggleDashboard_RelocatesFocusFromDashboard(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneDashboard
+	app.oc().Focus.FocusedPane = messages.PaneDashboard
 
 	app.runPrefixAction("toggle_dashboard")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("focus should relocate to center when dashboard is hidden, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when dashboard is hidden, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_ToggleSidebar_RelocatesFocusFromSidebar(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneSidebar
+	app.oc().Focus.FocusedPane = messages.PaneSidebar
 
 	app.runPrefixAction("toggle_sidebar")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRunPrefixAction_ToggleSidebar_RelocatesFocusFromSidebarTerminal(t *testing.T) {
 	app := newLayoutTestApp(t)
-	app.focusedPane = messages.PaneSidebarTerminal
+	app.oc().Focus.FocusedPane = messages.PaneSidebarTerminal
 
 	app.runPrefixAction("toggle_sidebar")
 
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("focus should relocate to center when sidebar is hidden, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestPrefixCommand_bb_MatchesToggleBoth(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
 
-	app.prefixActive = true
-	app.prefixSequence = []string{"b"}
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"b"}
 	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'b', Text: "b"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("prefix 'b b' should complete, got %v", status)
 	}
 }
@@ -258,10 +262,10 @@ func TestPrefixCommand_bb_MatchesToggleBoth(t *testing.T) {
 func TestPrefixCommand_bh_IsPartial(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
 
-	app.prefixActive = true
-	app.prefixSequence = []string{"b"}
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"b"}
 	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'h', Text: "h"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("prefix 'b h' should complete, got %v", status)
 	}
 }
@@ -269,10 +273,10 @@ func TestPrefixCommand_bh_IsPartial(t *testing.T) {
 func TestPrefixCommand_bl_IsPartial(t *testing.T) {
 	app, _, _ := newPrefixTestApp(t)
 
-	app.prefixActive = true
-	app.prefixSequence = []string{"b"}
+	app.oc().Prefix.Active = true
+	app.oc().Prefix.Sequence = []string{"b"}
 	status, _ := app.handlePrefixCommand(tea.KeyPressMsg{Code: 'l', Text: "l"})
-	if status != prefixMatchComplete {
+	if status != orchestrator.PrefixMatchComplete {
 		t.Fatalf("prefix 'b l' should complete, got %v", status)
 	}
 }

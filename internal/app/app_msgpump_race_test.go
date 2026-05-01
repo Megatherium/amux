@@ -9,14 +9,15 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/messages"
 )
 
 func TestExternalMsgPumpConcurrent(t *testing.T) {
-	app := &App{
-		externalMsgs:     make(chan tea.Msg, 256),
-		externalCritical: make(chan tea.Msg, 64),
-	}
+	app := &App{orch: orchestrator.New()}
+	// Use smaller channels for faster test execution.
+	app.oc().Pump = orchestrator.NewMessagePumpWithSize(256, 64)
+	normal, critical := app.oc().Pump.Channels()
 
 	var delivered int64
 	app.SetMsgSender(func(msg tea.Msg) {
@@ -45,8 +46,8 @@ func TestExternalMsgPumpConcurrent(t *testing.T) {
 	}
 
 	wg.Wait()
-	close(app.externalMsgs)
-	close(app.externalCritical)
+	close(normal)
+	close(critical)
 
 	if !waitForCount(&delivered, 1, 2*time.Second) {
 		t.Fatalf("expected some messages delivered")

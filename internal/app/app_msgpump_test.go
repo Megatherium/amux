@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -28,7 +29,9 @@ var (
 )
 
 func TestEnqueueExternalMsgDropsWhenFull(t *testing.T) {
-	a := &App{externalMsgs: make(chan tea.Msg, 1)}
+	a := &App{orch: orchestrator.New()}
+	// Override with smaller channels for testing.
+	a.oc().Pump = orchestrator.NewMessagePumpWithSize(1, 1)
 
 	msg1 := testMsg("first")
 	msg2 := testMsg("second")
@@ -67,23 +70,19 @@ func TestEnqueueExternalMsgDropsWhenFull(t *testing.T) {
 		t.Fatalf("unexpected extra message %q (wanted drop of %q)", got, msg2)
 	case <-time.After(250 * time.Millisecond):
 	}
-
-	close(a.externalMsgs)
 }
 
 func TestEnqueueExternalMsgRoutesCriticalInterfaceToCriticalQueue(t *testing.T) {
-	a := &App{
-		externalMsgs:     make(chan tea.Msg, 1),
-		externalCritical: make(chan tea.Msg, 1),
-	}
+	a := &App{orch: orchestrator.New()}
+	normal, critical := a.oc().Pump.Channels()
 
 	msg := criticalTestMsg{}
 	a.enqueueExternalMsg(msg)
 
-	if got := len(a.externalCritical); got != 1 {
+	if got := len(critical); got != 1 {
 		t.Fatalf("expected critical queue length 1, got %d", got)
 	}
-	if got := len(a.externalMsgs); got != 0 {
+	if got := len(normal); got != 0 {
 		t.Fatalf("expected normal queue length 0, got %d", got)
 	}
 }
@@ -99,21 +98,19 @@ func TestNonEvictingCriticalInterfaceImpliesCriticalRouting(t *testing.T) {
 }
 
 func TestEnqueueExternalMsg_NonEvictingCriticalDoesNotDropNormalQueue(t *testing.T) {
-	a := &App{
-		externalMsgs:     make(chan tea.Msg, 1),
-		externalCritical: make(chan tea.Msg, 1),
-	}
+	a := &App{orch: orchestrator.New()}
+	normal, critical := a.oc().Pump.Channels()
 
-	a.externalMsgs <- testMsg("normal")
-	a.externalCritical <- criticalTestMsg{}
+	normal <- testMsg("normal")
+	critical <- criticalTestMsg{}
 
 	a.enqueueExternalMsg(nonEvictingCriticalTestMsg{})
 
-	if got := len(a.externalMsgs); got != 1 {
+	if got := len(normal); got != 1 {
 		t.Fatalf("expected normal queue length to remain 1, got %d", got)
 	}
 	select {
-	case msg := <-a.externalMsgs:
+	case msg := <-normal:
 		got, ok := msg.(testMsg)
 		if !ok {
 			t.Fatalf("expected normal queue message type %T, got %T", testMsg("normal"), msg)

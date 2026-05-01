@@ -52,12 +52,6 @@ const (
 	// supervisorBackoff controls restart backoff for file/state watchers.
 	supervisorBackoff = 500 * time.Millisecond
 
-	// externalMsgBuffer is the size of the external message channel.
-	externalMsgBuffer = 4096
-
-	// externalCriticalBuffer is the size of the critical external message channel.
-	externalCriticalBuffer = 512
-
 	// defaultMaxAttachedAgentTabs limits concurrently attached chat PTYs to keep
 	// UI responsiveness predictable under heavy multi-agent workloads.
 	// AMUX_MAX_ATTACHED_AGENT_TABS=0 disables the limit.

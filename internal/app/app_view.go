@@ -136,7 +136,7 @@ func (a *App) viewLayerBased() tea.View {
 		centerHeight := a.ui.layout.Height()
 
 		// Check if we can use VTermLayer for direct cell rendering
-		centerOwnsCursor := a.focusedPane == messages.PaneCenter && !blockingOverlayVisible
+		centerOwnsCursor := a.oc().Focus.FocusedPane == messages.PaneCenter && !blockingOverlayVisible
 		if termLayer := a.ui.center.TerminalLayerWithCursorOwner(centerOwnsCursor); termLayer != nil && a.ui.center.HasTabs() && !a.ui.center.HasDiffViewer() {
 			// Get terminal viewport from center model (accounts for borders, tab bar, help lines)
 			termOffsetX, termOffsetY, termW, termH := a.ui.center.TerminalViewport()
@@ -272,7 +272,7 @@ func (a *App) viewLayerBased() tea.View {
 				bottomContentHeight = 1
 			}
 
-			sidebarOwnsCursor := a.focusedPane == messages.PaneSidebarTerminal && !blockingOverlayVisible
+			sidebarOwnsCursor := a.oc().Focus.FocusedPane == messages.PaneSidebarTerminal && !blockingOverlayVisible
 			if termLayer := a.ui.sidebarTerminal.TerminalLayerWithCursorOwner(sidebarOwnsCursor); termLayer != nil {
 				originX, originY := a.ui.sidebarTerminal.TerminalOrigin()
 				termW, termH := a.ui.sidebarTerminal.TerminalSize()
@@ -378,7 +378,7 @@ func (a *App) viewLayerBased() tea.View {
 	}
 	if cursor == nil &&
 		!blockingOverlayVisible &&
-		(a.focusedPane == messages.PaneCenter || a.focusedPane == messages.PaneSidebarTerminal) &&
+		(a.oc().Focus.FocusedPane == messages.PaneCenter || a.oc().Focus.FocusedPane == messages.PaneSidebarTerminal) &&
 		terminalCursor != nil &&
 		!a.toastCoversPoint(terminalCursor.X, terminalCursor.Y) {
 		cursor = terminalCursor

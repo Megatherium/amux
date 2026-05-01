@@ -40,7 +40,6 @@ func TestOpenDiff_ReusesExistingChangedFileTab(t *testing.T) {
 		ui: &UICompositor{
 			center: centerModel,
 		},
-		focusedPane: messages.PaneSidebar,
 	}
 
 	_, cmd := app.Update(messages.OpenDiff{
@@ -59,8 +58,8 @@ func TestOpenDiff_ReusesExistingChangedFileTab(t *testing.T) {
 	if activeIdx != 1 {
 		t.Fatalf("expected existing diff tab to become active immediately, got index %d", activeIdx)
 	}
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("expected center focus after opening diff, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("expected center focus after opening diff, got %v", app.oc().Focus.FocusedPane)
 	}
 
 	msg := cmd()

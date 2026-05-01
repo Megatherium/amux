@@ -3,25 +3,19 @@ package app
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/andyrewlee/amux/internal/app/orchestrator"
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
-type prefixMatch int
-
-const (
-	prefixMatchNone prefixMatch = iota
-	prefixMatchPartial
-	prefixMatchComplete
-)
-
-type prefixCommand struct {
+// prefixCommandAction maps string action names to handler functions.
+type prefixCommandAction struct {
 	Sequence []string
 	Desc     string
 	Action   string
 }
 
-var prefixCommandTable = []prefixCommand{
+var prefixCommandTable = []prefixCommandAction{
 	{Sequence: []string{"a"}, Desc: "add project", Action: "add_project"},
 	{Sequence: []string{"b", "b"}, Desc: "toggle both sidebars", Action: "toggle_both_sidebars"},
 	{Sequence: []string{"b", "h"}, Desc: "toggle dashboard", Action: "toggle_dashboard"},
@@ -43,21 +37,18 @@ var prefixCommandTable = []prefixCommand{
 	{Sequence: []string{"t", "s"}, Desc: "restart tab", Action: "restart_tab"},
 }
 
-func (a *App) prefixCommands() []prefixCommand {
+// prefixCommands returns the prefix command table for the palette.
+func (a *App) prefixCommands() []prefixCommandAction {
 	return prefixCommandTable
 }
 
-// matchingPrefixCommands intentionally does not apply prefixActionVisible.
-// Command execution remains permissive and unavailable actions fail gracefully
-// in runPrefixAction with contextual no-op/toast behavior.
-func (a *App) matchingPrefixCommands(sequence []string) []prefixCommand {
-	commands := a.prefixCommands()
+// matchingPrefixCommands returns commands whose sequences start with the given prefix.
+func (a *App) matchingPrefixCommands(sequence []string) []prefixCommandAction {
 	if len(sequence) == 0 {
-		return commands
+		return prefixCommandTable
 	}
-
-	matches := make([]prefixCommand, 0, len(commands))
-	for _, cmd := range commands {
+	var matches []prefixCommandAction
+	for _, cmd := range prefixCommandTable {
 		if len(sequence) > len(cmd.Sequence) {
 			continue
 		}
@@ -73,6 +64,22 @@ func (a *App) matchingPrefixCommands(sequence []string) []prefixCommand {
 		}
 	}
 	return matches
+}
+
+// buildPrefixCommands converts the app's prefix command table to
+// orchestrator.PrefixCommand format, binding actions via runPrefixAction.
+func (a *App) buildPrefixCommands() []orchestrator.PrefixCommand {
+	result := make([]orchestrator.PrefixCommand, len(prefixCommandTable))
+	for i, cmd := range prefixCommandTable {
+		action := cmd.Action // capture
+		result[i] = orchestrator.PrefixCommand{
+			Sequence: cmd.Sequence,
+			Label:    cmd.Desc,
+			Help:     cmd.Desc,
+			Action:   func() tea.Cmd { return a.runPrefixAction(action) },
+		}
+	}
+	return result
 }
 
 func (a *App) runPrefixAction(action string) tea.Cmd {
@@ -135,7 +142,7 @@ func (a *App) runPrefixAction(action string) tea.Cmd {
 	case "prev_tab":
 		return a.cycleTab(a.ui.sidebar.PrevTab, a.ui.sidebarTerminal.PrevTab, a.ui.center.PrevTab)
 	case "close_tab":
-		if a.focusedPane == messages.PaneSidebarTerminal {
+		if a.oc().Focus.FocusedPane == messages.PaneSidebarTerminal {
 			return a.ui.sidebarTerminal.CloseActiveTab()
 		}
 		return a.ui.center.CloseActiveTab()

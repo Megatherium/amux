@@ -140,7 +140,6 @@ func TestRouteFocusOnActivation_CenterVisibleWithTabs(t *testing.T) {
 			layout: layoutManager,
 			center: centerModel,
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
 
@@ -153,8 +152,8 @@ func TestRouteFocusOnActivation_CenterVisibleWithTabs(t *testing.T) {
 	if !queued {
 		t.Fatal("expected centerFocusQueuedReattach=true when center visible with tabs")
 	}
-	if app.focusedPane != messages.PaneCenter {
-		t.Fatalf("expected focus on PaneCenter, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneCenter {
+		t.Fatalf("expected focus on PaneCenter, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -168,7 +167,6 @@ func TestRouteFocusOnActivation_PreviewReturnsFalse(t *testing.T) {
 			layout: layoutManager,
 			center: center.New(nil),
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
 
@@ -182,15 +180,13 @@ func TestRouteFocusOnActivation_PreviewReturnsFalse(t *testing.T) {
 	if queued {
 		t.Fatal("preview activation should not queue reattach")
 	}
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("preview should leave focus unchanged, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("preview should leave focus unchanged, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
 func TestRouteFocusOnActivation_NilWorkspaceReturnsFalse(t *testing.T) {
-	app := &App{
-		focusedPane: messages.PaneDashboard,
-	}
+	app := &App{}
 
 	var cmds []tea.Cmd
 
@@ -214,7 +210,6 @@ func TestRouteFocusOnActivation_DashboardOnlyFocusesDashboard(t *testing.T) {
 			layout: layoutManager,
 			center: center.New(nil),
 		},
-		focusedPane: messages.PaneSidebar,
 	}
 	app.syncPaneFocusFlags()
 
@@ -227,8 +222,8 @@ func TestRouteFocusOnActivation_DashboardOnlyFocusesDashboard(t *testing.T) {
 	if queued {
 		t.Fatal("dashboard-only layout should not queue center reattach")
 	}
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focus on PaneDashboard, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus on PaneDashboard, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -246,7 +241,6 @@ func TestRouteFocusOnActivation_CenterVisibleNoTabs(t *testing.T) {
 			layout: layoutManager,
 			center: centerModel,
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
 
@@ -260,8 +254,8 @@ func TestRouteFocusOnActivation_CenterVisibleNoTabs(t *testing.T) {
 		t.Fatal("no tabs should not queue center reattach")
 	}
 	// Focus should stay on dashboard since there are no tabs to focus.
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focus to remain on dashboard, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus to remain on dashboard, got %v", app.oc().Focus.FocusedPane)
 	}
 }
 
@@ -283,7 +277,6 @@ func TestRouteFocusOnActivation_CenterVisibleWithPersistedTabs(t *testing.T) {
 			layout: layoutManager,
 			center: centerModel,
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
 

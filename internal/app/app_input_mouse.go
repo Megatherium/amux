@@ -97,7 +97,7 @@ func (a *App) routeMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 		return nil
 	}
 
-	targetPane := a.focusedPane
+	targetPane := a.oc().Focus.FocusedPane
 	// Modal overlays and toast overlays do not consume wheel today, so preserve
 	// focused-pane routing instead of hit-testing obscured panes beneath them.
 	if !a.overlayVisible() && !a.toastCoversPoint(msg.X, msg.Y) {
@@ -108,7 +108,7 @@ func (a *App) routeMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 		if hasTarget {
 			// Dashboard wheel handling activates rows, so do not retarget passive
 			// hover wheel input into it from another pane.
-			if hoverPane != messages.PaneDashboard || a.focusedPane == messages.PaneDashboard {
+			if hoverPane != messages.PaneDashboard || a.oc().Focus.FocusedPane == messages.PaneDashboard {
 				if a.canRetargetWheelToPane(hoverPane) {
 					targetPane = hoverPane
 				}
@@ -117,7 +117,7 @@ func (a *App) routeMouseWheel(msg tea.MouseWheelMsg) tea.Cmd {
 	}
 
 	var focusCmd tea.Cmd
-	if targetPane != a.focusedPane {
+	if targetPane != a.oc().Focus.FocusedPane {
 		focusCmd = a.focusPaneOnWheel(targetPane)
 	}
 
@@ -172,7 +172,7 @@ func (a *App) canRetargetWheelToPane(pane messages.PaneType) bool {
 func (a *App) routeMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
 	// Keep left-button drag motion bound to the pane focused on mouse-down.
 	// Selection/edge-scroll logic depends on receiving out-of-bounds motion.
-	targetPane := a.focusedPane
+	targetPane := a.oc().Focus.FocusedPane
 	if msg.Button != tea.MouseLeft {
 		var ok bool
 		targetPane, ok = a.paneForPoint(msg.X, msg.Y)
@@ -218,7 +218,7 @@ func (a *App) routeMouseMotion(msg tea.MouseMotionMsg) tea.Cmd {
 func (a *App) routeMouseRelease(msg tea.MouseReleaseMsg) tea.Cmd {
 	// Keep left-button release bound to the pane focused on mouse-down so
 	// cross-pane drags still finalize selection state in the source pane.
-	targetPane := a.focusedPane
+	targetPane := a.oc().Focus.FocusedPane
 	if msg.Button != tea.MouseLeft {
 		var ok bool
 		targetPane, ok = a.paneForPoint(msg.X, msg.Y)
@@ -312,7 +312,7 @@ func (a *App) paneForPoint(x, y int) (messages.PaneType, bool) {
 }
 
 func (a *App) prefixPaletteContainsPoint(x, y int) bool {
-	if !a.prefixActive || a.ui.width <= 0 || a.ui.height <= 0 {
+	if !a.oc().Prefix.Active || a.ui.width <= 0 || a.ui.height <= 0 {
 		return false
 	}
 	palette := a.renderPrefixPalette()

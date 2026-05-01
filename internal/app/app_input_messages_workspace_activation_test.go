@@ -87,7 +87,6 @@ func TestHandleWorkspaceActivated_PreviewSkipsFocusTransfer(t *testing.T) {
 			sidebar:         sidebar.NewTabbedSidebar(),
 			sidebarTerminal: sidebar.NewTerminalModel(),
 		},
-		focusedPane: messages.PaneDashboard,
 	}
 	app.syncPaneFocusFlags()
 
@@ -97,7 +96,7 @@ func TestHandleWorkspaceActivated_PreviewSkipsFocusTransfer(t *testing.T) {
 		Preview:   true,
 	})
 
-	if app.focusedPane != messages.PaneDashboard {
-		t.Fatalf("expected focus to remain on dashboard, got %v", app.focusedPane)
+	if app.oc().Focus.FocusedPane != messages.PaneDashboard {
+		t.Fatalf("expected focus to remain on dashboard, got %v", app.oc().Focus.FocusedPane)
 	}
 }
