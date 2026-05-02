@@ -114,10 +114,13 @@ type agentTabOpts struct {
 	TicketTitle string
 	Model       string
 	AgentMode   string
+	DraftTabID  string // optional: reuse an existing draft tab instead of creating a new one
 }
 
 // createAgentTabWithMetadata creates a new agent tab with draft metadata.
-func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace, ticketID, ticketTitle, model, agentMode string) tea.Cmd {
+// If draftTabID is non-empty, the PTY will attach to the existing tab
+// (the converted draft tab) instead of creating a new one.
+func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace, ticketID, ticketTitle, model, agentMode, draftTabID string) tea.Cmd {
 	return m.createAgentTabWithSession(agentTabOpts{
 		Assistant:   assistant,
 		Workspace:   ws,
@@ -126,6 +129,7 @@ func (m *Model) createAgentTabWithMetadata(assistant string, ws *data.Workspace,
 		TicketTitle: ticketTitle,
 		Model:       model,
 		AgentMode:   agentMode,
+		DraftTabID:  draftTabID,
 	})
 }
 
@@ -140,7 +144,10 @@ func (m *Model) createAgentTabWithSession(opts agentTabOpts) tea.Cmd {
 	tm := m.terminalMetrics()
 	termWidth := tm.Width
 	termHeight := tm.Height
-	tabID := generateTabID()
+	tabID := TabID(opts.DraftTabID)
+	if tabID == "" {
+		tabID = generateTabID()
+	}
 	sessionName := opts.SessionName
 	if sessionName == "" {
 		sessionName = tmux.SessionName("amux", string(opts.Workspace.ID()), string(tabID))

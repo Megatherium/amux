@@ -262,6 +262,9 @@ type LaunchAgent struct {
 	TicketTitle string
 	Model       string
 	AgentMode   string
+	// DraftTabID, when set, causes the PTY to be attached to an existing tab
+	// (the draft tab converted to an agent tab) instead of creating a new one.
+	DraftTabID string
 }
 
 // OpenDiff requests opening a diff viewer for a file

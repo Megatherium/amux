@@ -370,17 +370,7 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		}
 
 	case DraftComplete:
-		m.draft = nil
-		return m, func() tea.Msg {
-			return messages.LaunchAgent{
-				Assistant:   msg.Assistant,
-				Workspace:   msg.Workspace,
-				TicketID:    msg.TicketID,
-				TicketTitle: msg.TicketTitle,
-				Model:       msg.Model,
-				AgentMode:   msg.AgentMode,
-			}
-		}
+		return m.handleDraftComplete(msg)
 
 	case DraftCancelled:
 		m.draft = nil
