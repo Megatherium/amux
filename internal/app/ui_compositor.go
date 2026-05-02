@@ -36,8 +36,6 @@ type UICompositor struct {
 	pendingWorkspaceName    string
 	pendingWorkspaceBase    string
 	pendingTickets          []tickets.Ticket
-	previewTicket           *tickets.Ticket
-	previewProject          *data.Project
 
 	// Layout dimensions and visual state (moved from App).
 	width, height int

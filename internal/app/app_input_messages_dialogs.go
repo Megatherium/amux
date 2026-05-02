@@ -273,9 +273,6 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 // is shown in the center pane. When agent tabs exist, the info is shown in the
 // sidebar's ticket tab (without auto-focusing the sidebar).
 func (a *App) handleTicketPreview(msg messages.TicketPreviewMsg) {
-	a.ui.previewTicket = msg.Ticket
-	a.ui.previewProject = msg.Project
-
 	// Forward the preview to the sidebar for the ticket tab
 	if a.ui.sidebar != nil {
 		a.ui.sidebar.SetPreviewTicket(msg.Ticket)

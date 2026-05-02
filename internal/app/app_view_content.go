@@ -3,11 +3,9 @@ package app
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/andyrewlee/amux/internal/tickets"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
 
@@ -27,12 +25,6 @@ func (a *App) centerPaneStyle() lipgloss.Style {
 func (a *App) renderCenterPaneContent() string {
 	if a.showWelcome {
 		return a.renderWelcome()
-	}
-
-	// Ticket preview takes priority when no workspace is active or when the
-	// active workspace has no tabs (the center is showing the info screen).
-	if a.ui.previewTicket != nil && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
-		return a.renderTicketPreview()
 	}
 
 	if a.activeWorkspace != nil {
@@ -72,8 +64,6 @@ func (a *App) goHome() {
 	}
 	a.ui.centerBtnFocused = false
 	a.ui.centerBtnIndex = 0
-	a.ui.previewTicket = nil
-	a.ui.previewProject = nil
 }
 
 // hasTicketService reports whether the active project has a ticket service configured.
@@ -170,137 +160,6 @@ func (a *App) welcomeContent() string {
 		b.WriteString(a.ui.styles.Help.Render("Dashboard: j/k to move • Enter to select"))
 	}
 	return b.String()
-}
-
-// renderTicketPreview renders ticket info in the center pane when the cursor
-// hovers over a ticket row in the dashboard and no agent tabs are open.
-func (a *App) renderTicketPreview() string {
-	t := a.ui.previewTicket
-	if t == nil {
-		return ""
-	}
-
-	var b strings.Builder
-	b.WriteString("\n")
-
-	// Title with ticket ID
-	header := a.ui.styles.Title.Render(t.ID + ": " + t.Title)
-	b.WriteString(header)
-	b.WriteString("\n\n")
-
-	// Status badge
-	statusStyle := lipgloss.NewStyle().Bold(true)
-	switch t.Status {
-	case "open":
-		statusStyle = statusStyle.Foreground(common.ColorPrimary())
-	case "in_progress":
-		statusStyle = statusStyle.Foreground(common.ColorSecondary())
-	case "closed":
-		statusStyle = statusStyle.Foreground(common.ColorMuted())
-	default:
-		statusStyle = statusStyle.Foreground(common.ColorForeground())
-	}
-	b.WriteString(a.ui.styles.Muted.Render("Status: "))
-	b.WriteString(statusStyle.Render(t.Status))
-
-	// Priority
-	b.WriteString("  ")
-	b.WriteString(a.ui.styles.Muted.Render("Priority: "))
-	b.WriteString(tickets.PriorityLabel(t.Priority))
-
-	// Type
-	if t.IssueType != "" {
-		b.WriteString("  ")
-		b.WriteString(a.ui.styles.Muted.Render("Type: "))
-		b.WriteString(t.IssueType)
-	}
-
-	b.WriteString("\n")
-
-	// Assignee
-	if t.Assignee != "" {
-		b.WriteString(a.ui.styles.Muted.Render("Assignee: "))
-		b.WriteString(t.Assignee)
-		b.WriteString("\n")
-	}
-
-	// Dates
-	b.WriteString(a.ui.styles.Muted.Render("Created: "))
-	b.WriteString(t.CreatedAt.Format("2006-01-02 15:04"))
-	b.WriteString("  ")
-	b.WriteString(a.ui.styles.Muted.Render("Updated: "))
-	b.WriteString(t.UpdatedAt.Format("2006-01-02 15:04"))
-	b.WriteString("\n")
-
-	// Description
-	if t.Description != "" {
-		b.WriteString("\n")
-		// Word-wrap the description to fit the pane
-		descWidth := a.ui.layout.CenterWidth() - 6
-		if descWidth < 20 {
-			descWidth = 20
-		}
-		desc := wordWrap(t.Description, descWidth)
-		b.WriteString(a.ui.styles.Muted.Render(desc))
-		b.WriteString("\n")
-	}
-
-	// Action hint
-	b.WriteString("\n")
-	helpStyle := lipgloss.NewStyle().Foreground(common.ColorMuted())
-	b.WriteString(helpStyle.Render("Enter: start agent with ticket"))
-
-	return b.String()
-}
-
-// wordWrap wraps text to the given width, preserving existing newlines.
-func wordWrap(text string, width int) string {
-	if width <= 0 {
-		return text
-	}
-	var result strings.Builder
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		if i > 0 {
-			result.WriteString("\n")
-		}
-		wrapped := wrapLine(line, width)
-		result.WriteString(wrapped)
-	}
-	return result.String()
-}
-
-// wrapLine wraps a single line to the given width.
-func wrapLine(line string, width int) string {
-	if utf8.RuneCountInString(line) <= width {
-		return line
-	}
-	var result strings.Builder
-	runes := []rune(line)
-	for len(runes) > 0 {
-		if result.Len() > 0 {
-			result.WriteString("\n")
-		}
-		if len(runes) <= width {
-			result.WriteString(string(runes))
-			break
-		}
-		// Find a good break point
-		breakAt := width
-		for j := width; j > width/2; j-- {
-			if j < len(runes) && (runes[j] == ' ' || runes[j] == '-') {
-				breakAt = j + 1
-				break
-			}
-		}
-		result.WriteString(string(runes[:breakAt]))
-		runes = runes[breakAt:]
-		// Skip leading space on next line
-		if len(runes) > 0 && runes[0] == ' ' {
-			runes = runes[1:]
-		}
-	}
-	return result.String()
 }
 
 func (a *App) welcomeLogo() (string, lipgloss.Style) {
