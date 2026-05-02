@@ -137,24 +137,49 @@ func (m *Model) helpItem(key, desc string) string {
 func (m *Model) helpLines(contentWidth int) []string {
 	items := []string{}
 
-	hasTabs := len(m.getTabs()) > 0
-	if m.workspace != nil {
-		items = append(items,
-			m.helpItem(m.pfx()+" t a", "new agent tab"),
-		)
+	tabs := m.getTabs()
+	activeIdx := m.getActiveTabIdx()
+
+	// Determine active tab kind for context-appropriate help
+	kind := AgentTab
+	if len(tabs) > 0 && activeIdx < len(tabs) {
+		kind = tabs[activeIdx].Kind
 	}
-	if hasTabs {
+
+	switch kind {
+	case DraftTab:
 		items = append(items,
-			m.helpItem(m.pfx()+" t x", "close"),
-			m.helpItem(m.pfx()+" t d", "detach"),
-			m.helpItem(m.pfx()+" t r", "reattach"),
-			m.helpItem(m.pfx()+" t s", "restart"),
-			m.helpItem(m.pfx()+" t p", "prev"),
-			m.helpItem(m.pfx()+" t n", "next"),
-			m.helpItem(m.pfx()+" 1-9", "jump tab"),
-			m.helpItem("PgUp", "scroll up"),
-			m.helpItem("PgDn", "scroll down"),
+			m.helpItem("Esc", "cancel"),
+			m.helpItem("Enter", "select"),
+			m.helpItem("type", "to filter"),
+			m.helpItem("↑↓", "navigate"),
 		)
+	case TicketViewTab:
+		items = append(items,
+			m.helpItem("Esc", "close"),
+			m.helpItem("Enter", "start draft"),
+			m.helpItem("↑↓", "scroll description"),
+		)
+	default: // AgentTab
+		hasTabs := len(tabs) > 0
+		if m.workspace != nil {
+			items = append(items,
+				m.helpItem(m.pfx()+" t a", "new agent tab"),
+			)
+		}
+		if hasTabs {
+			items = append(items,
+				m.helpItem(m.pfx()+" t x", "close"),
+				m.helpItem(m.pfx()+" t d", "detach"),
+				m.helpItem(m.pfx()+" t r", "reattach"),
+				m.helpItem(m.pfx()+" t s", "restart"),
+				m.helpItem(m.pfx()+" t p", "prev"),
+				m.helpItem(m.pfx()+" t n", "next"),
+				m.helpItem(m.pfx()+" 1-9", "jump tab"),
+				m.helpItem("PgUp", "scroll up"),
+				m.helpItem("PgDn", "scroll down"),
+			)
+		}
 	}
 	return common.WrapHelpItems(items, contentWidth)
 }
