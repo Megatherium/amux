@@ -384,6 +384,11 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 
 	case DraftCancelled:
 		m.draft = nil
+		tabs := m.getTabs()
+		activeIdx := m.getActiveTabIdx()
+		if activeIdx < len(tabs) && tabs[activeIdx].Kind == DraftTab {
+			return m, m.closeTabAt(activeIdx)
+		}
 		return m, nil
 
 	case messages.LaunchAgent:
