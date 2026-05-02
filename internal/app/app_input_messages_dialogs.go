@@ -263,7 +263,7 @@ func (a *App) handleTicketSelected(msg messages.TicketSelectedMsg) []tea.Cmd {
 		})...)
 	}
 
-	a.ui.center.StartDraft(msg.Ticket, mainWS)
+	a.ui.center.CreateDraftTab(msg.Ticket, mainWS)
 	cmds = append(cmds, a.focusPane(messages.PaneCenter))
 	return cmds
 }

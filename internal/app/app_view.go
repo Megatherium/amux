@@ -204,7 +204,7 @@ func (a *App) viewLayerBased() tea.View {
 			// Fallback to string-based rendering with borders (no caching - content changes)
 			a.ui.centerChrome.Invalidate()
 			var centerContent string
-			if a.ui.center.HasTabs() || a.ui.center.HasDraft() {
+			if a.ui.center.HasTabs() {
 				centerContent = a.ui.center.View()
 			} else {
 				centerContent = a.renderCenterPaneContent()

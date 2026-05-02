@@ -31,7 +31,7 @@ func (a *App) renderCenterPaneContent() string {
 
 	// Ticket preview takes priority when no workspace is active or when the
 	// active workspace has no tabs (the center is showing the info screen).
-	if a.ui.previewTicket != nil && !a.ui.center.HasTabs() && !a.ui.center.HasDraft() {
+	if a.ui.previewTicket != nil && !a.ui.center.HasTabs() {
 		return a.renderTicketPreview()
 	}
 

@@ -54,14 +54,12 @@ func (m *Model) Focused() bool {
 	return m.focused
 }
 
-// StartDraft begins a draft flow for the given ticket.
-func (m *Model) StartDraft(ticket *tickets.Ticket, ws *data.Workspace) {
+// CreateDraftTab creates a draft tab for the given ticket.
+func (m *Model) CreateDraftTab(ticket *tickets.Ticket, ws *data.Workspace) {
 	draft := NewDraft(ticket, ws, m.config, m.styles)
 	draft.SetSize(m.contentWidth(), m.height-4)
 	draft.Focus()
-	m.draft = draft
 
-	// Create DraftTab in the tab system
 	now := time.Now()
 	tabID := generateTabID()
 	tab := &Tab{
@@ -78,16 +76,6 @@ func (m *Model) StartDraft(ticket *tickets.Ticket, ws *data.Workspace) {
 	newIdx := len(m.tabsByWorkspace[wsID]) - 1
 	m.setActiveTabIdxForWorkspace(wsID, newIdx)
 	m.noteTabsChanged()
-}
-
-// CancelDraft removes the active draft.
-func (m *Model) CancelDraft() {
-	m.draft = nil
-}
-
-// HasDraft returns whether a draft is in progress.
-func (m *Model) HasDraft() bool {
-	return m.draft != nil
 }
 
 // SetWorkspace sets the active workspace.
@@ -155,10 +143,6 @@ func (m *Model) SetMsgSinkTry(sink func(tea.Msg) bool) {
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-
-	if m.draft != nil {
-		m.draft.SetSize(m.contentWidth(), m.height-4)
-	}
 
 	// Use centralized metrics for terminal sizing
 	tm := m.terminalMetrics()

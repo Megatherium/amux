@@ -370,7 +370,6 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		}
 
 	case DraftComplete:
-		m.draft = nil
 		return m, func() tea.Msg {
 			return messages.LaunchAgent{
 				Assistant:   msg.Assistant,
@@ -383,7 +382,6 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 		}
 
 	case DraftCancelled:
-		m.draft = nil
 		tabs := m.getTabs()
 		activeIdx := m.getActiveTabIdx()
 		if activeIdx < len(tabs) && tabs[activeIdx].Kind == DraftTab {

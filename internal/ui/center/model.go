@@ -39,9 +39,6 @@ type Model struct {
 	offsetX         int // X offset from screen left (dashboard width)
 	showKeymapHints bool
 
-	// Draft state
-	draft *Draft
-
 	// Animation
 	spinnerFrame int // Current frame for activity spinner animation
 
