@@ -92,6 +92,10 @@ type Model struct {
 	ticketCache      map[string][]tickets.Ticket // project path → cached tickets
 	ticketsCollapsed map[string]bool             // project path → collapsed state
 
+	// Double-click detection for ticket rows
+	lastClickTime time.Time
+	lastClickRow  int
+
 	// Styles
 	styles common.Styles
 
@@ -109,6 +113,7 @@ func New() *Model {
 		deletingWorkspaces: make(map[string]bool),
 		activeWorkspaceIDs: make(map[string]bool),
 		ticketsCollapsed:   make(map[string]bool),
+		lastClickRow:       -1,
 		cursor:             0,
 		focused:            true,
 		styles:             common.DefaultStyles(),

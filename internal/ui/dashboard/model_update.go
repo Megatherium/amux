@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -9,6 +10,10 @@ import (
 	"github.com/andyrewlee/amux/internal/messages"
 	"github.com/andyrewlee/amux/internal/ui/common"
 )
+
+// doubleClickWindow is the maximum time between two clicks on the same
+// ticket row to be considered a double-click (which starts the draft flow).
+const doubleClickWindow = 500 * time.Millisecond
 
 // Update handles messages
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
@@ -73,6 +78,24 @@ func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 			if m.rows[idx].Type == RowTicketsHeader {
 				return m, m.handleSpace()
 			}
+			// For ticket rows, single-click shows the ticket preview;
+			// double-click starts the draft flow.
+			if m.rows[idx].Type == RowTicket {
+				now := time.Now()
+				if m.lastClickRow == idx && !m.lastClickTime.IsZero() && now.Sub(m.lastClickTime) < doubleClickWindow {
+					// Double-click: start draft flow
+					m.lastClickTime = time.Time{}
+					m.lastClickRow = -1
+					return m, m.handleEnter()
+				}
+				// Single click: show ticket preview
+				m.lastClickTime = now
+				m.lastClickRow = idx
+				return m, m.activateCurrentRow()
+			}
+			// All other row types: reset double-click state and handle enter.
+			m.lastClickTime = time.Time{}
+			m.lastClickRow = -1
 			return m, m.handleEnter()
 		}
 

@@ -74,6 +74,10 @@ func (m *Model) rebuildRows() {
 	m.rows = rows
 	m.clampCursor()
 	m.clampScrollOffset()
+
+	// Reset double-click state since row indices may have changed.
+	m.lastClickTime = time.Time{}
+	m.lastClickRow = -1
 }
 
 // appendProjectRows appends all rows for a single project: header, workspaces,
