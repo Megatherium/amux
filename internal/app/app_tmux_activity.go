@@ -127,40 +127,40 @@ func (a *App) runTmuxActivityScan(
 	ownerEpoch := int64(0)
 	sharedRoleKnown := false
 	if a.sharedTmuxActivityEnabled() {
-		role, sharedActive, applyShared, epoch, err := a.resolveTmuxActivityScanRole(opts, now)
-		if err != nil {
-			if !tmux.IsNoServerError(err) {
-				logging.Warn("tmux activity ownership resolution failed; falling back to local scan: %v", err)
+		res := a.resolveTmuxActivityScanRole(opts, now)
+		if res.err != nil {
+			if !tmux.IsNoServerError(res.err) {
+				logging.Warn("tmux activity ownership resolution failed; falling back to local scan: %v", res.err)
 			}
-		} else if role == tmuxActivityRoleFollower {
+		} else if res.role == tmuxActivityRoleFollower {
 			_, stoppedTabs, syncErr := a.fetchAndSyncActivitySessionStates(infoBySession, opts, svc)
 			if syncErr != nil {
 				logging.Warn("tmux activity follower session-state sync failed: %v", syncErr)
 			}
-			if !applyShared {
+			if !res.applyShared {
 				return tmuxActivityResult{
 					Token:        scanToken,
 					SkipApply:    true,
 					StoppedTabs:  stoppedTabs,
 					ScannerOwner: false,
-					ScannerEpoch: epoch,
+					ScannerEpoch: res.epoch,
 					RoleKnown:    true,
 				}
 			}
-			if sharedActive == nil {
-				sharedActive = make(map[string]bool)
+			if res.sharedActive == nil {
+				res.sharedActive = make(map[string]bool)
 			}
 			return tmuxActivityResult{
 				Token:              scanToken,
-				ActiveWorkspaceIDs: sharedActive,
+				ActiveWorkspaceIDs: res.sharedActive,
 				StoppedTabs:        stoppedTabs,
 				ScannerOwner:       false,
-				ScannerEpoch:       epoch,
+				ScannerEpoch:       res.epoch,
 				RoleKnown:          true,
 			}
 		} else {
 			sharedRoleKnown = true
-			ownerEpoch = epoch
+			ownerEpoch = res.epoch
 		}
 	}
 

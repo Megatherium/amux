@@ -16,55 +16,55 @@ func TestResolveTmuxActivityScanRole_OwnerFollowerSnapshotEpoch(t *testing.T) {
 	owner := &App{instanceID: "owner-instance"}
 	now := time.Now()
 
-	role, shared, applyShared, epoch, err := owner.resolveTmuxActivityScanRole(opts, now)
-	if err != nil {
-		t.Fatalf("resolve owner role: %v", err)
+	r := owner.resolveTmuxActivityScanRole(opts, now)
+	if r.err != nil {
+		t.Fatalf("resolve owner role: %v", r.err)
 	}
-	if role != tmuxActivityRoleOwner {
-		t.Fatalf("expected owner role, got %v", role)
+	if r.role != tmuxActivityRoleOwner {
+		t.Fatalf("expected owner role, got %v", r.role)
 	}
-	if applyShared {
+	if r.applyShared {
 		t.Fatal("expected owner path not to apply shared snapshot")
 	}
-	if len(shared) != 0 {
-		t.Fatalf("expected no shared snapshot for owner path, got %v", shared)
+	if len(r.sharedActive) != 0 {
+		t.Fatalf("expected no shared snapshot for owner path, got %v", r.sharedActive)
 	}
-	if epoch < 1 {
-		t.Fatalf("expected epoch >= 1, got %d", epoch)
+	if r.epoch < 1 {
+		t.Fatalf("expected epoch >= 1, got %d", r.epoch)
 	}
 
 	active := map[string]bool{"ws-a": true, "ws-b": true}
-	if err := owner.publishTmuxActivitySnapshot(opts, active, epoch, now); err != nil {
+	if err := owner.publishTmuxActivitySnapshot(opts, active, r.epoch, now); err != nil {
 		t.Fatalf("publish snapshot: %v", err)
 	}
 
 	follower := &App{instanceID: "follower-instance"}
-	role, shared, applyShared, followerEpoch, err := follower.resolveTmuxActivityScanRole(opts, now.Add(500*time.Millisecond))
-	if err != nil {
-		t.Fatalf("resolve follower role: %v", err)
+	f := follower.resolveTmuxActivityScanRole(opts, now.Add(500*time.Millisecond))
+	if f.err != nil {
+		t.Fatalf("resolve follower role: %v", f.err)
 	}
-	if role != tmuxActivityRoleFollower {
-		t.Fatalf("expected follower role, got %v", role)
+	if f.role != tmuxActivityRoleFollower {
+		t.Fatalf("expected follower role, got %v", f.role)
 	}
-	if !applyShared {
+	if !f.applyShared {
 		t.Fatal("expected follower to apply shared snapshot")
 	}
-	if followerEpoch != epoch {
-		t.Fatalf("expected follower epoch %d, got %d", epoch, followerEpoch)
+	if f.epoch != r.epoch {
+		t.Fatalf("expected follower epoch %d, got %d", r.epoch, f.epoch)
 	}
-	if !shared["ws-a"] || !shared["ws-b"] {
-		t.Fatalf("expected shared active snapshot, got %v", shared)
+	if !f.sharedActive["ws-a"] || !f.sharedActive["ws-b"] {
+		t.Fatalf("expected shared active snapshot, got %v", f.sharedActive)
 	}
 
-	role, _, _, renewedEpoch, err := owner.resolveTmuxActivityScanRole(opts, now.Add(time.Second))
-	if err != nil {
-		t.Fatalf("resolve owner renew: %v", err)
+	r2 := owner.resolveTmuxActivityScanRole(opts, now.Add(time.Second))
+	if r2.err != nil {
+		t.Fatalf("resolve owner renew: %v", r2.err)
 	}
-	if role != tmuxActivityRoleOwner {
-		t.Fatalf("expected owner role on renew, got %v", role)
+	if r2.role != tmuxActivityRoleOwner {
+		t.Fatalf("expected owner role on renew, got %v", r2.role)
 	}
-	if renewedEpoch != epoch {
-		t.Fatalf("expected owner renew to keep epoch %d, got %d", epoch, renewedEpoch)
+	if r2.epoch != r.epoch {
+		t.Fatalf("expected owner renew to keep epoch %d, got %d", r.epoch, r2.epoch)
 	}
 }
 
@@ -104,15 +104,15 @@ func TestReadTmuxActivitySnapshot_EpochMismatchReturnsNotOK(t *testing.T) {
 
 	owner := &App{instanceID: "owner-epoch"}
 	now := time.Now()
-	_, _, _, epoch, err := owner.resolveTmuxActivityScanRole(opts, now)
-	if err != nil {
-		t.Fatalf("resolve owner role: %v", err)
+	r := owner.resolveTmuxActivityScanRole(opts, now)
+	if r.err != nil {
+		t.Fatalf("resolve owner role: %v", r.err)
 	}
-	if err := owner.publishTmuxActivitySnapshot(opts, map[string]bool{"ws-a": true}, epoch, now); err != nil {
+	if err := owner.publishTmuxActivitySnapshot(opts, map[string]bool{"ws-a": true}, r.epoch, now); err != nil {
 		t.Fatalf("publish snapshot: %v", err)
 	}
 
-	shared, ok, err := readTmuxActivitySnapshot(opts, now, epoch+1)
+	shared, ok, err := readTmuxActivitySnapshot(opts, now, r.epoch+1)
 	if err != nil {
 		t.Fatalf("read snapshot: %v", err)
 	}
@@ -131,18 +131,18 @@ func TestResolveTmuxActivityScanRole_FollowerWithoutSnapshotSkipsApply(t *testin
 	}
 
 	app := &App{instanceID: "follower-only"}
-	role, shared, applyShared, epoch, err := app.resolveTmuxActivityScanRole(opts, now.Add(200*time.Millisecond))
-	if err != nil {
-		t.Fatalf("resolve role: %v", err)
+	res := app.resolveTmuxActivityScanRole(opts, now.Add(200*time.Millisecond))
+	if res.err != nil {
+		t.Fatalf("resolve role: %v", res.err)
 	}
-	if role != tmuxActivityRoleFollower {
-		t.Fatalf("expected follower role, got %v", role)
+	if res.role != tmuxActivityRoleFollower {
+		t.Fatalf("expected follower role, got %v", res.role)
 	}
-	if applyShared {
-		t.Fatalf("expected follower to skip apply when snapshot missing, got shared=%v", shared)
+	if res.applyShared {
+		t.Fatalf("expected follower to skip apply when snapshot missing, got shared=%v", res.sharedActive)
 	}
-	if epoch != 7 {
-		t.Fatalf("expected follower epoch 7, got %d", epoch)
+	if res.epoch != 7 {
+		t.Fatalf("expected follower epoch 7, got %d", res.epoch)
 	}
 }
 
@@ -152,11 +152,11 @@ func TestResolveTmuxActivityScanRole_OwnerResolveDoesNotRenewHeartbeat(t *testin
 
 	owner := &App{instanceID: "owner-no-resolve-heartbeat"}
 	now := time.Now()
-	_, _, _, epoch, err := owner.resolveTmuxActivityScanRole(opts, now)
-	if err != nil {
-		t.Fatalf("resolve owner role: %v", err)
+	r := owner.resolveTmuxActivityScanRole(opts, now)
+	if r.err != nil {
+		t.Fatalf("resolve owner role: %v", r.err)
 	}
-	if err := owner.publishTmuxActivitySnapshot(opts, map[string]bool{"ws-a": true}, epoch, now); err != nil {
+	if err := owner.publishTmuxActivitySnapshot(opts, map[string]bool{"ws-a": true}, r.epoch, now); err != nil {
 		t.Fatalf("publish snapshot: %v", err)
 	}
 
@@ -169,15 +169,15 @@ func TestResolveTmuxActivityScanRole_OwnerResolveDoesNotRenewHeartbeat(t *testin
 		t.Fatalf("parse heartbeat before resolve: %v", err)
 	}
 
-	role, _, _, renewedEpoch, err := owner.resolveTmuxActivityScanRole(opts, now.Add(2*time.Second))
-	if err != nil {
-		t.Fatalf("resolve owner role again: %v", err)
+	r2 := owner.resolveTmuxActivityScanRole(opts, now.Add(2*time.Second))
+	if r2.err != nil {
+		t.Fatalf("resolve owner role again: %v", r2.err)
 	}
-	if role != tmuxActivityRoleOwner {
-		t.Fatalf("expected owner role, got %v", role)
+	if r2.role != tmuxActivityRoleOwner {
+		t.Fatalf("expected owner role, got %v", r2.role)
 	}
-	if renewedEpoch != epoch {
-		t.Fatalf("expected owner epoch %d, got %d", epoch, renewedEpoch)
+	if r2.epoch != r.epoch {
+		t.Fatalf("expected owner epoch %d, got %d", r.epoch, r2.epoch)
 	}
 
 	afterRaw, err := tmux.GlobalOptionValue(tmuxActivityHeartbeatOption, opts)

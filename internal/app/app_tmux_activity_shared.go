@@ -68,6 +68,16 @@ const (
 	tmuxActivityRoleFollower
 )
 
+// activityScanRoleResult bundles the return values of resolveTmuxActivityScanRole.
+// sharedActive and applyShared are meaningful only when role == tmuxActivityRoleFollower.
+type activityScanRoleResult struct {
+	role         tmuxActivityRole
+	sharedActive map[string]bool
+	applyShared  bool
+	epoch        int64
+	err          error
+}
+
 func (a *App) sharedTmuxActivityEnabled() bool {
 	return strings.TrimSpace(a.instanceID) != ""
 }
@@ -75,7 +85,7 @@ func (a *App) sharedTmuxActivityEnabled() bool {
 func (a *App) resolveTmuxActivityScanRole(
 	opts tmux.Options,
 	now time.Time,
-) (tmuxActivityRole, map[string]bool, bool, int64, error) {
+) activityScanRoleResult {
 	// instanceID is assigned once at init; trim once here so all lease-owner
 	// comparisons use the same normalized representation.
 	instanceID := strings.TrimSpace(a.instanceID)
@@ -83,21 +93,21 @@ func (a *App) resolveTmuxActivityScanRole(
 	if err != nil {
 		// Epoch 0 is intentional on unresolved ownership; callers normalize to 1
 		// only when publishing as owner in a known epoch.
-		return tmuxActivityRoleOwner, nil, false, 0, err
+		return activityScanRoleResult{role: tmuxActivityRoleOwner, err: err}
 	}
 	if ownerLeaseAlive(lease, now) && lease.ownerID != instanceID {
 		active, ok, err := readTmuxActivitySnapshot(opts, now, lease.epoch)
 		if err != nil {
-			return tmuxActivityRoleFollower, nil, false, lease.epoch, err
+			return activityScanRoleResult{role: tmuxActivityRoleFollower, epoch: lease.epoch, err: err}
 		}
-		return tmuxActivityRoleFollower, active, ok, lease.epoch, nil
+		return activityScanRoleResult{role: tmuxActivityRoleFollower, sharedActive: active, applyShared: ok, epoch: lease.epoch}
 	}
 	if ownerLeaseAlive(lease, now) && lease.ownerID == instanceID {
 		epoch := lease.epoch
 		if epoch < 1 {
 			epoch = 1
 		}
-		return tmuxActivityRoleOwner, nil, false, epoch, nil
+		return activityScanRoleResult{role: tmuxActivityRoleOwner, epoch: epoch}
 	}
 
 	candidateEpoch := lease.epoch + 1
@@ -107,20 +117,20 @@ func (a *App) resolveTmuxActivityScanRole(
 	// tmux global options provide no atomic compare-and-swap primitive. Claim by
 	// write-then-confirm-read and rely on epoch checks to prevent split-brain use.
 	if err := writeTmuxActivityOwnerLease(opts, instanceID, candidateEpoch, now); err != nil {
-		return tmuxActivityRoleOwner, nil, false, candidateEpoch, err
+		return activityScanRoleResult{role: tmuxActivityRoleOwner, epoch: candidateEpoch, err: err}
 	}
 	confirmedLease, err := readTmuxActivityOwnerLease(opts)
 	if err != nil {
-		return tmuxActivityRoleOwner, nil, false, candidateEpoch, err
+		return activityScanRoleResult{role: tmuxActivityRoleOwner, epoch: candidateEpoch, err: err}
 	}
 	if confirmedLease.ownerID != instanceID || confirmedLease.epoch != candidateEpoch {
 		active, ok, err := readTmuxActivitySnapshot(opts, now, confirmedLease.epoch)
 		if err != nil {
-			return tmuxActivityRoleFollower, nil, false, confirmedLease.epoch, err
+			return activityScanRoleResult{role: tmuxActivityRoleFollower, epoch: confirmedLease.epoch, err: err}
 		}
-		return tmuxActivityRoleFollower, active, ok, confirmedLease.epoch, nil
+		return activityScanRoleResult{role: tmuxActivityRoleFollower, sharedActive: active, applyShared: ok, epoch: confirmedLease.epoch}
 	}
-	return tmuxActivityRoleOwner, nil, false, candidateEpoch, nil
+	return activityScanRoleResult{role: tmuxActivityRoleOwner, epoch: candidateEpoch}
 }
 
 func (a *App) canPublishTmuxActivitySnapshot(opts tmux.Options, epoch int64, now time.Time) (bool, int64, error) {
