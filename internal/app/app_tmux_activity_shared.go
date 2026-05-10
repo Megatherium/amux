@@ -12,6 +12,46 @@ import (
 	"github.com/andyrewlee/amux/internal/tmux"
 )
 
+// === Leader-election protocol over tmux global options ===
+//
+// Multiple amux instances may share a single tmux server. Activity scanning
+// (list-sessions, capture-pane, etc.) is expensive, so only one instance
+// should run it. This file implements a cooperative leader-election protocol
+// using tmux global options (@amux_activity_*) as a shared store.
+//
+// Roles:
+//   - Owner — the elected scanner. Performs local activity scans and
+//     periodically publishes an active-workspace snapshot that followers
+//     consume instead of running their own scans.
+//   - Follower — skips the local scan and applies the owner's snapshot,
+//     falling back to a local scan when the snapshot is stale or missing.
+//
+// Lease mechanism:
+//   - @amux_activity_owner       — owner instance ID (string)
+//   - @amux_activity_owner_heartbeat_ms — last heartbeat (unix millis)
+//   - @amux_activity_owner_epoch      — monotonic epoch for tombstoning stale owners
+//
+// Tmux global options have no atomic compare-and-swap. Ownership is claimed
+// by write-then-confirm-read: write a lease, re-read it, and if the stored
+// owner/epoch don't match our write we lost the race. Epoch numbers prevent
+// split-brain: followers reject snapshots whose epoch doesn't match the
+// current lease epoch.
+//
+// Snapshot format: "epoch;timestamp_ms;payload"
+//   - epoch       — owner's lease epoch at publish time
+//   - timestamp   — when the snapshot was created (unix millis)
+//   - payload     — "j:" + base64(json) of sorted workspace IDs
+//
+// Legacy payloads (no "j:" prefix) are comma-delimited workspace IDs with
+// optional "b:" base64 encoding. These are decoded for backward compatibility.
+//
+// resolveTmuxActivityScanRole path summary:
+//   1. No lease (error)      → become owner (epoch=0, caller normalizes)
+//   2. Alive lease, other ID → follower: read snapshot, apply if fresh
+//   3. Alive lease, our ID   → owner: keep existing epoch
+//   4. Expired lease         → claim with epoch+1, confirm-read
+//   5. Confirmed claim       → owner; otherwise → follower of winner
+
 const (
 	tmuxActivityOwnerOption     = "@amux_activity_owner"
 	tmuxActivityHeartbeatOption = "@amux_activity_owner_heartbeat_ms"
