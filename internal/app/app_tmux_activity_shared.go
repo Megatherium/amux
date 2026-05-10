@@ -103,17 +103,11 @@ func (a *App) resolveTmuxActivityScanRole(
 		return activityScanRoleResult{role: tmuxActivityRoleFollower, sharedActive: active, applyShared: ok, epoch: lease.epoch}
 	}
 	if ownerLeaseAlive(lease, now) && lease.ownerID == instanceID {
-		epoch := lease.epoch
-		if epoch < 1 {
-			epoch = 1
-		}
+		epoch := max(lease.epoch, 1)
 		return activityScanRoleResult{role: tmuxActivityRoleOwner, epoch: epoch}
 	}
 
-	candidateEpoch := lease.epoch + 1
-	if candidateEpoch < 1 {
-		candidateEpoch = 1
-	}
+	candidateEpoch := max(lease.epoch+1, 1)
 	// tmux global options provide no atomic compare-and-swap primitive. Claim by
 	// write-then-confirm-read and rely on epoch checks to prevent split-brain use.
 	if err := writeTmuxActivityOwnerLease(opts, instanceID, candidateEpoch, now); err != nil {
@@ -221,9 +215,7 @@ func readTmuxActivityOwnerLease(opts tmux.Options) (tmuxActivityLease, error) {
 }
 
 func writeTmuxActivityOwnerLease(opts tmux.Options, ownerID string, epoch int64, now time.Time) error {
-	if epoch < 1 {
-		epoch = 1
-	}
+	epoch = max(epoch, 1)
 	return tmux.SetGlobalOptionValues([]tmux.OptionValue{
 		{Key: tmuxActivityOwnerOption, Value: strings.TrimSpace(ownerID)},
 		{Key: tmuxActivityEpochOption, Value: strconv.FormatInt(epoch, 10)},
@@ -300,8 +292,8 @@ func decodeTmuxActivitySnapshot(raw string) (map[string]bool, int64, time.Time, 
 	if payload == "" {
 		return active, epoch, time.UnixMilli(timestampMS), true
 	}
-	if strings.HasPrefix(payload, "j:") {
-		decodedPayload, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(payload, "j:"))
+	if rest, ok := strings.CutPrefix(payload, "j:"); ok {
+		decodedPayload, err := base64.RawURLEncoding.DecodeString(rest)
 		if err == nil {
 			var ids []string
 			if err := json.Unmarshal(decodedPayload, &ids); err == nil {
@@ -318,7 +310,7 @@ func decodeTmuxActivitySnapshot(raw string) (map[string]bool, int64, time.Time, 
 	}
 
 	legacyCandidates := make([]string, 0)
-	for _, candidate := range strings.Split(payload, ",") {
+	for candidate := range strings.SplitSeq(payload, ",") {
 		wsID := strings.TrimSpace(candidate)
 		if wsID != "" {
 			legacyCandidates = append(legacyCandidates, wsID)
@@ -332,12 +324,13 @@ func decodeTmuxActivitySnapshot(raw string) (map[string]bool, int64, time.Time, 
 	// Note: plain IDs that literally start with "b:" and are valid base64 will be
 	// interpreted as encoded legacy IDs by design for backward compatibility.
 	for _, candidate := range legacyCandidates {
-		if !strings.HasPrefix(candidate, "b:") {
+		rest, ok := strings.CutPrefix(candidate, "b:")
+		if !ok {
 			active[candidate] = true
 			continue
 		}
 
-		decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(candidate, "b:"))
+		decoded, err := base64.RawURLEncoding.DecodeString(rest)
 		if err != nil {
 			active[candidate] = true
 			continue
