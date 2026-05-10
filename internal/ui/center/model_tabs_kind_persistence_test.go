@@ -65,7 +65,7 @@ func TestTabInfoRoundTripPreservesKind(t *testing.T) {
 	// Create DraftTab and TicketViewTab via TabInfo.
 	info := data.TabInfo{
 		Assistant:   "claude",
-		Name:        "Draft",
+		Name:        "Draft (bmx-99)",
 		Kind:        int(DraftTab),
 		CreatedAt:   time.Now().Unix(),
 		TicketID:    "bmx-99",

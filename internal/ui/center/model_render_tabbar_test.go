@@ -28,7 +28,8 @@ func TestTabBarRendersMixedKinds(t *testing.T) {
 	m.tabsByWorkspace[wsID] = []*Tab{
 		{ID: "a", Name: "Agent", Kind: AgentTab, Workspace: ws, createdAt: now.Unix()},
 		{
-			ID: "d", Name: "Draft", Kind: DraftTab, Workspace: ws, createdAt: now.Unix(),
+			ID: "d", Name: "Draft (bmx-1)", Kind: DraftTab, Workspace: ws, createdAt: now.Unix(),
+			TicketID: "bmx-1", TicketTitle: "Test",
 			Draft: &Draft{ticket: &tickets.Ticket{ID: "bmx-1", Title: "Test"}},
 		},
 		{
@@ -44,8 +45,8 @@ func TestTabBarRendersMixedKinds(t *testing.T) {
 	if !strings.Contains(view, "Agent") {
 		t.Error("tab bar should contain 'Agent' name")
 	}
-	if !strings.Contains(view, "Draft") {
-		t.Error("tab bar should contain 'Draft' name")
+	if !strings.Contains(view, "Draft (bmx-1)") {
+		t.Error("tab bar should contain 'Draft (bmx-1)' name")
 	}
 	if !strings.Contains(view, "Ticket") {
 		t.Error("tab bar should contain 'Ticket' name")

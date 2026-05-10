@@ -1,6 +1,7 @@
 package center
 
 import (
+	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -55,7 +56,22 @@ func (m *Model) Focused() bool {
 }
 
 // StartDraft begins a draft flow for the given ticket.
+// If a DraftTab for the same ticket already exists in the workspace,
+// it switches to that tab instead of creating a new one.
 func (m *Model) StartDraft(ticket *tickets.Ticket, ws *data.Workspace) {
+	wsID := string(ws.ID())
+
+	// Check if a DraftTab for this ticket already exists.
+	// If so, switch to it instead of creating a duplicate.
+	for i, tab := range m.tabsByWorkspace[wsID] {
+		if tab.Kind == DraftTab && tab.TicketID == ticket.ID && !tab.isClosed() {
+			m.setActiveTabIdxForWorkspace(wsID, i)
+			m.draft = tab.Draft
+			m.noteTabsChanged()
+			return
+		}
+	}
+
 	draft := NewDraft(ticket, ws, m.config, m.styles)
 	draft.SetSize(m.contentWidth(), m.height-4)
 	draft.Focus()
@@ -66,14 +82,15 @@ func (m *Model) StartDraft(ticket *tickets.Ticket, ws *data.Workspace) {
 	tabID := generateTabID()
 	tab := &Tab{
 		ID:            tabID,
-		Name:          "Draft",
+		Name:          fmt.Sprintf("Draft (%s)", ticket.ID),
 		Kind:          DraftTab,
 		Draft:         draft,
 		Workspace:     ws,
+		TicketID:      ticket.ID,
+		TicketTitle:   ticket.Title,
 		createdAt:     now.Unix(),
 		lastFocusedAt: now,
 	}
-	wsID := string(ws.ID())
 	m.tabsByWorkspace[wsID] = append(m.tabsByWorkspace[wsID], tab)
 	newIdx := len(m.tabsByWorkspace[wsID]) - 1
 	m.setActiveTabIdxForWorkspace(wsID, newIdx)

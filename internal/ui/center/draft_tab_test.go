@@ -53,11 +53,13 @@ func setupDraftTab(t *testing.T) (*Model, *Tab) {
 	draft.SetSize(80, 24)
 
 	tab := &Tab{
-		ID:        generateTabID(),
-		Name:      "Draft",
-		Kind:      DraftTab,
-		Draft:     draft,
-		Workspace: ws,
+		ID:          generateTabID(),
+		Name:        "Draft (bmx-99)",
+		Kind:        DraftTab,
+		Draft:       draft,
+		Workspace:   ws,
+		TicketID:    ticket.ID,
+		TicketTitle: ticket.Title,
 	}
 	wsID := string(ws.ID())
 	m.tabsByWorkspace[wsID] = []*Tab{tab}
@@ -67,7 +69,8 @@ func setupDraftTab(t *testing.T) (*Model, *Tab) {
 }
 
 // TestDraftTabStartDraftCreatesDraftTab verifies that StartDraft creates a
-// tab with Kind=DraftTab, sets tab.Draft, and makes it the active tab.
+// tab with Kind=DraftTab, sets tab.Draft, stores ticket metadata, and
+// makes it the active tab.
 func TestDraftTabStartDraftCreatesDraftTab(t *testing.T) {
 	m := newTestModel()
 	m.config = tabDispatchConfig()
@@ -92,6 +95,15 @@ func TestDraftTabStartDraftCreatesDraftTab(t *testing.T) {
 	}
 	if tab.Draft.ticket == nil || tab.Draft.ticket.ID != "bmx-99" {
 		t.Error("tab.Draft.ticket not set correctly")
+	}
+	if tab.TicketID != "bmx-99" {
+		t.Errorf("expected TicketID=bmx-99, got %s", tab.TicketID)
+	}
+	if tab.TicketTitle != "Tab Dispatch Test" {
+		t.Errorf("expected TicketTitle='Tab Dispatch Test', got %s", tab.TicketTitle)
+	}
+	if tab.Name != "Draft (bmx-99)" {
+		t.Errorf("expected tab name 'Draft (bmx-99)', got %s", tab.Name)
 	}
 
 	activeIdx := m.activeTabByWorkspace[wsID]
@@ -155,8 +167,8 @@ func TestDraftTabViewRendersDraftContent(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "Draft") {
-		t.Error("view should contain 'Draft' tab name")
+	if !strings.Contains(view, "Draft (bmx-99)") {
+		t.Error("view should contain 'Draft (bmx-99)' tab name")
 	}
 	if !strings.Contains(view, "bmx-99") {
 		t.Error("view should contain ticket ID 'bmx-99'")
@@ -298,5 +310,147 @@ func TestDraftTabKeepsIsolatedDraftUnitTests(t *testing.T) {
 	if dc.Assistant != "claude" || dc.TicketID != "bmx-42" || dc.TicketTitle != "My Ticket" ||
 		dc.Model != "sonnet" || dc.AgentMode != "auto-approve" || dc.Workspace == nil {
 		t.Error("DraftComplete metadata mismatch")
+	}
+}
+
+// TestDraftTabDeduplicateSameTicket verifies that calling StartDraft twice
+// for the same ticket ID reuses the existing DraftTab instead of creating a
+// duplicate.
+func TestDraftTabDeduplicateSameTicket(t *testing.T) {
+	m := newTestModel()
+	m.config = tabDispatchConfig()
+	ws := tabDispatchWorkspace()
+	m.workspace = ws
+	wsID := string(ws.ID())
+	ticket := tabDispatchTicket()
+
+	// First call creates a new DraftTab.
+	m.StartDraft(ticket, ws)
+	if len(m.tabsByWorkspace[wsID]) != 1 {
+		t.Fatalf("after first StartDraft: expected 1 tab, got %d", len(m.tabsByWorkspace[wsID]))
+	}
+	firstTab := m.tabsByWorkspace[wsID][0]
+
+	// Second call for the same ticket should switch to the existing tab.
+	m.StartDraft(ticket, ws)
+	if len(m.tabsByWorkspace[wsID]) != 1 {
+		t.Errorf("after second StartDraft: expected 1 tab (no duplicate), got %d", len(m.tabsByWorkspace[wsID]))
+	}
+	if m.tabsByWorkspace[wsID][0] != firstTab {
+		t.Error("second StartDraft should reuse the existing tab")
+	}
+	if m.activeTabByWorkspace[wsID] != 0 {
+		t.Errorf("active tab index should be 0, got %d", m.activeTabByWorkspace[wsID])
+	}
+	if m.draft != firstTab.Draft {
+		t.Error("m.draft should point to the existing tab's draft")
+	}
+}
+
+// TestDraftTabDifferentTicketsCreateSeparateTabs verifies that calling
+// StartDraft with different tickets creates distinct DraftTab entries.
+func TestDraftTabDifferentTicketsCreateSeparateTabs(t *testing.T) {
+	m := newTestModel()
+	m.config = tabDispatchConfig()
+	ws := tabDispatchWorkspace()
+	m.workspace = ws
+	wsID := string(ws.ID())
+
+	ticket1 := tabDispatchTicket() // bmx-99
+	ticket2 := &tickets.Ticket{ID: "bmx-42", Title: "Another Ticket"}
+
+	m.StartDraft(ticket1, ws)
+	m.StartDraft(ticket2, ws)
+
+	tabs := m.tabsByWorkspace[wsID]
+	if len(tabs) != 2 {
+		t.Fatalf("expected 2 tabs for different tickets, got %d", len(tabs))
+	}
+
+	if tabs[0].TicketID != "bmx-99" {
+		t.Errorf("tab 0: expected TicketID=bmx-99, got %s", tabs[0].TicketID)
+	}
+	if tabs[1].TicketID != "bmx-42" {
+		t.Errorf("tab 1: expected TicketID=bmx-42, got %s", tabs[1].TicketID)
+	}
+
+	// The second tab should be the active one.
+	if m.activeTabByWorkspace[wsID] != 1 {
+		t.Errorf("expected active tab index 1, got %d", m.activeTabByWorkspace[wsID])
+	}
+
+	// Tab names should include ticket IDs.
+	if tabs[0].Name != "Draft (bmx-99)" {
+		t.Errorf("tab 0: expected name 'Draft (bmx-99)', got %s", tabs[0].Name)
+	}
+	if tabs[1].Name != "Draft (bmx-42)" {
+		t.Errorf("tab 1: expected name 'Draft (bmx-42)', got %s", tabs[1].Name)
+	}
+}
+
+// TestDraftTabSwitchToExistingPreservesActiveIndex verifies that when
+// deduplicating, the active tab index switches to the existing tab's position
+// (not always index 0).
+func TestDraftTabSwitchToExistingPreservesActiveIndex(t *testing.T) {
+	m := newTestModel()
+	m.config = tabDispatchConfig()
+	ws := tabDispatchWorkspace()
+	m.workspace = ws
+	wsID := string(ws.ID())
+
+	ticket1 := &tickets.Ticket{ID: "bmx-1", Title: "First"}
+	ticket2 := &tickets.Ticket{ID: "bmx-2", Title: "Second"}
+	ticket3 := &tickets.Ticket{ID: "bmx-3", Title: "Third"}
+
+	m.StartDraft(ticket1, ws) // tab at index 0
+	m.StartDraft(ticket2, ws) // tab at index 1
+	m.StartDraft(ticket3, ws) // tab at index 2
+	if len(m.tabsByWorkspace[wsID]) != 3 {
+		t.Fatalf("expected 3 tabs, got %d", len(m.tabsByWorkspace[wsID]))
+	}
+
+	// Switch to existing ticket2 (index 1).
+	m.StartDraft(ticket2, ws)
+	if len(m.tabsByWorkspace[wsID]) != 3 {
+		t.Errorf("expected still 3 tabs (no duplicate), got %d", len(m.tabsByWorkspace[wsID]))
+	}
+	if m.activeTabByWorkspace[wsID] != 1 {
+		t.Errorf("expected active index 1 (ticket2), got %d", m.activeTabByWorkspace[wsID])
+	}
+
+	// Switch to existing ticket1 (index 0).
+	m.StartDraft(ticket1, ws)
+	if m.activeTabByWorkspace[wsID] != 0 {
+		t.Errorf("expected active index 0 (ticket1), got %d", m.activeTabByWorkspace[wsID])
+	}
+}
+
+// TestDraftTabNameIncludesTicketID verifies that the tab name format is
+// "Draft (<ticketID>)" for various ticket IDs.
+func TestDraftTabNameIncludesTicketID(t *testing.T) {
+	m := newTestModel()
+	m.config = tabDispatchConfig()
+	ws := tabDispatchWorkspace()
+	m.workspace = ws
+	wsID := string(ws.ID())
+
+	tests := []struct {
+		id       string
+		wantName string
+	}{
+		{"ba-3x3", "Draft (ba-3x3)"},
+		{"bmx-42", "Draft (bmx-42)"},
+		{"PROJ-123", "Draft (PROJ-123)"},
+	}
+
+	for _, tt := range tests {
+		ticket := &tickets.Ticket{ID: tt.id, Title: "Test"}
+		m.StartDraft(ticket, ws)
+
+		tabs := m.tabsByWorkspace[wsID]
+		last := tabs[len(tabs)-1]
+		if last.Name != tt.wantName {
+			t.Errorf("ticket ID=%s: expected name %q, got %q", tt.id, tt.wantName, last.Name)
+		}
 	}
 }
